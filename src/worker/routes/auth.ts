@@ -1,6 +1,12 @@
+import { and, eq, lte } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
+import { createDb } from "../db";
+import { sessions, users, workspaceMembers } from "../db/schema";
+import { createId } from "../lib/id";
+import { createSessionToken, getSessionExpiresAt, hashSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../lib/session";
+import { INVS_WORKSPACE_ID } from "../lib/workspace";
 import type { AppBindings } from "../types/app-env";
 
 const OAUTH_STATE_COOKIE = "flow_oauth_state";
@@ -19,6 +25,16 @@ type DiscordUser = {
   global_name: string | null;
   avatar: string | null;
 };
+
+function getDiscordAvatarUrl(user: DiscordUser) {
+  if (!user.avatar) {
+    return null;
+  }
+
+  const animated = user.avatar.startsWith("a_") ? "&animated=true" : "";
+
+  return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=128${animated}`;
+}
 
 export const authRoutes = new Hono<{
   Bindings: AppBindings;
@@ -137,14 +153,134 @@ authRoutes.get("/discord/callback", async (c) => {
 
   const discordUser = (await userResponse.json()) as DiscordUser;
 
+  const db = createDb(c.env.flow_db);
+  const now = new Date();
+
+  const displayName = discordUser.global_name ?? discordUser.username;
+
+  const avatarUrl = getDiscordAvatarUrl(discordUser);
+
+  await db
+    .insert(users)
+    .values({
+      id: createId("usr"),
+      discordUserId: discordUser.id,
+      displayName,
+      avatarUrl,
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now,
+    })
+    .onConflictDoUpdate({
+      target: users.discordUserId,
+      set: {
+        displayName,
+        avatarUrl,
+        updatedAt: now,
+        lastLoginAt: now,
+      },
+    });
+
+  const [flowUser] = await db
+    .select({
+      id: users.id,
+    })
+    .from(users)
+    .where(eq(users.discordUserId, discordUser.id))
+    .limit(1);
+
+  if (!flowUser) {
+    return c.json(
+      {
+        error: {
+          code: "USER_PERSISTENCE_FAILED",
+          message: "Failed to persist user",
+        },
+      },
+      500,
+    );
+  }
+
+  let [membership] = await db
+    .select({
+      role: workspaceMembers.role,
+    })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID), eq(workspaceMembers.userId, flowUser.id)))
+    .limit(1);
+
+  if (!membership && discordUser.id === c.env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID) {
+    await db
+      .insert(workspaceMembers)
+      .values({
+        workspaceId: INVS_WORKSPACE_ID,
+        userId: flowUser.id,
+        role: "owner",
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+
+    membership = {
+      role: "owner",
+    };
+  }
+
+  if (!membership) {
+    return c.json(
+      {
+        error: {
+          code: "WORKSPACE_ACCESS_DENIED",
+          message: "You do not have access to this workspace",
+        },
+      },
+      403,
+    );
+  }
+
+  await db.delete(sessions).where(and(eq(sessions.userId, flowUser.id), lte(sessions.expiresAt, now)));
+
+  const sessionToken = createSessionToken();
+
+  const sessionId = await hashSessionToken(sessionToken);
+
+  const expiresAt = getSessionExpiresAt();
+
+  await db.insert(sessions).values({
+    id: sessionId,
+    userId: flowUser.id,
+    expiresAt,
+    createdAt: now,
+  });
+
+  setCookie(c, SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    secure,
+    sameSite: "Lax",
+    maxAge: SESSION_TTL_SECONDS,
+    path: "/",
+  });
+
+  return c.redirect("/");
+});
+
+authRoutes.post("/logout", async (c) => {
+  const sessionToken = getCookie(c, SESSION_COOKIE);
+
+  if (sessionToken) {
+    const sessionId = await hashSessionToken(sessionToken);
+
+    const db = createDb(c.env.flow_db);
+
+    await db.delete(sessions).where(eq(sessions.id, sessionId));
+  }
+
+  deleteCookie(c, SESSION_COOKIE, {
+    path: "/",
+  });
+
   return c.json({
     data: {
-      discordUser: {
-        id: discordUser.id,
-        username: discordUser.username,
-        displayName: discordUser.global_name ?? discordUser.username,
-        avatar: discordUser.avatar,
-      },
+      success: true,
     },
   });
 });

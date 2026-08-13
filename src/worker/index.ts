@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { createDb } from "./db";
 import { workspaces } from "./db/schema";
 import { authRoutes } from "./routes/auth";
+import { meRoutes } from "./routes/me";
 import type { AppBindings } from "./types/app-env";
 
 const app = new Hono<{
@@ -10,6 +11,7 @@ const app = new Hono<{
 }>();
 
 app.route("/api/auth", authRoutes);
+app.route("/api/me", meRoutes);
 
 app.get("/api/health", (c) => {
   return c.json({
