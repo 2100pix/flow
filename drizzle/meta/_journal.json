@@ -15,6 +15,13 @@
       "when": 1786627801000,
       "tag": "0001_identity_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786628428896,
+      "tag": "0002_work_schema",
+      "breakpoints": true
     }
   ]
 }
