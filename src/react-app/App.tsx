@@ -1,11 +1,11 @@
 // src/App.tsx
-import "./App.css";
 
 function App() {
   return (
-    <main>
-      <h1>Flow</h1>
-      <p>Internal project management for creative studios.</p>
+    <main className="min-h-screen p-8 ">
+      <h1 className="text-2xl font-semibold">Flow</h1>
+
+      <p className="mt-2 text-sm text-neutral-500">Internal project management for creative studios.</p>
     </main>
   );
 }
