@@ -1,6 +1,9 @@
-import { BuildingsIcon, FolderIcon, HouseIcon, UsersIcon } from "@phosphor-icons/react";
+import { BuildingsIcon, FolderIcon, HouseIcon, SignOutIcon, UsersIcon } from "@phosphor-icons/react";
 import { NavLink, Outlet } from "react-router";
 
+import { Button } from "@/components/ui/button";
+import { useLogout } from "@/features/auth/hooks/use-logout";
+import type { AuthContext } from "@/features/auth/types";
 import { cn } from "@/lib/utils";
 
 const mainNavigation = [
@@ -65,7 +68,9 @@ function NavigationGroup({ label, items }: { label: string; items: NavigationIte
   );
 }
 
-export function AppLayout() {
+export function AppLayout({ auth }: { auth: AuthContext }) {
+  const logout = useLogout();
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -86,10 +91,34 @@ export function AppLayout() {
         </nav>
 
         <div className="border-t border-sidebar-border p-2">
-          <div className="rounded-md px-2.5 py-2">
-            <p className="truncate text-sm font-medium">INVS Studio</p>
+          <div className="mb-2 px-2.5 pt-1">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">INVS Studio</p>
+          </div>
 
-            <p className="text-xs text-sidebar-foreground/50">Workspace</p>
+          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+            {auth.user.avatarUrl ? (
+              <img src={auth.user.avatarUrl} alt="" className="size-7 rounded-full" />
+            ) : (
+              <div className="flex size-7 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium">{auth.user.displayName.charAt(0).toUpperCase()}</div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{auth.user.displayName}</p>
+
+              <p className="truncate text-xs capitalize text-sidebar-foreground/50">{auth.workspace.role}</p>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Sign out"
+              disabled={logout.isPending}
+              onClick={() => {
+                logout.mutate();
+              }}
+            >
+              <SignOutIcon />
+            </Button>
           </div>
         </div>
       </aside>
