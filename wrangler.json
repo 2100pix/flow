@@ -17,7 +17,14 @@
 	"assets": {
 		"directory": "./dist/client",
 		"not_found_handling": "single-page-application"
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "flow_db",
+			"database_name": "flow-db",
+			"database_id": "bde92fb3-7da3-4384-b0c3-c942ee9b8d41"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
