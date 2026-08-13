@@ -55,7 +55,10 @@
     "deploy": "wrangler deploy",
     "dev": "vite",
     "lint": "eslint .",
-    "preview": "npm run build && vite preview"
+    "preview": "npm run build && vite preview",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply flow-db --local",
+    "db:seed:local": "wrangler d1 execute flow-db --local --file=./scripts/seed.sql"
   },
   "type": "module"
 }
