@@ -208,8 +208,14 @@ authRoutes.get("/discord/callback", async (c) => {
     .from(workspaceMembers)
     .where(and(eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID), eq(workspaceMembers.userId, flowUser.id)))
     .limit(1);
-
-  if (!membership && discordUser.id === c.env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID) {
+  const [existingWorkspaceMember] = await db
+    .select({
+      userId: workspaceMembers.userId,
+    })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID))
+    .limit(1);
+  if (!membership && !existingWorkspaceMember && discordUser.id === c.env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID) {
     await db
       .insert(workspaceMembers)
       .values({
@@ -238,11 +244,8 @@ authRoutes.get("/discord/callback", async (c) => {
   }
 
   await db.delete(sessions).where(and(eq(sessions.userId, flowUser.id), lte(sessions.expiresAt, now)));
-
   const sessionToken = createSessionToken();
-
   const sessionId = await hashSessionToken(sessionToken);
-
   const expiresAt = getSessionExpiresAt();
 
   await db.insert(sessions).values({
