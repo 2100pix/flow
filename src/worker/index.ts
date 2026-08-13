@@ -2,8 +2,14 @@ import { Hono } from "hono";
 
 import { createDb } from "./db";
 import { workspaces } from "./db/schema";
+import { authRoutes } from "./routes/auth";
+import type { AppBindings } from "./types/app-env";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{
+  Bindings: AppBindings;
+}>();
+
+app.route("/api/auth", authRoutes);
 
 app.get("/api/health", (c) => {
   return c.json({
