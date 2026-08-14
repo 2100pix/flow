@@ -1,10 +1,12 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../../shared/contracts/projects";
+import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
+
 import { createDb } from "../db";
-import { clients, projects } from "../db/schema";
+import { clients, projectMembers, projects, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { requireAuth, requireRole } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
@@ -414,6 +416,240 @@ projectsRoutes.delete("/:id", requireAuth, requireRole("owner", "admin"), async 
       updatedAt: now,
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+/**
+ * * bagian member project
+ */
+projectsRoutes.get("/:id/members", requireAuth, async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [project] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+      role: workspaceMembers.role,
+      addedAt: projectMembers.createdAt,
+    })
+    .from(projectMembers)
+    .innerJoin(users, eq(projectMembers.userId, users.id))
+    .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+    .where(eq(projectMembers.projectId, projectId))
+    .orderBy(asc(users.displayName));
+
+  const data: ProjectMemberDto[] = result.map((member) => ({
+    user: {
+      id: member.id,
+      displayName: member.displayName,
+      avatarUrl: member.avatarUrl,
+      role: member.role,
+    },
+
+    addedAt: member.addedAt.toISOString(),
+  }));
+
+  return c.json({
+    data,
+  });
+});
+
+projectsRoutes.post(
+  "/:id/members",
+  requireAuth,
+  requireRole("owner", "admin"),
+  zValidator("json", addProjectMemberSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid member data",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+    const projectId = c.req.param("id");
+
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const [project] = await db
+      .select({
+        id: projects.id,
+      })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+      .limit(1);
+
+    if (!project) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Project not found",
+          },
+        },
+        404,
+      );
+    }
+
+    const [member] = await db
+      .select({
+        id: users.id,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        role: workspaceMembers.role,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.userId, input.userId)))
+      .limit(1);
+
+    if (!member) {
+      return c.json(
+        {
+          error: {
+            code: "MEMBER_NOT_FOUND",
+            message: "Workspace member not found",
+          },
+        },
+        404,
+      );
+    }
+
+    const now = new Date();
+
+    await db
+      .insert(projectMembers)
+      .values({
+        projectId,
+        userId: member.id,
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+
+    const [membership] = await db
+      .select({
+        addedAt: projectMembers.createdAt,
+      })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, member.id)))
+      .limit(1);
+
+    if (!membership) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_MEMBER_PERSISTENCE_FAILED",
+            message: "Failed to add project member",
+          },
+        },
+        500,
+      );
+    }
+
+    const data: ProjectMemberDto = {
+      user: {
+        id: member.id,
+        displayName: member.displayName,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+      },
+
+      addedAt: membership.addedAt.toISOString(),
+    };
+
+    return c.json({
+      data,
+    });
+  },
+);
+
+projectsRoutes.delete("/:id/members/:userId", requireAuth, requireRole("owner", "admin"), async (c) => {
+  const auth = c.var.auth;
+
+  const projectId = c.req.param("id");
+
+  const userId = c.req.param("userId");
+
+  const db = createDb(c.env.flow_db);
+
+  const [project] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [membership] = await db
+    .select({
+      userId: projectMembers.userId,
+    })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+    .limit(1);
+
+  if (!membership) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_MEMBER_NOT_FOUND",
+          message: "Project member not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
 
   return c.json({
     data: {

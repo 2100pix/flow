@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth";
 import { meRoutes } from "./routes/me";
 import { clientsRoutes } from "./routes/clients";
 import { projectsRoutes } from "./routes/projects";
+import { membersRoutes } from "./routes/members";
 import type { AppBindings } from "./types/app-env";
 
 const app = new Hono<{
@@ -16,6 +17,7 @@ app.route("/api/auth", authRoutes);
 app.route("/api/me", meRoutes);
 app.route("/api/clients", clientsRoutes);
 app.route("/api/projects", projectsRoutes);
+app.route("/api/members", membersRoutes);
 
 app.get("/api/health", (c) => {
   return c.json({

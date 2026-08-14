@@ -7,6 +7,12 @@ import { useClients } from "@/features/clients/hooks/use-clients";
 import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+
+import { useAddProjectMember } from "@/features/members/hooks/use-add-project-member";
+import { useMembers } from "@/features/members/hooks/use-members";
+import { useProjectMembers } from "@/features/members/hooks/use-project-members";
+import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
+
 import type { ProjectDto, ProjectStatus } from "@/features/projects/types";
 
 type ProjectEditorProps = {
@@ -255,6 +261,117 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
   );
 }
 
+function ProjectTeam({ projectId, canManage }: { projectId: string; canManage: boolean }) {
+  const [userId, setUserId] = useState("");
+
+  const { data: members = [] } = useMembers();
+
+  const { data: projectMembers = [], isPending, isError } = useProjectMembers(projectId);
+
+  const addMember = useAddProjectMember();
+
+  const removeMember = useRemoveProjectMember();
+
+  const assignedIds = new Set(projectMembers.map((member) => member.user.id));
+
+  const availableMembers = members.filter((member) => !assignedIds.has(member.id));
+
+  return (
+    <div className="rounded-lg border p-5">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <p className="text-sm font-medium">Team</p>
+
+          <p className="mt-1 text-sm text-muted-foreground">Workspace members assigned to this project.</p>
+        </div>
+
+        {canManage && availableMembers.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <select
+              value={userId}
+              onChange={(event) => {
+                setUserId(event.target.value);
+              }}
+              className="h-8 w-52 rounded-lg border border-input bg-background px-2.5 text-sm outline-none"
+            >
+              <option value="">Select member</option>
+
+              {availableMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.displayName}
+                </option>
+              ))}
+            </select>
+
+            <Button
+              disabled={!userId || addMember.isPending}
+              onClick={() => {
+                addMember.mutate(
+                  {
+                    projectId,
+                    userId,
+                  },
+                  {
+                    onSuccess: () => {
+                      setUserId("");
+                    },
+                  },
+                );
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {isPending ? <p className="mt-4 text-sm text-muted-foreground">Loading team…</p> : null}
+
+      {isError ? <p className="mt-4 text-sm text-destructive">Unable to load project team.</p> : null}
+
+      {addMember.isError ? <p className="mt-4 text-sm text-destructive">{addMember.error.message}</p> : null}
+
+      {projectMembers.length === 0 && !isPending ? <p className="mt-4 text-sm text-muted-foreground">No project members yet.</p> : null}
+
+      {projectMembers.length > 0 ? (
+        <div className="mt-4 divide-y rounded-lg border">
+          {projectMembers.map((member) => (
+            <div key={member.user.id} className="flex items-center gap-3 px-3 py-2.5">
+              {member.user.avatarUrl ? (
+                <img src={member.user.avatarUrl} alt="" className="size-7 rounded-full" />
+              ) : (
+                <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">{member.user.displayName.charAt(0).toUpperCase()}</div>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{member.user.displayName}</p>
+
+                <p className="text-xs capitalize text-muted-foreground">{member.user.role}</p>
+              </div>
+
+              {canManage ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={removeMember.isPending}
+                  onClick={() => {
+                    removeMember.mutate({
+                      projectId,
+                      userId: member.user.id,
+                    });
+                  }}
+                >
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProjectDetailPage() {
   const { projectId } = useParams();
 
@@ -280,12 +397,15 @@ export function ProjectDetailPage() {
 
           {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
         </div>
-
         {isPending ? <p className="text-sm text-muted-foreground">Loading project…</p> : null}
-
         {isError ? <p className="text-sm text-destructive">Unable to load project.</p> : null}
+        {project ? (
+          <>
+            <ProjectEditor key={project.updatedAt} project={project} canManage={canManage} />
 
-        {project ? <ProjectEditor key={project.updatedAt} project={project} canManage={canManage} /> : null}
+            <ProjectTeam projectId={project.id} canManage={canManage} />
+          </>
+        ) : null}
       </div>
     </div>
   );
