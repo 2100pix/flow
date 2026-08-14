@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { BuildingsIcon, FolderIcon, HouseIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
-import { NavLink, Outlet } from "react-router";
+import { BuildingsIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
+import { Link, NavLink, Outlet } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
 import type { AuthContext } from "@/features/auth/types";
+import { useProjects } from "@/features/projects/hooks/use-projects";
+import type { ProjectDto } from "@/features/projects/types";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "flow:sidebar-collapsed";
@@ -17,18 +19,17 @@ const mainNavigation = [
   },
 ];
 
-const spaceNavigation = [
-  {
-    label: "Clients",
-    href: "/clients",
-    icon: BuildingsIcon,
-  },
-  {
-    label: "Projects",
-    href: "/projects",
-    icon: FolderIcon,
-  },
-];
+const clientsNavigationItem = {
+  label: "Clients",
+  href: "/clients",
+  icon: BuildingsIcon,
+};
+
+const projectsNavigationItem = {
+  label: "Projects",
+  href: "/projects",
+  icon: FolderIcon,
+};
 
 const manageNavigation = [
   {
@@ -64,6 +65,74 @@ function NavigationLink({ item, collapsed }: { item: NavigationItem; collapsed: 
   );
 }
 
+function QuickCreateButton({ to, label }: { to: string; label: string }) {
+  return (
+    <Link to={to} aria-label={label} title={label} className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+      <PlusIcon size={14} />
+    </Link>
+  );
+}
+
+function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolean; projects: ProjectDto[]; canCreate: boolean }) {
+  if (collapsed) {
+    return (
+      <div className="space-y-1">
+        <NavigationLink item={clientsNavigationItem} collapsed />
+
+        <NavigationLink item={projectsNavigationItem} collapsed />
+      </div>
+    );
+  }
+
+  const visibleProjects = projects.slice(0, 6);
+
+  return (
+    <div>
+      <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">Space</p>
+
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <NavigationLink item={clientsNavigationItem} collapsed={false} />
+          </div>
+
+          {canCreate && <QuickCreateButton to="/clients?create=client" label="Create client" />}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <NavigationLink item={projectsNavigationItem} collapsed={false} />
+          </div>
+
+          {canCreate && <QuickCreateButton to="/projects?create=project" label="Create project" />}
+        </div>
+
+        {visibleProjects.length > 0 && (
+          <div className="space-y-0.5 pb-1 pl-6">
+            {visibleProjects.map((project) => (
+              <NavLink
+                key={project.id}
+                to={`/projects/${project.id}`}
+                className={({ isActive }) =>
+                  cn("block truncate rounded-md px-2 py-1.5 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
+                }
+              >
+                {project.name}
+              </NavLink>
+            ))}
+
+            {projects.length > 6 && (
+              <Link to="/projects" className="block rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground">
+                See all projects
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NavigationGroup({ label, items, collapsed }: { label: string; items: NavigationItem[]; collapsed: boolean }) {
   return (
     <div>
@@ -79,6 +148,10 @@ function NavigationGroup({ label, items, collapsed }: { label: string; items: Na
 }
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
+  const { data: projects = [] } = useProjects();
+
+  const canCreate = auth.workspace.role === "owner" || auth.workspace.role === "admin";
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -119,14 +192,14 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
             </Button>
           </div>
 
-          <nav className="flex-1 space-y-5 px-2 py-2">
+          <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
             <div className="space-y-1">
               {mainNavigation.map((item) => (
                 <NavigationLink key={item.href} item={item} collapsed={sidebarCollapsed} />
               ))}
             </div>
 
-            <NavigationGroup label="Space" items={spaceNavigation} collapsed={sidebarCollapsed} />
+            <SpaceNavigation collapsed={sidebarCollapsed} projects={projects} canCreate={canCreate} />
 
             <NavigationGroup label="Manage" items={manageNavigation} collapsed={sidebarCollapsed} />
           </nav>

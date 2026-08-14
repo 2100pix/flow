@@ -6,6 +6,8 @@ export const createProjectSchema = z.object({
   clientId: z.string().trim().min(1),
 
   name: z.string().trim().min(1).max(160),
+
+  description: z.string().trim().max(5000).optional(),
 });
 
 export const discordChannelUrlSchema = z.url().refine(

@@ -126,7 +126,7 @@ projectsRoutes.post(
 
       name: input.name,
 
-      description: null,
+      description: input.description ?? null,
       status: "planning",
       startDate: null,
       dueDate: null,
@@ -145,7 +145,7 @@ projectsRoutes.post(
       },
 
       name: input.name,
-      description: null,
+      description: input.description ?? null,
       status: "planning",
       startDate: null,
       dueDate: null,
