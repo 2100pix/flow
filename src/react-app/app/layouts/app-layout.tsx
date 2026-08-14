@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { BuildingsIcon, FolderIcon, HouseIcon, SidebarSimpleIcon, SignOutIcon, UsersIcon } from "@phosphor-icons/react";
+import { BuildingsIcon, FolderIcon, HouseIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
 import { NavLink, Outlet } from "react-router";
 
+import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
-import { useLogout } from "@/features/auth/hooks/use-logout";
 import type { AuthContext } from "@/features/auth/types";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ const mainNavigation = [
   },
 ];
 
-const workNavigation = [
+const spaceNavigation = [
   {
     label: "Clients",
     href: "/clients",
@@ -79,7 +79,6 @@ function NavigationGroup({ label, items, collapsed }: { label: string; items: Na
 }
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
-  const logout = useLogout();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -97,88 +96,46 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className={cn("flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground", "transition-[width] duration-200", sidebarCollapsed ? "w-16" : "w-60")}>
-        <div className={cn("flex h-12 shrink-0 items-center", sidebarCollapsed ? "justify-center px-2" : "justify-between px-4")}>
-          {/* Replace this temporary Flow wordmark/mark with the final logo asset when available. */}
-          {sidebarCollapsed ? (
-            <span className="flex size-8 items-center justify-center rounded-md text-sm font-semibold" aria-label="Flow">
-              F
-            </span>
-          ) : (
-            <span className="text-sm font-semibold tracking-tight">Flow</span>
-          )}
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-border bg-background px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Replace this temporary Flow mark with the final logo asset when branding is ready. */}
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-label="Flow">
+            F
+          </div>
 
-          {!sidebarCollapsed && (
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Collapse sidebar" title="Collapse sidebar" onClick={toggleSidebar}>
-              <SidebarSimpleIcon />
-            </Button>
-          )}
+          {/* Replace hardcoded workspace name with workspace data in 8.5K. */}
+          <p className="truncate text-sm font-semibold tracking-tight">INVS Studio</p>
         </div>
 
-        {sidebarCollapsed && (
-          <div className="px-2 pb-1">
-            <Button type="button" variant="ghost" size="icon-sm" className="w-full" aria-label="Expand sidebar" title="Expand sidebar" onClick={toggleSidebar}>
+        <AccountMenu auth={auth} />
+      </header>
+
+      <div className="flex min-h-[calc(100vh-3rem)]">
+        <aside className={cn("flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground", "transition-[width] duration-200", sidebarCollapsed ? "w-16" : "w-60")}>
+          <div className={cn("flex h-11 shrink-0 items-center px-2", sidebarCollapsed ? "justify-center" : "justify-end")}>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={toggleSidebar}>
               <SidebarSimpleIcon />
             </Button>
           </div>
-        )}
 
-        <nav className={cn("flex-1 space-y-5 py-2", sidebarCollapsed ? "px-2" : "px-2")}>
-          <div className="space-y-1">
-            {mainNavigation.map((item) => (
-              <NavigationLink key={item.href} item={item} collapsed={sidebarCollapsed} />
-            ))}
-          </div>
-
-          <NavigationGroup label="Space" items={workNavigation} collapsed={sidebarCollapsed} />
-
-          <NavigationGroup label="Manage" items={manageNavigation} collapsed={sidebarCollapsed} />
-        </nav>
-
-        <div className="border-t border-sidebar-border p-2">
-          {!sidebarCollapsed && (
-            <div className="mb-2 px-2.5 pt-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">INVS Studio</p>
+          <nav className="flex-1 space-y-5 px-2 py-2">
+            <div className="space-y-1">
+              {mainNavigation.map((item) => (
+                <NavigationLink key={item.href} item={item} collapsed={sidebarCollapsed} />
+              ))}
             </div>
-          )}
 
-          <div className={cn("flex rounded-md", sidebarCollapsed ? "flex-col items-center gap-1 py-1.5" : "items-center gap-2 px-2 py-1.5")}>
-            {auth.user.avatarUrl ? (
-              <img src={auth.user.avatarUrl} alt="" title={sidebarCollapsed ? auth.user.displayName : undefined} className="size-7 shrink-0 rounded-full" />
-            ) : (
-              <div title={sidebarCollapsed ? auth.user.displayName : undefined} className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium">
-                {auth.user.displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <NavigationGroup label="Space" items={spaceNavigation} collapsed={sidebarCollapsed} />
 
-            {!sidebarCollapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{auth.user.displayName}</p>
+            <NavigationGroup label="Manage" items={manageNavigation} collapsed={sidebarCollapsed} />
+          </nav>
+        </aside>
 
-                <p className="truncate text-xs capitalize text-sidebar-foreground/50">{auth.workspace.role}</p>
-              </div>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Sign out"
-              title={sidebarCollapsed ? "Sign out" : undefined}
-              disabled={logout.isPending}
-              onClick={() => {
-                logout.mutate();
-              }}
-            >
-              <SignOutIcon />
-            </Button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="min-w-0 flex-1">
-        <Outlet />
-      </main>
+        <main className="min-w-0 flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
