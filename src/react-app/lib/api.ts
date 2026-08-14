@@ -4,6 +4,7 @@ type ApiErrorBody = {
     message?: string;
   };
 };
+export const SESSION_INVALID_EVENT = "flow:session-invalid";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -32,6 +33,10 @@ export async function apiFetch<T>(input: string, init: RequestInit = {}): Promis
   const body = (await response.json().catch(() => null)) as T | ApiErrorBody | null;
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SESSION_INVALID_EVENT));
+    }
+
     const errorBody = body as ApiErrorBody | null;
 
     throw new ApiError(response.status, errorBody?.error?.code ?? "REQUEST_FAILED", errorBody?.error?.message ?? "Request failed");

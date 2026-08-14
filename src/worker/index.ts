@@ -9,6 +9,7 @@ import { projectsRoutes } from "./routes/projects";
 import { membersRoutes } from "./routes/members";
 import { tasksRoutes } from "./routes/tasks";
 import { dashboardRoutes } from "./routes/dashboard";
+import { HTTPException } from "hono/http-exception";
 
 import type { AppBindings } from "./types/app-env";
 
@@ -61,6 +62,34 @@ app.notFound((c) => {
       },
     },
     404,
+  );
+});
+
+app.onError((error, c) => {
+  if (error instanceof HTTPException) {
+    return c.json(
+      {
+        error: {
+          code: "HTTP_ERROR",
+
+          message: error.message || "Request failed",
+        },
+      },
+      error.status,
+    );
+  }
+
+  console.error("Unhandled Flow API error", error);
+
+  return c.json(
+    {
+      error: {
+        code: "INTERNAL_ERROR",
+
+        message: "Internal server error",
+      },
+    },
+    500,
   );
 });
 
