@@ -7,6 +7,7 @@ import { MembersPage } from "@/app/pages/members-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
 import { ClientDetailPage } from "@/app/pages/client-detail-page";
 import { ProjectDetailPage } from "@/app/pages/project-detail-page";
+import { ProjectBoardPage } from "@/app/pages/project-board-page";
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
 export const router = createBrowserRouter([
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
       {
         path: "/projects/:projectId",
         element: <ProjectDetailPage />,
+      },
+      {
+        path: "/projects/:projectId/board",
+        element: <ProjectBoardPage />,
       },
     ],
   },
