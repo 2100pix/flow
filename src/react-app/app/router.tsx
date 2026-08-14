@@ -23,20 +23,8 @@ export const router = createBrowserRouter([
     element: <LoginPage />,
   },
   {
-    path: "/projects/:projectId/board",
-
-    element: (
-      <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
-        <ProjectBoardPage />
-      </Suspense>
-    ),
-  },
-  {
-    path: "*",
-    element: <NotFoundPage />,
-  },
-  {
     element: <ProtectedLayout />,
+
     children: [
       {
         path: "/",
@@ -64,7 +52,16 @@ export const router = createBrowserRouter([
       },
       {
         path: "/projects/:projectId/board",
-        element: <ProjectBoardPage />,
+
+        element: (
+          <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
+            <ProjectBoardPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "*",
+        element: <NotFoundPage />,
       },
     ],
   },
