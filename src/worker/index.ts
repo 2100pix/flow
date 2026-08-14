@@ -52,4 +52,16 @@ app.get("/api/db-health", async (c) => {
   });
 });
 
+app.notFound((c) => {
+  return c.json(
+    {
+      error: {
+        code: "NOT_FOUND",
+        message: "API route not found",
+      },
+    },
+    404,
+  );
+});
+
 export default app;

@@ -9,5 +9,9 @@ export function useDashboard() {
     queryKey: dashboardQueryKey,
 
     queryFn: getDashboard,
+
+    staleTime: 0,
+
+    refetchOnMount: "always",
   });
 }
