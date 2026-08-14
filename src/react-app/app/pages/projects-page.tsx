@@ -5,6 +5,7 @@ import { useMe } from "@/features/auth/hooks/use-me";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
 import { useProjects } from "@/features/projects/hooks/use-projects";
+import { Link } from "react-router";
 
 export function ProjectsPage() {
   const [name, setName] = useState("");
@@ -126,15 +127,14 @@ export function ProjectsPage() {
         {projects.length > 0 ? (
           <div className="divide-y rounded-lg border">
             {projects.map((project) => (
-              <div key={project.id} className="flex items-center justify-between gap-6 px-4 py-3">
+              <Link key={project.id} to={`/projects/${project.id}`} className="flex items-center justify-between gap-6 px-4 py-3 transition-colors hover:bg-muted/50">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{project.name}</p>
 
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{project.client.name}</p>
                 </div>
-
                 <span className="text-xs capitalize text-muted-foreground">{project.status.replace("_", " ")}</span>
-              </div>
+              </Link>
             ))}
           </div>
         ) : null}

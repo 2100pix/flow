@@ -1,1 +1,1 @@
-export type { CreateProjectInput, ProjectDto, ProjectResponse, ProjectsResponse, ProjectStatus } from "../../../shared/contracts/projects";
+export type { ArchiveProjectResponse, CreateProjectInput, ProjectDto, ProjectResponse, ProjectsResponse, ProjectStatus, UpdateProjectInput } from "../../../shared/contracts/projects";

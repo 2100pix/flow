@@ -1,0 +1,292 @@
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+
+import { Button } from "@/components/ui/button";
+import { useMe } from "@/features/auth/hooks/use-me";
+import { useClients } from "@/features/clients/hooks/use-clients";
+import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
+import { useProject } from "@/features/projects/hooks/use-project";
+import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+import type { ProjectDto, ProjectStatus } from "@/features/projects/types";
+
+type ProjectEditorProps = {
+  project: ProjectDto;
+  canManage: boolean;
+};
+
+function ProjectEditor({ project, canManage }: ProjectEditorProps) {
+  const navigate = useNavigate();
+
+  const { data: clients = [] } = useClients();
+
+  const [clientId, setClientId] = useState(project.client.id);
+
+  const [name, setName] = useState(project.name);
+
+  const [description, setDescription] = useState(project.description ?? "");
+
+  const [status, setStatus] = useState<ProjectStatus>(project.status);
+
+  const [startDate, setStartDate] = useState(project.startDate ?? "");
+
+  const [dueDate, setDueDate] = useState(project.dueDate ?? "");
+
+  const [discordChannelUrl, setDiscordChannelUrl] = useState(project.discordChannelUrl ?? "");
+
+  const updateProject = useUpdateProject();
+
+  const archiveProject = useArchiveProject();
+
+  const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
+
+  return (
+    <div className="space-y-8">
+      <div className="rounded-lg border p-5">
+        <div className="grid max-w-3xl gap-5">
+          <div>
+            <label htmlFor="project-name" className="mb-1.5 block text-sm font-medium">
+              Name
+            </label>
+
+            <input
+              id="project-name"
+              value={name}
+              maxLength={160}
+              disabled={!canManage}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="project-client" className="mb-1.5 block text-sm font-medium">
+              Client
+            </label>
+
+            <select
+              id="project-client"
+              value={clientId}
+              disabled={!canManage}
+              onChange={(event) => {
+                setClientId(event.target.value);
+              }}
+              className="h-8 w-full max-w-sm rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+            >
+              {availableClients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                  {client.status === "inactive" ? " (inactive)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="project-status" className="mb-1.5 block text-sm font-medium">
+              Status
+            </label>
+
+            <select
+              id="project-status"
+              value={status}
+              disabled={!canManage}
+              onChange={(event) => {
+                setStatus(event.target.value as ProjectStatus);
+              }}
+              className="h-8 w-full max-w-xs rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+            >
+              <option value="planning">Planning</option>
+
+              <option value="active">Active</option>
+
+              <option value="on_hold">On hold</option>
+
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="project-description" className="mb-1.5 block text-sm font-medium">
+              Description
+            </label>
+
+            <textarea
+              id="project-description"
+              value={description}
+              maxLength={5000}
+              disabled={!canManage}
+              rows={5}
+              onChange={(event) => {
+                setDescription(event.target.value);
+              }}
+              className="w-full resize-y rounded-lg border border-input bg-background px-2.5 py-2 text-sm outline-none disabled:opacity-60"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="project-start" className="mb-1.5 block text-sm font-medium">
+                Start date
+              </label>
+
+              <input
+                id="project-start"
+                type="date"
+                value={startDate}
+                disabled={!canManage}
+                onChange={(event) => {
+                  setStartDate(event.target.value);
+                }}
+                className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="project-due" className="mb-1.5 block text-sm font-medium">
+                Due date
+              </label>
+
+              <input
+                id="project-due"
+                type="date"
+                value={dueDate}
+                disabled={!canManage}
+                onChange={(event) => {
+                  setDueDate(event.target.value);
+                }}
+                className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="project-discord" className="mb-1.5 block text-sm font-medium">
+              Discord channel
+            </label>
+
+            <input
+              id="project-discord"
+              type="url"
+              value={discordChannelUrl}
+              disabled={!canManage}
+              placeholder="https://discord.com/channels/..."
+              onChange={(event) => {
+                setDiscordChannelUrl(event.target.value);
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+            />
+
+            {project.discordChannelUrl ? (
+              <a href={project.discordChannelUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-muted-foreground hover:text-foreground">
+                Open Discord channel
+              </a>
+            ) : null}
+          </div>
+
+          {updateProject.isError ? <p className="text-sm text-destructive">{updateProject.error.message}</p> : null}
+
+          {canManage ? (
+            <Button
+              className="w-fit"
+              disabled={!name.trim() || updateProject.isPending}
+              onClick={() => {
+                updateProject.mutate({
+                  projectId: project.id,
+
+                  input: {
+                    clientId,
+
+                    name: name.trim(),
+
+                    description: description.trim() || null,
+
+                    status,
+
+                    startDate: startDate || null,
+
+                    dueDate: dueDate || null,
+
+                    discordChannelUrl: discordChannelUrl.trim() || null,
+                  },
+                });
+              }}
+            >
+              {updateProject.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {canManage ? (
+        <div className="rounded-lg border border-destructive/20 p-5">
+          <p className="text-sm font-medium">Archive project</p>
+
+          <p className="mt-1 text-sm text-muted-foreground">Archived projects are removed from active project views.</p>
+
+          {archiveProject.isError ? <p className="mt-3 text-sm text-destructive">{archiveProject.error.message}</p> : null}
+
+          <Button
+            className="mt-4"
+            variant="destructive"
+            disabled={archiveProject.isPending}
+            onClick={() => {
+              const confirmed = window.confirm(`Archive ${project.name}?`);
+
+              if (!confirmed) {
+                return;
+              }
+
+              archiveProject.mutate(project.id, {
+                onSuccess: () => {
+                  void navigate("/projects", {
+                    replace: true,
+                  });
+                },
+              });
+            }}
+          >
+            {archiveProject.isPending ? "Archiving…" : "Archive project"}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ProjectDetailPage() {
+  const { projectId } = useParams();
+
+  const { data: auth } = useMe();
+
+  const { data: project, isPending, isError } = useProject(projectId);
+
+  if (!projectId) {
+    return null;
+  }
+
+  const canManage = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+
+  return (
+    <div className="p-8">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div>
+          <Link to="/projects" className="text-sm text-muted-foreground hover:text-foreground">
+            Projects
+          </Link>
+
+          <h1 className="mt-3 text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
+
+          {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
+        </div>
+
+        {isPending ? <p className="text-sm text-muted-foreground">Loading project…</p> : null}
+
+        {isError ? <p className="text-sm text-destructive">Unable to load project.</p> : null}
+
+        {project ? <ProjectEditor key={project.updatedAt} project={project} canManage={canManage} /> : null}
+      </div>
+    </div>
+  );
+}

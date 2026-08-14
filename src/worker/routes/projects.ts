@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createProjectSchema, type ProjectDto } from "../../shared/contracts/projects";
+import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../../shared/contracts/projects";
 import { createDb } from "../db";
 import { clients, projects } from "../db/schema";
 import { createId } from "../lib/id";
@@ -162,3 +162,262 @@ projectsRoutes.post(
     );
   },
 );
+
+projectsRoutes.get("/:id", requireAuth, async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [project] = await db
+    .select({
+      id: projects.id,
+
+      clientId: clients.id,
+      clientName: clients.name,
+
+      name: projects.name,
+      description: projects.description,
+      status: projects.status,
+      startDate: projects.startDate,
+      dueDate: projects.dueDate,
+      discordChannelUrl: projects.discordChannelUrl,
+
+      createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const data: ProjectDto = {
+    id: project.id,
+
+    client: {
+      id: project.clientId,
+      name: project.clientName,
+    },
+
+    name: project.name,
+    description: project.description,
+    status: project.status,
+    startDate: project.startDate,
+    dueDate: project.dueDate,
+    discordChannelUrl: project.discordChannelUrl,
+
+    createdAt: project.createdAt.toISOString(),
+
+    updatedAt: project.updatedAt.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
+
+projectsRoutes.patch(
+  "/:id",
+  requireAuth,
+  requireRole("owner", "admin"),
+  zValidator("json", updateProjectSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid project data",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+    const projectId = c.req.param("id");
+
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const [project] = await db
+      .select({
+        id: projects.id,
+
+        clientId: clients.id,
+        clientName: clients.name,
+
+        name: projects.name,
+        description: projects.description,
+        status: projects.status,
+        startDate: projects.startDate,
+        dueDate: projects.dueDate,
+        discordChannelUrl: projects.discordChannelUrl,
+
+        createdAt: projects.createdAt,
+      })
+      .from(projects)
+      .innerJoin(clients, eq(projects.clientId, clients.id))
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+      .limit(1);
+
+    if (!project) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Project not found",
+          },
+        },
+        404,
+      );
+    }
+
+    let selectedClient = {
+      id: project.clientId,
+      name: project.clientName,
+    };
+
+    if (input.clientId !== undefined && input.clientId !== project.clientId) {
+      const [targetClient] = await db
+        .select({
+          id: clients.id,
+          name: clients.name,
+        })
+        .from(clients)
+        .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
+        .limit(1);
+
+      if (!targetClient) {
+        return c.json(
+          {
+            error: {
+              code: "CLIENT_NOT_AVAILABLE",
+              message: "An active client is required",
+            },
+          },
+          400,
+        );
+      }
+
+      selectedClient = targetClient;
+    }
+
+    const startDate = input.startDate !== undefined ? input.startDate : project.startDate;
+
+    const dueDate = input.dueDate !== undefined ? input.dueDate : project.dueDate;
+
+    if (startDate && dueDate && startDate > dueDate) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_PROJECT_DATES",
+            message: "Due date cannot be before start date",
+          },
+        },
+        400,
+      );
+    }
+
+    const now = new Date();
+
+    const name = input.name ?? project.name;
+
+    const description = input.description !== undefined ? input.description : project.description;
+
+    const status = input.status ?? project.status;
+
+    const discordChannelUrl = input.discordChannelUrl !== undefined ? input.discordChannelUrl : project.discordChannelUrl;
+
+    await db
+      .update(projects)
+      .set({
+        clientId: selectedClient.id,
+        name,
+        description,
+        status,
+        startDate,
+        dueDate,
+        discordChannelUrl,
+        updatedAt: now,
+      })
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+    const data: ProjectDto = {
+      id: project.id,
+
+      client: selectedClient,
+
+      name,
+      description,
+      status,
+      startDate,
+      dueDate,
+      discordChannelUrl,
+
+      createdAt: project.createdAt.toISOString(),
+
+      updatedAt: now.toISOString(),
+    };
+
+    return c.json({
+      data,
+    });
+  },
+);
+
+projectsRoutes.delete("/:id", requireAuth, requireRole("owner", "admin"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [project] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const now = new Date();
+
+  await db
+    .update(projects)
+    .set({
+      archivedAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
