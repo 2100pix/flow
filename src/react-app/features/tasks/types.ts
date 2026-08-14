@@ -1,1 +1,1 @@
-export type { CreateTaskInput, ProjectTasksResponse, TaskAssigneeDto, TaskDto, TaskPriority, TaskResponse, TaskStatus } from "../../../shared/contracts/tasks";
+export type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, TaskAssigneeDto, TaskDto, TaskPriority, TaskResponse, TaskStatus, UpdateTaskInput } from "../../../shared/contracts/tasks";

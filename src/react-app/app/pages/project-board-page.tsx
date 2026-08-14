@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
+import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
 import type { TaskDto, TaskStatus } from "@/features/tasks/types";
 
 const columns: {
@@ -88,10 +89,16 @@ function QuickCreateTask({ projectId, status }: { projectId: string; status: Tas
   );
 }
 
-function TaskCard({ task }: { task: TaskDto }) {
+function TaskCard({ task, onOpen }: { task: TaskDto; onOpen: () => void }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <button type="button" onClick={onOpen} className="block w-full rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50">
       <p className="text-sm font-medium leading-5">{task.title}</p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {task.priority ? <span className="capitalize">{task.priority}</span> : null}
+
+        {task.dueDate ? <span>{task.dueDate}</span> : null}
+      </div>
 
       {task.assignee ? (
         <div className="mt-3 flex items-center gap-2">
@@ -100,11 +107,11 @@ function TaskCard({ task }: { task: TaskDto }) {
           <span className="truncate text-xs text-muted-foreground">{task.assignee.displayName}</span>
         </div>
       ) : null}
-    </div>
+    </button>
   );
 }
 
-function TaskColumn({ projectId, status, label, tasks }: { projectId: string; status: TaskStatus; label: string; tasks: TaskDto[] }) {
+function TaskColumn({ projectId, status, label, tasks, onOpenTask }: { projectId: string; status: TaskStatus; label: string; tasks: TaskDto[]; onOpenTask: (taskId: string) => void }) {
   return (
     <section className="flex w-[290px] shrink-0 flex-col rounded-lg border bg-muted/20">
       <div className="flex items-center justify-between border-b px-3 py-2.5">
@@ -115,7 +122,13 @@ function TaskColumn({ projectId, status, label, tasks }: { projectId: string; st
 
       <div className="min-h-28 flex-1 space-y-2 p-2">
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onOpen={() => {
+              onOpenTask(task.id);
+            }}
+          />
         ))}
       </div>
 
@@ -126,9 +139,35 @@ function TaskColumn({ projectId, status, label, tasks }: { projectId: string; st
 
 export function ProjectBoardPage() {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  const activeTaskId = searchParams.get("task");
+
+  function openTask(taskId: string) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+
+      next.set("task", taskId);
+
+      return next;
+    });
+  }
+
+  function closeTask() {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+
+        next.delete("task");
+
+        return next;
+      },
+      {
+        replace: true,
+      },
+    );
+  }
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
-
   const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
 
   if (!projectId) {
@@ -160,10 +199,11 @@ export function ProjectBoardPage() {
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
         <div className="flex h-full min-w-max gap-3">
           {columns.map((column) => (
-            <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} tasks={tasks.filter((task) => task.status === column.status)} />
+            <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} onOpenTask={openTask} tasks={tasks.filter((task) => task.status === column.status)} />
           ))}
         </div>
       </div>
+      {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} /> : null}
     </div>
   );
 }
