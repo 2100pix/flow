@@ -5,6 +5,7 @@ import { HomePage } from "@/app/pages/home-page";
 import { LoginPage } from "@/app/pages/login-page";
 import { MembersPage } from "@/app/pages/members-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
+import { ClientDetailPage } from "@/app/pages/client-detail-page";
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
 export const router = createBrowserRouter([
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: "/members",
         element: <MembersPage />,
+      },
+      {
+        path: "/clients/:clientId",
+        element: <ClientDetailPage />,
       },
     ],
   },

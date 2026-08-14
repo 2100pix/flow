@@ -1,1 +1,1 @@
-export type { ClientDto, ClientResponse, ClientsResponse, ClientStatus, CreateClientInput } from "../../../shared/contracts/clients";
+export type { ArchiveClientResponse, ClientDto, ClientResponse, ClientsResponse, ClientStatus, CreateClientInput, UpdateClientInput } from "../../../shared/contracts/clients";

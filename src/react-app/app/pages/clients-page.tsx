@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/hooks/use-me";
+import { Link } from "react-router";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { useCreateClient } from "@/features/clients/hooks/use-create-client";
 
@@ -84,15 +85,15 @@ export function ClientsPage() {
         {clients.length > 0 ? (
           <div className="divide-y rounded-lg border">
             {clients.map((client) => (
-              <div key={client.id} className="flex items-center justify-between px-4 py-3">
+              <Link key={client.id} to={`/clients/${client.id}`} className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/50">
                 <div>
                   <p className="text-sm font-medium">{client.name}</p>
 
                   <p className="mt-0.5 text-xs capitalize text-muted-foreground">{client.status}</p>
                 </div>
 
-                <p className="text-xs text-muted-foreground">{client.id}</p>
-              </div>
+                <span className="text-xs text-muted-foreground">View</span>
+              </Link>
             ))}
           </div>
         ) : null}

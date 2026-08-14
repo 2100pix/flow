@@ -2,9 +2,9 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createClientSchema, type ClientDto } from "../../shared/contracts/clients";
+import { createClientSchema, updateClientSchema, type ClientDto } from "../../shared/contracts/clients";
 import { createDb } from "../db";
-import { clients } from "../db/schema";
+import { clients, projects } from "../db/schema";
 import { createId } from "../lib/id";
 import { requireAuth, requireRole } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
@@ -104,3 +104,195 @@ clientsRoutes.post(
     );
   },
 );
+
+clientsRoutes.get("/:id", requireAuth, async (c) => {
+  const auth = c.var.auth;
+  const clientId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [client] = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      logoUrl: clients.logoUrl,
+      status: clients.status,
+      createdAt: clients.createdAt,
+      updatedAt: clients.updatedAt,
+    })
+    .from(clients)
+    .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)))
+    .limit(1);
+
+  if (!client) {
+    return c.json(
+      {
+        error: {
+          code: "CLIENT_NOT_FOUND",
+          message: "Client not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const data: ClientDto = {
+    id: client.id,
+    name: client.name,
+    logoUrl: client.logoUrl,
+    status: client.status,
+    createdAt: client.createdAt.toISOString(),
+    updatedAt: client.updatedAt.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
+
+clientsRoutes.patch(
+  "/:id",
+  requireAuth,
+  requireRole("owner", "admin"),
+  zValidator("json", updateClientSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid client data",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+    const clientId = c.req.param("id");
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const [client] = await db
+      .select({
+        id: clients.id,
+        name: clients.name,
+        logoUrl: clients.logoUrl,
+        status: clients.status,
+        createdAt: clients.createdAt,
+      })
+      .from(clients)
+      .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)))
+      .limit(1);
+
+    if (!client) {
+      return c.json(
+        {
+          error: {
+            code: "CLIENT_NOT_FOUND",
+            message: "Client not found",
+          },
+        },
+        404,
+      );
+    }
+
+    const now = new Date();
+
+    await db
+      .update(clients)
+      .set({
+        ...(input.name !== undefined
+          ? {
+              name: input.name,
+            }
+          : {}),
+
+        ...(input.status !== undefined
+          ? {
+              status: input.status,
+            }
+          : {}),
+
+        updatedAt: now,
+      })
+      .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)));
+
+    const data: ClientDto = {
+      id: client.id,
+      name: input.name ?? client.name,
+      logoUrl: client.logoUrl,
+      status: input.status ?? client.status,
+      createdAt: client.createdAt.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+
+    return c.json({
+      data,
+    });
+  },
+);
+
+clientsRoutes.delete("/:id", requireAuth, requireRole("owner", "admin"), async (c) => {
+  const auth = c.var.auth;
+  const clientId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [client] = await db
+    .select({
+      id: clients.id,
+    })
+    .from(clients)
+    .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)))
+    .limit(1);
+
+  if (!client) {
+    return c.json(
+      {
+        error: {
+          code: "CLIENT_NOT_FOUND",
+          message: "Client not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [existingProject] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.clientId, clientId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (existingProject) {
+    return c.json(
+      {
+        error: {
+          code: "CLIENT_HAS_PROJECTS",
+          message: "Archive the client's projects before archiving this client",
+        },
+      },
+      409,
+    );
+  }
+
+  const now = new Date();
+
+  await db
+    .update(clients)
+    .set({
+      archivedAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
