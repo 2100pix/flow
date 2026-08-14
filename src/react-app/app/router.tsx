@@ -9,6 +9,7 @@ import { MembersPage } from "@/app/pages/members-page";
 import { NotFoundPage } from "@/app/pages/not-found-page";
 import { ProjectDetailPage } from "@/app/pages/project-detail-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
+import { SettingsPage } from "@/app/pages/settings-page";
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
 const ProjectBoardPage = lazy(() =>
@@ -41,6 +42,10 @@ export const router = createBrowserRouter([
       {
         path: "/members",
         element: <MembersPage />,
+      },
+      {
+        path: "/settings",
+        element: <SettingsPage />,
       },
       {
         path: "/clients/:clientId",

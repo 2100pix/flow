@@ -3,7 +3,7 @@ import { deleteCookie, getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 
 import { createDb } from "../db";
-import { sessions, users, workspaceMembers } from "../db/schema";
+import { sessions, users, workspaceMembers, workspaces } from "../db/schema";
 import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
 import { INVS_WORKSPACE_ID } from "../lib/workspace";
 import type { AuthContext, WorkspaceRole } from "../types/auth";
@@ -42,10 +42,12 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
+      workspaceName: workspaces.name,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID)))
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
     .limit(1);
 
@@ -79,6 +81,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
 
     workspace: {
       id: INVS_WORKSPACE_ID,
+      name: result.workspaceName,
       role: result.role,
     },
   });

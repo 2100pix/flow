@@ -9,6 +9,7 @@ export type AuthContext = {
 
   workspace: {
     id: string;
+    name: string;
     role: WorkspaceRole;
   };
 };

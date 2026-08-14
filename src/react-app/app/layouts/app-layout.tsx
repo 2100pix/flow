@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BuildingsIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
+import { BuildingsIcon, FolderIcon, GearSixIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
@@ -36,6 +36,11 @@ const manageNavigation = [
     label: "Members",
     href: "/members",
     icon: UsersIcon,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: GearSixIcon,
   },
 ];
 
@@ -176,9 +181,8 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-label="Flow">
             F
           </div>
-
           {/* Replace hardcoded workspace name with workspace data in 8.5K. */}
-          <p className="truncate text-sm font-semibold tracking-tight">INVS Studio</p>
+          <p className="truncate text-sm font-semibold tracking-tight">{auth.workspace.name}</p>
         </div>
 
         <AccountMenu auth={auth} />
