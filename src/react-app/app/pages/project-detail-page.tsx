@@ -387,27 +387,35 @@ export function ProjectDetailPage() {
 
   return (
     <div className="p-8">
-      <div className="flex items-start justify-between gap-6">
-        <div>
-          <Link to="/projects" className="text-sm text-muted-foreground hover:text-foreground">
-            Projects
-          </Link>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
-          {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <Link to="/projects" className="text-sm text-muted-foreground hover:text-foreground">
+              Projects
+            </Link>
+
+            <h1 className="mt-3 text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
+
+            {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
+          </div>
+
+          {project ? (
+            <Link to={`/projects/${project.id}/board`} className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted">
+              Open board
+            </Link>
+          ) : null}
         </div>
+
         {isPending ? <p className="text-sm text-muted-foreground">Loading project…</p> : null}
+
         {isError ? <p className="text-sm text-destructive">Unable to load project.</p> : null}
+
         {project ? (
           <>
             <ProjectEditor key={project.updatedAt} project={project} canManage={canManage} />
 
             <ProjectTeam projectId={project.id} canManage={canManage} />
           </>
-        ) : null}
-        {project ? (
-          <Link to={`/projects/${project.id}/board`} className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted">
-            Open board
-          </Link>
         ) : null}
       </div>
     </div>
