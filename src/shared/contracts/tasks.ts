@@ -88,3 +88,43 @@ export type ProjectTasksResponse = {
 export type TaskResponse = {
   data: TaskDto;
 };
+
+export const reorderTaskColumnSchema = z.object({
+  status: taskStatusSchema,
+
+  taskIds: z.array(z.string().trim().min(1)),
+});
+
+export const reorderTasksSchema = z
+  .object({
+    columns: z.array(reorderTaskColumnSchema).min(1).max(2),
+  })
+  .superRefine((value, ctx) => {
+    const statuses = value.columns.map((column) => column.status);
+
+    if (new Set(statuses).size !== statuses.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["columns"],
+        message: "Column statuses must be unique",
+      });
+    }
+
+    const taskIds = value.columns.flatMap((column) => column.taskIds);
+
+    if (new Set(taskIds).size !== taskIds.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["columns"],
+        message: "Task IDs must be unique",
+      });
+    }
+  });
+
+export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>;
+
+export type ReorderTasksResponse = {
+  data: {
+    success: true;
+  };
+};

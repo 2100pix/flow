@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { move } from "@dnd-kit/helpers";
+import { DragDropProvider, useDroppable } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/features/projects/hooks/use-project";
+import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
-import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
-import type { TaskDto, TaskStatus } from "@/features/tasks/types";
+import { useReorderTasks } from "@/features/tasks/hooks/use-reorder-tasks";
+import type { ReorderTasksInput, TaskDto, TaskStatus } from "@/features/tasks/types";
 
 const columns: {
   status: TaskStatus;
@@ -34,7 +38,53 @@ const columns: {
   },
 ];
 
-function QuickCreateTask({ projectId, status }: { projectId: string; status: TaskStatus }) {
+type TaskBoardState = Record<TaskStatus, TaskDto[]>;
+
+function buildBoard(tasks: TaskDto[]): TaskBoardState {
+  const board: TaskBoardState = {
+    backlog: [],
+    todo: [],
+    in_progress: [],
+    review: [],
+    done: [],
+  };
+
+  for (const task of tasks) {
+    board[task.status].push(task);
+  }
+
+  for (const column of columns) {
+    board[column.status].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  return board;
+}
+
+function cloneBoard(board: TaskBoardState): TaskBoardState {
+  return {
+    backlog: [...board.backlog],
+
+    todo: [...board.todo],
+
+    in_progress: [...board.in_progress],
+
+    review: [...board.review],
+
+    done: [...board.done],
+  };
+}
+
+function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | null {
+  for (const column of columns) {
+    if (board[column.status].some((task) => task.id === taskId)) {
+      return column.status;
+    }
+  }
+
+  return null;
+}
+
+function QuickCreateTask({ projectId, status, disabled }: { projectId: string; status: TaskStatus; disabled: boolean }) {
   const [title, setTitle] = useState("");
 
   const createTask = useCreateTask();
@@ -47,7 +97,7 @@ function QuickCreateTask({ projectId, status }: { projectId: string; status: Tas
 
         const value = title.trim();
 
-        if (!value) {
+        if (!value || disabled) {
           return;
         }
 
@@ -72,14 +122,15 @@ function QuickCreateTask({ projectId, status }: { projectId: string; status: Tas
         <input
           value={title}
           maxLength={240}
+          disabled={disabled || createTask.isPending}
           placeholder="Add task"
           onChange={(event) => {
             setTitle(event.target.value);
           }}
-          className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
         />
 
-        <Button type="submit" size="sm" disabled={!title.trim() || createTask.isPending}>
+        <Button type="submit" size="sm" disabled={disabled || !title.trim() || createTask.isPending}>
           Add
         </Button>
       </div>
@@ -89,31 +140,81 @@ function QuickCreateTask({ projectId, status }: { projectId: string; status: Tas
   );
 }
 
-function TaskCard({ task, onOpen }: { task: TaskDto; onOpen: () => void }) {
+function TaskCard({ task, index, status, disabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; disabled: boolean; onOpen: () => void }) {
+  const { ref, handleRef, isDragSource } = useSortable({
+    id: task.id,
+    index,
+    group: status,
+
+    type: "task",
+    accept: "task",
+
+    disabled,
+  });
+
   return (
-    <button type="button" onClick={onOpen} className="block w-full rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted/50">
-      <p className="text-sm font-medium leading-5">{task.title}</p>
+    <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-40" : ""}`}>
+      <div className="flex items-start gap-2">
+        <button type="button" disabled={disabled} onClick={onOpen} className="min-w-0 flex-1 text-left disabled:pointer-events-none">
+          <p className="text-sm font-medium leading-5">{task.title}</p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {task.priority ? <span className="capitalize">{task.priority}</span> : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {task.priority ? <span className="capitalize">{task.priority}</span> : null}
 
-        {task.dueDate ? <span>{task.dueDate}</span> : null}
+            {task.dueDate ? <span>{task.dueDate}</span> : null}
+          </div>
+
+          {task.assignee ? (
+            <div className="mt-3 flex items-center gap-2">
+              {task.assignee.avatarUrl ? <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" /> : null}
+
+              <span className="truncate text-xs text-muted-foreground">{task.assignee.displayName}</span>
+            </div>
+          ) : null}
+        </button>
+
+        <button
+          ref={handleRef}
+          type="button"
+          disabled={disabled}
+          aria-label={`Drag ${task.title}`}
+          className="shrink-0 cursor-grab rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none active:cursor-grabbing"
+        >
+          Drag
+        </button>
       </div>
-
-      {task.assignee ? (
-        <div className="mt-3 flex items-center gap-2">
-          {task.assignee.avatarUrl ? <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" /> : null}
-
-          <span className="truncate text-xs text-muted-foreground">{task.assignee.displayName}</span>
-        </div>
-      ) : null}
-    </button>
+    </div>
   );
 }
 
-function TaskColumn({ projectId, status, label, tasks, onOpenTask }: { projectId: string; status: TaskStatus; label: string; tasks: TaskDto[]; onOpenTask: (taskId: string) => void }) {
+function TaskColumn({
+  projectId,
+  status,
+  label,
+  tasks,
+  disabled,
+  onOpenTask,
+}: {
+  projectId: string;
+  status: TaskStatus;
+  label: string;
+  tasks: TaskDto[];
+  disabled: boolean;
+
+  onOpenTask: (taskId: string) => void;
+}) {
+  const { ref, isDropTarget } = useDroppable({
+    id: status,
+    accept: "task",
+
+    // Lower priority than cards.
+    collisionPriority: -1,
+
+    disabled,
+  });
+
   return (
-    <section className="flex w-[290px] shrink-0 flex-col rounded-lg border bg-muted/20">
+    <section ref={ref} className={`flex w-[290px] shrink-0 flex-col rounded-lg border bg-muted/20 ${isDropTarget ? "ring-1 ring-ring" : ""}`}>
       <div className="flex items-center justify-between border-b px-3 py-2.5">
         <h2 className="text-sm font-medium">{label}</h2>
 
@@ -121,10 +222,13 @@ function TaskColumn({ projectId, status, label, tasks, onOpenTask }: { projectId
       </div>
 
       <div className="min-h-28 flex-1 space-y-2 p-2">
-        {tasks.map((task) => (
+        {tasks.map((task, index) => (
           <TaskCard
             key={task.id}
             task={task}
+            index={index}
+            status={status}
+            disabled={disabled}
             onOpen={() => {
               onOpenTask(task.id);
             }}
@@ -132,16 +236,45 @@ function TaskColumn({ projectId, status, label, tasks, onOpenTask }: { projectId
         ))}
       </div>
 
-      <QuickCreateTask projectId={projectId} status={status} />
+      <QuickCreateTask projectId={projectId} status={status} disabled={disabled} />
     </section>
   );
 }
 
 export function ProjectBoardPage() {
   const { projectId } = useParams();
+
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTaskId = searchParams.get("task");
+
+  const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
+
+  const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
+
+  const reorderTasks = useReorderTasks();
+
+  const serverBoard = useMemo(() => buildBoard(tasks), [tasks]);
+
+  const [dragBoard, setDragBoard] = useState<TaskBoardState | null>(null);
+
+  const board = dragBoard ?? serverBoard;
+
+  const boardRef = useRef<TaskBoardState | null>(null);
+
+  const previousBoardRef = useRef<TaskBoardState | null>(null);
+
+  if (!projectId) {
+    return null;
+  }
+
+  function resetDragState() {
+    boardRef.current = null;
+
+    previousBoardRef.current = null;
+
+    setDragBoard(null);
+  }
 
   function openTask(taskId: string) {
     setSearchParams((current) => {
@@ -167,12 +300,6 @@ export function ProjectBoardPage() {
       },
     );
   }
-  const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
-  const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
-
-  if (!projectId) {
-    return null;
-  }
 
   if (projectPending || tasksPending) {
     return <div className="p-8 text-sm text-muted-foreground">Loading board…</div>;
@@ -183,27 +310,117 @@ export function ProjectBoardPage() {
   }
 
   return (
-    <div className="flex h-screen min-w-0 flex-col">
-      <div className="shrink-0 border-b px-8 py-5">
-        <Link to={`/projects/${project.id}`} className="text-sm text-muted-foreground hover:text-foreground">
-          Project overview
-        </Link>
+    <DragDropProvider
+      onDragStart={() => {
+        const snapshot = cloneBoard(board);
 
-        <div className="mt-2">
-          <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
+        previousBoardRef.current = snapshot;
 
-          <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p>
+        boardRef.current = snapshot;
+      }}
+      onDragOver={(event) => {
+        const source = event.operation.source;
+
+        if (!source || source.type !== "task") {
+          return;
+        }
+
+        setDragBoard((current) => {
+          const base = current ?? boardRef.current ?? board;
+
+          const next = move(base, event) as TaskBoardState;
+
+          boardRef.current = next;
+
+          return next;
+        });
+      }}
+      onDragEnd={(event) => {
+        const snapshot = previousBoardRef.current;
+
+        const currentBoard = boardRef.current;
+
+        if (!snapshot || !currentBoard) {
+          resetDragState();
+          return;
+        }
+
+        if (event.canceled || !event.operation.target) {
+          resetDragState();
+          return;
+        }
+
+        const source = event.operation.source;
+
+        if (!source || source.type !== "task") {
+          resetDragState();
+          return;
+        }
+
+        const taskId = String(source.id);
+
+        const sourceStatus = findTaskStatus(snapshot, taskId);
+
+        const targetStatus = findTaskStatus(currentBoard, taskId);
+
+        if (!sourceStatus || !targetStatus) {
+          resetDragState();
+          return;
+        }
+
+        const affectedStatuses: TaskStatus[] = sourceStatus === targetStatus ? [sourceStatus] : [sourceStatus, targetStatus];
+
+        const input: ReorderTasksInput = {
+          columns: affectedStatuses.map((status) => ({
+            status,
+
+            taskIds: currentBoard[status].map((task) => task.id),
+          })),
+        };
+
+        reorderTasks.mutate(
+          {
+            projectId: project.id,
+
+            input,
+          },
+          {
+            onSuccess: () => {
+              resetDragState();
+            },
+
+            onError: () => {
+              resetDragState();
+            },
+          },
+        );
+      }}
+    >
+      <div className="flex h-screen min-w-0 flex-col">
+        <div className="shrink-0 border-b px-8 py-5">
+          <Link to={`/projects/${project.id}`} className="text-sm text-muted-foreground hover:text-foreground">
+            Project overview
+          </Link>
+
+          <div className="mt-2">
+            <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
+
+            <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p>
+
+            {reorderTasks.isError ? <p className="mt-2 text-sm text-destructive">Unable to save task order.</p> : null}
+          </div>
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
-        <div className="flex h-full min-w-max gap-3">
-          {columns.map((column) => (
-            <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} onOpenTask={openTask} tasks={tasks.filter((task) => task.status === column.status)} />
-          ))}
+        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
+          <div className="flex h-full min-w-max gap-3">
+            {columns.map((column) => (
+              <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} tasks={board[column.status]} disabled={reorderTasks.isPending} onOpenTask={openTask} />
+            ))}
+          </div>
         </div>
+
+        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} /> : null}
       </div>
-      {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} /> : null}
-    </div>
+    </DragDropProvider>
   );
 }

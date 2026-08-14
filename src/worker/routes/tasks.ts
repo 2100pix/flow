@@ -1,8 +1,8 @@
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max, sql, type SQL } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createTaskSchema, updateTaskSchema, type TaskDto } from "../../shared/contracts/tasks";
+import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } from "../../shared/contracts/tasks";
 import { createDb } from "../db";
 import { projectMembers, projects, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
@@ -223,6 +223,123 @@ tasksRoutes.post(
       },
       201,
     );
+  },
+);
+
+tasksRoutes.patch(
+  "/projects/:projectId/tasks/reorder",
+  requireAuth,
+  zValidator("json", reorderTasksSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid task order",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+
+    const projectId = c.req.param("projectId");
+
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const [project] = await db
+      .select({
+        id: projects.id,
+      })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+      .limit(1);
+
+    if (!project) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Project not found",
+          },
+        },
+        404,
+      );
+    }
+
+    const statuses = input.columns.map((column) => column.status);
+
+    const receivedIds = input.columns.flatMap((column) => column.taskIds);
+
+    const currentTasks = await db
+      .select({
+        id: tasks.id,
+      })
+      .from(tasks)
+      .where(and(eq(tasks.projectId, projectId), inArray(tasks.status, statuses), isNull(tasks.archivedAt)));
+
+    const currentIds = new Set(currentTasks.map((task) => task.id));
+
+    if (currentIds.size !== receivedIds.length || receivedIds.some((taskId) => !currentIds.has(taskId))) {
+      return c.json(
+        {
+          error: {
+            code: "BOARD_CHANGED",
+            message: "Task board changed; reload and try again",
+          },
+        },
+        409,
+      );
+    }
+
+    if (receivedIds.length === 0) {
+      return c.json({
+        data: {
+          success: true as const,
+        },
+      });
+    }
+
+    const statusCase: SQL[] = [sql`(case`];
+
+    const sortOrderCase: SQL[] = [sql`(case`];
+
+    for (const column of input.columns) {
+      column.taskIds.forEach((taskId, index) => {
+        statusCase.push(sql`when ${tasks.id} = ${taskId} then ${column.status}`);
+
+        sortOrderCase.push(sql`when ${tasks.id} = ${taskId} then ${(index + 1) * 100}`);
+      });
+    }
+
+    statusCase.push(sql`else ${tasks.status} end)`);
+
+    sortOrderCase.push(sql`else ${tasks.sortOrder} end)`);
+
+    const nextStatus = sql.join(statusCase, sql.raw(" "));
+
+    const nextSortOrder = sql.join(sortOrderCase, sql.raw(" "));
+
+    const now = new Date();
+
+    await db
+      .update(tasks)
+      .set({
+        status: nextStatus,
+        sortOrder: nextSortOrder,
+        updatedAt: now,
+      })
+      .where(and(eq(tasks.projectId, projectId), inArray(tasks.id, receivedIds), isNull(tasks.archivedAt)));
+
+    return c.json({
+      data: {
+        success: true as const,
+      },
+    });
   },
 );
 
