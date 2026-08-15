@@ -2,6 +2,7 @@ import * as z from "zod";
 
 export const permissionKeys = [
   "workspace.manage",
+  "dashboard.view",
 
   "members.view",
   "members.manage",
@@ -55,7 +56,11 @@ export const permissionCatalog: Array<{
     group: "Workspace",
     label: "Manage workspace",
   },
-
+  {
+    key: "dashboard.view",
+    group: "Dashboard",
+    label: "View dashboard",
+  },
   {
     key: "members.view",
     group: "Members",

@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { createRoleSchema, updateRoleSchema, type RoleDto } from "../../shared/contracts/roles";
 import { builtInRoleDefinitions, isReservedRoleName } from "../../shared/roles";
 import { createDb } from "../db";
-import { workspaceRolePermissions, workspaceRoles } from "../db/schema";
+import { workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
 import { requireAuth, requireRole } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
@@ -317,6 +317,25 @@ rolesRoutes.delete("/:roleId", requireAuth, requireRole("owner", "admin"), async
     );
   }
 
+  const [assignedMember] = await db
+    .select({
+      userId: workspaceMembers.userId,
+    })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.customRoleId, roleId)))
+    .limit(1);
+
+  if (assignedMember) {
+    return c.json(
+      {
+        error: {
+          code: "ROLE_IN_USE",
+          message: "Reassign members before deleting this role",
+        },
+      },
+      409,
+    );
+  }
   await db.delete(workspaceRoles).where(and(eq(workspaceRoles.id, roleId), eq(workspaceRoles.workspaceId, auth.workspace.id)));
 
   return c.json({

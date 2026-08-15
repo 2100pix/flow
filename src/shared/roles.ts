@@ -8,7 +8,7 @@ export type BuiltInRoleDefinition = {
   permissions: readonly PermissionKey[];
 };
 
-const memberPermissions = ["members.view", "teams.view", "clients.view", "projects.view", "tasks.view", "tasks.create", "tasks.edit", "tasks.archive", "tasks.assign"] as const satisfies readonly PermissionKey[];
+const memberPermissions = ["members.view", "dashboard.view", "teams.view", "clients.view", "projects.view", "tasks.view", "tasks.create", "tasks.edit", "tasks.archive", "tasks.assign"] as const satisfies readonly PermissionKey[];
 
 export const builtInRoleDefinitions: readonly BuiltInRoleDefinition[] = [
   {

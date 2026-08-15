@@ -5,6 +5,19 @@ export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 export const addProjectMemberSchema = z.object({
   userId: z.string().trim().min(1),
 });
+export const updateWorkspaceMemberRoleSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("built_in"),
+    role: workspaceRoleSchema,
+  }),
+
+  z.object({
+    kind: z.literal("custom"),
+    roleId: z.string().trim().min(1),
+  }),
+]);
+
+export type UpdateWorkspaceMemberRoleInput = z.infer<typeof updateWorkspaceMemberRoleSchema>;
 
 export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;
 
@@ -14,7 +27,17 @@ export type MemberDto = {
   id: string;
   displayName: string;
   avatarUrl: string | null;
+
   role: WorkspaceRole;
+
+  customRole: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+export type MemberResponse = {
+  data: MemberDto;
 };
 
 export type MembersResponse = {

@@ -1,1 +1,12 @@
-export type { AddProjectMemberInput, MemberDto, MembersResponse, ProjectMemberDto, ProjectMemberResponse, ProjectMembersResponse, RemoveProjectMemberResponse, WorkspaceRole } from "../../../shared/contracts/members";
+export type {
+  AddProjectMemberInput,
+  MemberDto,
+  MemberResponse,
+  MembersResponse,
+  ProjectMemberDto,
+  ProjectMemberResponse,
+  ProjectMembersResponse,
+  RemoveProjectMemberResponse,
+  UpdateWorkspaceMemberRoleInput,
+  WorkspaceRole,
+} from "../../../shared/contracts/members";
