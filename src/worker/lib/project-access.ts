@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { canViewProject, type ProjectVisibility } from "../../shared/project-privacy";
 
@@ -17,18 +17,6 @@ export type AccessibleProject = {
   isProjectMember: boolean;
 };
 
-/**
- * Resolve project access without disclosing whether an
- * inaccessible private project exists.
- *
- * null means one of:
- *
- * - project does not exist
- * - project belongs to another workspace
- * - project is archived
- * - caller lacks projects.view
- * - caller cannot access the private project
- */
 export async function findAccessibleProject(db: Db, auth: AuthContext, projectId: string): Promise<AccessibleProject | null> {
   const [project] = await db
     .select({
@@ -84,4 +72,50 @@ export async function findAccessibleProject(db: Db, auth: AuthContext, projectId
     project,
     isProjectMember,
   };
+}
+
+export async function filterAccessibleProjects<
+  T extends {
+    id: string;
+    visibility: ProjectVisibility;
+  },
+>(db: Db, auth: AuthContext, candidateProjects: readonly T[]): Promise<T[]> {
+  if (auth.workspace.permissions.includes("projects.private.view_all")) {
+    return candidateProjects.filter((project) =>
+      canViewProject({
+        permissions: auth.workspace.permissions,
+        visibility: project.visibility,
+        isProjectMember: false,
+      }),
+    );
+  }
+
+  const privateProjectIds = candidateProjects.filter((project) => project.visibility === "private").map((project) => project.id);
+
+  if (privateProjectIds.length === 0) {
+    return candidateProjects.filter((project) =>
+      canViewProject({
+        permissions: auth.workspace.permissions,
+        visibility: project.visibility,
+        isProjectMember: false,
+      }),
+    );
+  }
+
+  const memberships = await db
+    .select({
+      projectId: projectMembers.projectId,
+    })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.userId, auth.user.id), inArray(projectMembers.projectId, privateProjectIds)));
+
+  const memberProjectIds = new Set(memberships.map((membership) => membership.projectId));
+
+  return candidateProjects.filter((project) =>
+    canViewProject({
+      permissions: auth.workspace.permissions,
+      visibility: project.visibility,
+      isProjectMember: memberProjectIds.has(project.id),
+    }),
+  );
 }
