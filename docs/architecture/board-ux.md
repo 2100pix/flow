@@ -52,10 +52,7 @@ The global application header occupies 3rem of viewport height.
 
 The board therefore must use the remaining application viewport:
 
-```text
 100vh - 3rem
-```
-
 The board itself must not create an additional document-level vertical scroll.
 
 Layout:
@@ -73,7 +70,10 @@ Horizontal board viewport
 Horizontal overflow belongs to the board viewport.
 
 Vertical overflow belongs to each individual task column.
-Columns
+
+---
+
+## Columns
 
 Each enabled workflow status renders exactly one column.
 
@@ -97,7 +97,9 @@ Column header and quick-create footer remain visible while the task list scrolls
 
 The task list owns vertical scrolling.
 
-Column Header
+---
+
+## Column Header
 
 Column header displays:
 
@@ -108,7 +110,9 @@ The semantic status key is not displayed on the board.
 
 Status keys are implementation identifiers, not user-facing labels.
 
-Empty Columns
+---
+
+## Empty Columns
 
 An empty enabled column remains visible.
 
@@ -122,7 +126,9 @@ If the user can create tasks, quick-create remains available.
 
 Empty columns must remain valid drop targets.
 
-Task Cards
+---
+
+## Task Cards
 
 A task card prioritizes scanability.
 
@@ -141,7 +147,9 @@ Task title may occupy at most a small bounded number of lines before truncation.
 
 Cards must not change height dramatically because of long content.
 
-Card Interaction
+---
+
+## Card Interaction
 
 The task body opens Task Detail.
 
@@ -159,7 +167,9 @@ The whole card must not become a drag handle.
 
 This prevents accidental drag operations when opening a task.
 
-Task Detail
+---
+
+## Task Detail
 
 Task Detail remains URL-addressable through:
 
@@ -173,7 +183,9 @@ Workflow labels and enabled destinations remain sourced from the project workflo
 
 Opening and closing Task Detail must not reset board data.
 
-Quick Create
+---
+
+## Quick Create
 
 Quick create is per-column.
 
@@ -206,7 +218,10 @@ The created task inherits the column semantic status.
 Quick create is hidden when the user lacks:
 
 tasks.create
-Drag and Drop
+
+---
+
+## Drag and Drop
 
 Task movement remains optimistic.
 
@@ -226,7 +241,9 @@ different enabled column
 
 Disabled workflow statuses can never be drag destinations because they are not rendered.
 
-Drag Feedback
+---
+
+## Drag Feedback
 
 During drag:
 
@@ -238,7 +255,9 @@ Feedback must remain subtle.
 
 The board must not use large overlays or modal drag previews.
 
-Reorder Persistence
+---
+
+## Reorder Persistence
 
 The backend remains authoritative.
 
@@ -261,7 +280,9 @@ optimistic board discarded
 
 A failed reorder must never leave the UI showing a task position that was not persisted.
 
-Mutation Locking
+---
+
+## Mutation Locking
 
 While a reorder request is pending:
 
@@ -271,7 +292,9 @@ task creation may remain available.
 
 Only the interaction that risks conflicting reorder state is locked.
 
-Permissions
+---
+
+## Permissions
 
 Board read:
 
@@ -297,7 +320,9 @@ Frontend permission checks are presentation controls only.
 
 Backend authorization remains authoritative.
 
-Private Projects
+---
+
+## Private Projects
 
 Board UX must not alter private-project non-discoverability.
 
@@ -307,7 +332,10 @@ Board components must not attempt to infer whether failure came from:
 
 project absence,
 private-project ACL.
-Board Header
+
+---
+
+## Board Header
 
 Board header contains only project-context information.
 
@@ -326,7 +354,9 @@ The board header must remain smaller than the task workspace.
 
 Board operations must not be dominated by project metadata.
 
-Loading
+---
+
+## Loading
 
 Project, tasks, and workflow are required before rendering the operational board.
 
@@ -337,7 +367,10 @@ Board loading therefore waits for:
 project
 tasks
 workflow
-Error States
+
+---
+
+## Error States
 
 Board-level loading failure renders a board-level error.
 
@@ -349,7 +382,9 @@ Task Detail failure remains inside Task Detail.
 
 Errors should remain scoped to the interaction that failed.
 
-Scrolling
+---
+
+## Scrolling
 
 Board scrolling model:
 
@@ -366,7 +401,9 @@ Each column scroll position is independent.
 
 Scrolling a long column must not move another column vertically.
 
-Responsive Behavior
+---
+
+## Responsive Behavior
 
 The board remains a horizontal kanban surface.
 
@@ -376,7 +413,9 @@ Small viewports use horizontal board scrolling.
 
 Column width remains usable for task scanning.
 
-Performance
+---
+
+## Performance
 
 The board must not perform per-card network requests.
 
@@ -390,7 +429,9 @@ Board derivation may use memoization.
 
 Stable task IDs remain React keys.
 
-Accessibility
+---
+
+## Accessibility
 
 Interactive controls require meaningful accessible labels.
 
@@ -406,7 +447,9 @@ Drag handle must expose an accessible task-specific label.
 
 Board UX must not depend on hover alone to expose essential functionality.
 
-Failure Policy
+---
+
+## Failure Policy
 
 The board must fail closed when workflow integrity fails.
 
@@ -419,7 +462,10 @@ board unavailable
 not:
 
 hardcoded fallback workflow
-Non-Goals
+
+---
+
+## Non-Goals
 
 This milestone does not introduce:
 
@@ -439,7 +485,10 @@ arbitrary card customization.
 
 Those require separate architecture decisions.
 
-Implementation Sequence
+---
+
+## Implementation Sequence
+
 8.9B — Board Viewport + Column Scrolling
 
 Fix application-shell height ownership and give every column an independent task scroll region.
