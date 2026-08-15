@@ -58,6 +58,10 @@ export const workspaceMembers = sqliteTable(
       enum: ["owner", "admin", "member"],
     }).notNull(),
 
+    customRoleId: text("custom_role_id").references(() => workspaceRoles.id, {
+      onDelete: "restrict",
+    }),
+
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
@@ -70,6 +74,9 @@ export const workspaceMembers = sqliteTable(
     index("workspace_members_user_id_idx").on(table.userId),
 
     check("workspace_members_role_check", sql`${table.role} in ('owner', 'admin', 'member')`),
+
+    index("workspace_members_custom_role_id_idx").on(table.customRoleId),
+    check("workspace_members_custom_role_check", sql`${table.role} = 'member' or ${table.customRoleId} is null`),
   ],
 );
 
