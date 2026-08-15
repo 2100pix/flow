@@ -6,6 +6,7 @@ import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } 
 import { createDb } from "../db";
 import { projectMembers, projects, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
+import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -27,15 +28,9 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
 
   const db = createDb(c.env.flow_db);
 
-  const [project] = await db
-    .select({
-      id: projects.id,
-    })
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-    .limit(1);
+  const access = await findAccessibleProject(db, auth, projectId);
 
-  if (!project) {
+  if (!access) {
     return c.json(
       {
         error: {
@@ -138,15 +133,9 @@ tasksRoutes.post(
 
     const db = createDb(c.env.flow_db);
 
-    const [project] = await db
-      .select({
-        id: projects.id,
-      })
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-      .limit(1);
+    const access = await findAccessibleProject(db, auth, projectId);
 
-    if (!project) {
+    if (!access) {
       return c.json(
         {
           error: {
@@ -253,15 +242,9 @@ tasksRoutes.patch(
 
     const db = createDb(c.env.flow_db);
 
-    const [project] = await db
-      .select({
-        id: projects.id,
-      })
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-      .limit(1);
+    const access = await findAccessibleProject(db, auth, projectId);
 
-    if (!project) {
+    if (!access) {
       return c.json(
         {
           error: {
@@ -392,7 +375,19 @@ tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), 
       404,
     );
   }
+  const access = await findAccessibleProject(db, auth, task.projectId);
 
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
   const data: TaskDto = {
     id: task.id,
     projectId: task.projectId,
@@ -517,7 +512,9 @@ tasksRoutes.patch(
       .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
       .limit(1);
 
-    if (!task) {
+    const access = await findAccessibleProject(db, auth, task.projectId);
+
+    if (!access) {
       return c.json(
         {
           error: {
@@ -648,7 +645,9 @@ tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archi
     .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
     .limit(1);
 
-  if (!task) {
+  const access = await findAccessibleProject(db, auth, task.projectId);
+
+  if (!access) {
     return c.json(
       {
         error: {
