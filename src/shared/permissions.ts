@@ -143,7 +143,7 @@ export const permissionCatalog: Array<{
   {
     key: "projects.private.manage",
     group: "Projects",
-    label: "Manage private projects",
+    label: "Manage private project access",
   },
   {
     key: "projects.private.view_all",
