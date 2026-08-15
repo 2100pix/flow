@@ -20,31 +20,22 @@ type ProjectEditorProps = {
   project: ProjectDto;
   canEdit: boolean;
   canArchive: boolean;
+  canManageVisibility: boolean;
 };
 
-function ProjectEditor({ project, canEdit, canArchive }: ProjectEditorProps) {
+function ProjectEditor({ project, canEdit, canArchive, canManageVisibility }: ProjectEditorProps) {
   const navigate = useNavigate();
-
   const { data: clients = [] } = useClients();
-
   const [clientId, setClientId] = useState(project.client.id);
-
   const [name, setName] = useState(project.name);
-
   const [description, setDescription] = useState(project.description ?? "");
-
   const [status, setStatus] = useState<ProjectStatus>(project.status);
-
+  const [visibility, setVisibility] = useState<ProjectDto["visibility"]>(project.visibility);
   const [startDate, setStartDate] = useState(project.startDate ?? "");
-
   const [dueDate, setDueDate] = useState(project.dueDate ?? "");
-
   const [discordChannelUrl, setDiscordChannelUrl] = useState(project.discordChannelUrl ?? "");
-
   const updateProject = useUpdateProject();
-
   const archiveProject = useArchiveProject();
-
   const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
 
   return (
@@ -114,7 +105,29 @@ function ProjectEditor({ project, canEdit, canArchive }: ProjectEditorProps) {
               <option value="completed">Completed</option>
             </select>
           </div>
+          <div>
+            <label htmlFor="project-visibility" className="mb-1.5 block text-sm font-medium">
+              Visibility
+            </label>
 
+            <select
+              id="project-visibility"
+              value={visibility}
+              disabled={!canManageVisibility}
+              onChange={(event) => {
+                setVisibility(event.target.value as ProjectDto["visibility"]);
+              }}
+              className="h-8 w-full max-w-xs rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+            >
+              <option value="workspace">Workspace</option>
+
+              <option value="private">Private</option>
+            </select>
+
+            <p className="mt-1.5 max-w-xl text-xs leading-5 text-muted-foreground">
+              {visibility === "private" ? "Private projects are restricted to project members and roles with access to all private projects." : "Workspace projects are discoverable by workspace members with project access."}
+            </p>
+          </div>
           <div>
             <label htmlFor="project-description" className="mb-1.5 block text-sm font-medium">
               Description
@@ -205,17 +218,12 @@ function ProjectEditor({ project, canEdit, canArchive }: ProjectEditorProps) {
 
                   input: {
                     clientId,
-
                     name: name.trim(),
-
                     description: description.trim() || null,
-
                     status,
-
+                    ...(canManageVisibility ? { visibility } : {}),
                     startDate: startDate || null,
-
                     dueDate: dueDate || null,
-
                     discordChannelUrl: discordChannelUrl.trim() || null,
                   },
                 });
@@ -263,7 +271,7 @@ function ProjectEditor({ project, canEdit, canArchive }: ProjectEditorProps) {
   );
 }
 
-function ProjectTeam({ projectId, canManage, canViewMembers }: { projectId: string; canManage: boolean; canViewMembers: boolean }) {
+function ProjectTeam({ projectId, canManage, canViewMembers, isPrivate }: { projectId: string; canManage: boolean; canViewMembers: boolean; isPrivate: boolean }) {
   const [userId, setUserId] = useState("");
 
   const { data: members = [] } = useMembers(canViewMembers);
@@ -283,8 +291,7 @@ function ProjectTeam({ projectId, canManage, canViewMembers }: { projectId: stri
       <div className="flex items-start justify-between gap-6">
         <div>
           <p className="text-sm font-medium">Team</p>
-
-          <p className="mt-1 text-sm text-muted-foreground">Workspace members assigned to this project.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{isPrivate ? "Project members can access this private project." : "Workspace members assigned to this project."}</p>{" "}
         </div>
 
         {canManage && availableMembers.length > 0 ? (
@@ -376,21 +383,16 @@ function ProjectTeam({ projectId, canManage, canViewMembers }: { projectId: stri
 
 export function ProjectDetailPage() {
   const { projectId } = useParams();
-
   const { data: auth } = useMe();
-
   const { data: project, isPending, isError } = useProject(projectId);
-
   if (!projectId) {
     return null;
   }
-
   const canEdit = hasPermission(auth, "projects.edit");
-
+  const canManagePrivate = hasPermission(auth, "projects.private.manage");
+  const canManageVisibility = canEdit && canManagePrivate;
   const canArchive = hasPermission(auth, "projects.archive");
-
-  const canManageTeam = hasPermission(auth, "projects.edit");
-
+  const canManageTeam = canEdit && (project?.visibility === "workspace" || (project?.visibility === "private" && canManagePrivate));
   const canViewMembers = hasPermission(auth, "members.view");
 
   return (
@@ -402,8 +404,11 @@ export function ProjectDetailPage() {
               Projects
             </Link>
 
-            <h1 className="mt-3 text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
+            <div className="mt-3 flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
 
+              {project?.visibility === "private" ? <span className="rounded-full border border-border px-2 py-1 text-[10px] font-medium">Private</span> : null}
+            </div>
             {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
           </div>
 
@@ -420,9 +425,9 @@ export function ProjectDetailPage() {
 
         {project ? (
           <>
-            <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} />
+            <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} canManageVisibility={canManageVisibility} />
 
-            <ProjectTeam projectId={project.id} canManage={canManageTeam} canViewMembers={canViewMembers} />
+            <ProjectTeam projectId={project.id} canManage={canManageTeam} canViewMembers={canViewMembers} isPrivate={project.visibility === "private"} />
           </>
         ) : null}
       </div>

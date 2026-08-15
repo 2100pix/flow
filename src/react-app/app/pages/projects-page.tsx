@@ -9,13 +9,10 @@ import { hasPermission } from "@/features/auth/permissions";
 
 export function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-
   const { data: auth } = useMe();
-
   const canView = hasPermission(auth, "projects.view");
-
   const canCreate = hasPermission(auth, "projects.create");
-
+  const canCreatePrivate = hasPermission(auth, "projects.private.create");
   const { data: projects = [], isPending, isError } = useProjects(canView);
 
   const createOpen = searchParams.get("create") === "project";
@@ -54,12 +51,7 @@ export function ProjectsPage() {
             <p className="mt-1 text-sm text-muted-foreground">Active work across workspace clients.</p>
           </div>
 
-          {canCreate && (
-            <Button type="button" onClick={openCreate}>
-              <PlusIcon />
-              New project
-            </Button>
-          )}
+          {canCreate && <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} />}
         </div>
 
         {isPending && <p className="text-sm text-muted-foreground">Loading projects…</p>}
@@ -84,8 +76,11 @@ export function ProjectsPage() {
 
                     <p className="mt-1 truncate text-xs text-muted-foreground">{project.client.name}</p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {project.visibility === "private" ? <span className="rounded-full border border-border px-2 py-1 text-[10px] font-medium text-foreground">Private</span> : null}
 
-                  <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[10px] capitalize text-muted-foreground">{project.status.replace("_", " ")}</span>
+                    <span className="rounded-full border border-border px-2 py-1 text-[10px] capitalize text-muted-foreground">{project.status.replace("_", " ")}</span>
+                  </div>
                 </div>
 
                 <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">{project.description || "No description"}</p>
