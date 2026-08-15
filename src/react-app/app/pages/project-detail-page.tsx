@@ -7,6 +7,7 @@ import { useClients } from "@/features/clients/hooks/use-clients";
 import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+import { hasPermission } from "@/features/auth/permissions";
 
 import { useAddProjectMember } from "@/features/members/hooks/use-add-project-member";
 import { useMembers } from "@/features/members/hooks/use-members";
@@ -17,10 +18,11 @@ import type { ProjectDto, ProjectStatus } from "@/features/projects/types";
 
 type ProjectEditorProps = {
   project: ProjectDto;
-  canManage: boolean;
+  canEdit: boolean;
+  canArchive: boolean;
 };
 
-function ProjectEditor({ project, canManage }: ProjectEditorProps) {
+function ProjectEditor({ project, canEdit, canArchive }: ProjectEditorProps) {
   const navigate = useNavigate();
 
   const { data: clients = [] } = useClients();
@@ -58,7 +60,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
               id="project-name"
               value={name}
               maxLength={160}
-              disabled={!canManage}
+              disabled={!canEdit}
               onChange={(event) => {
                 setName(event.target.value);
               }}
@@ -74,7 +76,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
             <select
               id="project-client"
               value={clientId}
-              disabled={!canManage}
+              disabled={!canEdit}
               onChange={(event) => {
                 setClientId(event.target.value);
               }}
@@ -97,7 +99,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
             <select
               id="project-status"
               value={status}
-              disabled={!canManage}
+              disabled={!canEdit}
               onChange={(event) => {
                 setStatus(event.target.value as ProjectStatus);
               }}
@@ -122,7 +124,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
               id="project-description"
               value={description}
               maxLength={5000}
-              disabled={!canManage}
+              disabled={!canEdit}
               rows={5}
               onChange={(event) => {
                 setDescription(event.target.value);
@@ -141,7 +143,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
                 id="project-start"
                 type="date"
                 value={startDate}
-                disabled={!canManage}
+                disabled={!canEdit}
                 onChange={(event) => {
                   setStartDate(event.target.value);
                 }}
@@ -158,7 +160,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
                 id="project-due"
                 type="date"
                 value={dueDate}
-                disabled={!canManage}
+                disabled={!canEdit}
                 onChange={(event) => {
                   setDueDate(event.target.value);
                 }}
@@ -176,7 +178,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
               id="project-discord"
               type="url"
               value={discordChannelUrl}
-              disabled={!canManage}
+              disabled={!canEdit}
               placeholder="https://discord.com/channels/..."
               onChange={(event) => {
                 setDiscordChannelUrl(event.target.value);
@@ -193,7 +195,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
 
           {updateProject.isError ? <p className="text-sm text-destructive">{updateProject.error.message}</p> : null}
 
-          {canManage ? (
+          {canEdit ? (
             <Button
               className="w-fit"
               disabled={!name.trim() || updateProject.isPending}
@@ -225,7 +227,7 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
         </div>
       </div>
 
-      {canManage ? (
+      {canArchive ? (
         <div className="rounded-lg border border-destructive/20 p-5">
           <p className="text-sm font-medium">Archive project</p>
 
@@ -261,10 +263,10 @@ function ProjectEditor({ project, canManage }: ProjectEditorProps) {
   );
 }
 
-function ProjectTeam({ projectId, canManage }: { projectId: string; canManage: boolean }) {
+function ProjectTeam({ projectId, canManage, canViewMembers }: { projectId: string; canManage: boolean; canViewMembers: boolean }) {
   const [userId, setUserId] = useState("");
 
-  const { data: members = [] } = useMembers();
+  const { data: members = [] } = useMembers(canViewMembers);
 
   const { data: projectMembers = [], isPending, isError } = useProjectMembers(projectId);
 
@@ -383,7 +385,13 @@ export function ProjectDetailPage() {
     return null;
   }
 
-  const canManage = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+  const canEdit = hasPermission(auth, "projects.edit");
+
+  const canArchive = hasPermission(auth, "projects.archive");
+
+  const canManageTeam = hasPermission(auth, "projects.edit");
+
+  const canViewMembers = hasPermission(auth, "members.view");
 
   return (
     <div className="p-8">
@@ -412,9 +420,9 @@ export function ProjectDetailPage() {
 
         {project ? (
           <>
-            <ProjectEditor key={project.updatedAt} project={project} canManage={canManage} />
+            <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} />
 
-            <ProjectTeam projectId={project.id} canManage={canManage} />
+            <ProjectTeam projectId={project.id} canManage={canManageTeam} canViewMembers={canViewMembers} />
           </>
         ) : null}
       </div>

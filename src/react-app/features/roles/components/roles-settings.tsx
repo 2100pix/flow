@@ -9,6 +9,7 @@ import type { RoleDto } from "@/features/roles/types";
 import { hasFullControl } from "../../../../shared/roles";
 import type { PermissionKey } from "../../../../shared/permissions";
 import { PermissionSelector } from "./permission-selector";
+import { hasPermission } from "@/features/auth/permissions";
 
 function BuiltInRoleCard({ role }: { role: RoleDto }) {
   return (
@@ -167,8 +168,7 @@ export function RolesSettings() {
 
   const [permissions, setPermissions] = useState<PermissionKey[]>([]);
 
-  const canManage = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
-
+  const canManage = hasPermission(auth, "roles.manage");
   const builtInRoles = roles.filter((role) => role.kind === "built_in");
 
   const customRoles = roles.filter((role) => role.kind === "custom");

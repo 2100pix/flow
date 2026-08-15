@@ -6,7 +6,11 @@ import { useProjectMembers } from "@/features/members/hooks/use-project-members"
 import { useArchiveTask } from "../hooks/use-archive-task";
 import { useTask } from "../hooks/use-task";
 import { useUpdateTask } from "../hooks/use-update-task";
-import type { TaskDto, TaskPriority, TaskStatus } from "../types";
+import { useMe } from "@/features/auth/hooks/use-me";
+
+import { hasPermission } from "@/features/auth/permissions";
+
+import type { TaskDto, TaskPriority, TaskStatus, UpdateTaskInput } from "../types";
 
 type TaskEditorProps = {
   task: TaskDto;
@@ -14,7 +18,15 @@ type TaskEditorProps = {
 };
 
 function TaskEditor({ task, onClose }: TaskEditorProps) {
-  const { data: projectMembers = [] } = useProjectMembers(task.projectId);
+  const { data: auth } = useMe();
+
+  const canEdit = hasPermission(auth, "tasks.edit");
+
+  const canAssign = hasPermission(auth, "tasks.assign");
+
+  const canArchive = hasPermission(auth, "tasks.archive");
+
+  const { data: projectMembers = [] } = useProjectMembers(task.projectId, canAssign);
 
   const [title, setTitle] = useState(task.title);
 
@@ -46,6 +58,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
             <input
               id="task-title"
               value={title}
+              disabled={!canEdit}
               maxLength={240}
               onChange={(event) => {
                 setTitle(event.target.value);
@@ -62,6 +75,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
             <textarea
               id="task-description"
               value={description}
+              disabled={!canEdit}
               rows={6}
               maxLength={5000}
               onChange={(event) => {
@@ -80,6 +94,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
               <select
                 id="task-status"
                 value={status}
+                disabled={!canEdit}
                 onChange={(event) => {
                   setStatus(event.target.value as TaskStatus);
                 }}
@@ -105,6 +120,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
               <select
                 id="task-priority"
                 value={priority}
+                disabled={!canEdit}
                 onChange={(event) => {
                   setPriority(event.target.value as TaskPriority | "");
                 }}
@@ -131,6 +147,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
             <select
               id="task-assignee"
               value={assigneeId}
+              disabled={!canAssign}
               onChange={(event) => {
                 setAssigneeId(event.target.value);
               }}
@@ -155,6 +172,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
               id="task-due-date"
               type="date"
               value={dueDate}
+              disabled={!canEdit}
               onChange={(event) => {
                 setDueDate(event.target.value);
               }}
@@ -171,6 +189,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
               id="task-discord"
               type="url"
               value={discordThreadUrl}
+              disabled={!canEdit}
               placeholder="https://discord.com/channels/..."
               onChange={(event) => {
                 setDiscordThreadUrl(event.target.value);
@@ -187,63 +206,72 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
 
           {updateTask.isError ? <p className="text-sm text-destructive">{updateTask.error.message}</p> : null}
 
-          <Button
-            disabled={!title.trim() || updateTask.isPending}
-            onClick={() => {
-              updateTask.mutate({
-                taskId: task.id,
+          {(canEdit || canAssign) && (
+            <Button
+              disabled={updateTask.isPending || (canEdit && !title.trim())}
+              onClick={() => {
+                const input: UpdateTaskInput = {};
 
-                input: {
-                  title: title.trim(),
+                if (canEdit) {
+                  input.title = title.trim();
 
-                  description: description.trim() || null,
+                  input.description = description.trim() || null;
 
-                  status,
+                  input.status = status;
 
-                  priority: priority || null,
+                  input.priority = priority || null;
 
-                  assigneeId: assigneeId || null,
+                  input.dueDate = dueDate || null;
 
-                  dueDate: dueDate || null,
+                  input.discordThreadUrl = discordThreadUrl.trim() || null;
+                }
 
-                  discordThreadUrl: discordThreadUrl.trim() || null,
-                },
-              });
-            }}
-          >
-            {updateTask.isPending ? "Saving…" : "Save changes"}
-          </Button>
+                if (canAssign) {
+                  input.assigneeId = assigneeId || null;
+                }
+
+                updateTask.mutate({
+                  taskId: task.id,
+
+                  input,
+                });
+              }}
+            >
+              {updateTask.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          )}
         </div>
       </div>
+      {canArchive && (
+        <div className="shrink-0 border-t p-6">
+          {archiveTask.isError ? <p className="mb-3 text-sm text-destructive">{archiveTask.error.message}</p> : null}
 
-      <div className="shrink-0 border-t p-6">
-        {archiveTask.isError ? <p className="mb-3 text-sm text-destructive">{archiveTask.error.message}</p> : null}
+          <Button
+            variant="destructive"
+            disabled={archiveTask.isPending}
+            onClick={() => {
+              const confirmed = window.confirm(`Archive ${task.title}?`);
 
-        <Button
-          variant="destructive"
-          disabled={archiveTask.isPending}
-          onClick={() => {
-            const confirmed = window.confirm(`Archive ${task.title}?`);
+              if (!confirmed) {
+                return;
+              }
 
-            if (!confirmed) {
-              return;
-            }
+              archiveTask.mutate(
+                {
+                  taskId: task.id,
 
-            archiveTask.mutate(
-              {
-                taskId: task.id,
-
-                projectId: task.projectId,
-              },
-              {
-                onSuccess: onClose,
-              },
-            );
-          }}
-        >
-          {archiveTask.isPending ? "Archiving…" : "Archive task"}
-        </Button>
-      </div>
+                  projectId: task.projectId,
+                },
+                {
+                  onSuccess: onClose,
+                },
+              );
+            }}
+          >
+            {archiveTask.isPending ? "Archiving…" : "Archive task"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

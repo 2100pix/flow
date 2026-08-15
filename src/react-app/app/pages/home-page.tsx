@@ -1,6 +1,9 @@
 import { Link } from "react-router";
 
 import { useDashboard } from "@/features/dashboard/hooks/use-dashboard";
+import { useMe } from "@/features/auth/hooks/use-me";
+
+import { hasPermission } from "@/features/auth/permissions";
 
 const taskStatuses = [
   {
@@ -44,7 +47,19 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 export function HomePage() {
-  const { data, isPending, isError } = useDashboard();
+  const { data: auth } = useMe();
+
+  const canView = hasPermission(auth, "dashboard.view");
+
+  const { data, isPending, isError } = useDashboard(canView);
+
+  if (auth && !canView) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">You do not have access to the dashboard.</p>
+      </div>
+    );
+  }
 
   if (isPending) {
     return (

@@ -5,18 +5,26 @@ import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/hooks/use-me";
 import { CreateClientDialog } from "@/features/clients/components/create-client-dialog";
 import { useClients } from "@/features/clients/hooks/use-clients";
+import { hasPermission } from "@/features/auth/permissions";
 
 export function ClientsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-
   const { data: auth } = useMe();
 
-  const { data: clients = [], isPending, isError } = useClients();
+  const canView = hasPermission(auth, "clients.view");
 
-  const canCreate = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+  const canCreate = hasPermission(auth, "clients.create");
+
+  const { data: clients = [], isPending, isError } = useClients(canView);
 
   const createOpen = searchParams.get("create") === "client";
-
+  if (auth && !canView) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">You do not have access to clients.</p>
+      </div>
+    );
+  }
   function openCreate() {
     const next = new URLSearchParams(searchParams);
 

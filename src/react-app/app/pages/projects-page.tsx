@@ -5,18 +5,27 @@ import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/hooks/use-me";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
 import { useProjects } from "@/features/projects/hooks/use-projects";
+import { hasPermission } from "@/features/auth/permissions";
 
 export function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: auth } = useMe();
 
-  const { data: projects = [], isPending, isError } = useProjects();
+  const canView = hasPermission(auth, "projects.view");
 
-  const canCreate = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+  const canCreate = hasPermission(auth, "projects.create");
+
+  const { data: projects = [], isPending, isError } = useProjects(canView);
 
   const createOpen = searchParams.get("create") === "project";
-
+  if (auth && !canView) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">You do not have access to projects.</p>
+      </div>
+    );
+  }
   function openCreate() {
     const next = new URLSearchParams(searchParams);
 

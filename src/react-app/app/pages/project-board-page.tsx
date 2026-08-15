@@ -10,6 +10,10 @@ import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useReorderTasks } from "@/features/tasks/hooks/use-reorder-tasks";
+import { useMe } from "@/features/auth/hooks/use-me";
+
+import { hasPermission } from "@/features/auth/permissions";
+
 import type { ReorderTasksInput, TaskDto, TaskStatus } from "@/features/tasks/types";
 
 const columns: {
@@ -140,7 +144,7 @@ function QuickCreateTask({ projectId, status, disabled }: { projectId: string; s
   );
 }
 
-function TaskCard({ task, index, status, disabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; disabled: boolean; onOpen: () => void }) {
+function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; dragDisabled: boolean; onOpen: () => void }) {
   const { ref, handleRef, isDragSource } = useSortable({
     id: task.id,
     index,
@@ -149,36 +153,36 @@ function TaskCard({ task, index, status, disabled, onOpen }: { task: TaskDto; in
     type: "task",
     accept: "task",
 
-    disabled,
+    disabled: dragDisabled,
   });
 
   return (
     <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-40" : ""}`}>
       <div className="flex items-start gap-2">
-        <button type="button" disabled={disabled} onClick={onOpen} className="min-w-0 flex-1 text-left disabled:pointer-events-none">
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
           <p className="text-sm font-medium leading-5">{task.title}</p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {task.priority ? <span className="capitalize">{task.priority}</span> : null}
+            {task.priority && <span className="capitalize">{task.priority}</span>}
 
-            {task.dueDate ? <span>{task.dueDate}</span> : null}
+            {task.dueDate && <span>{task.dueDate}</span>}
           </div>
 
-          {task.assignee ? (
+          {task.assignee && (
             <div className="mt-3 flex items-center gap-2">
-              {task.assignee.avatarUrl ? <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" /> : null}
+              {task.assignee.avatarUrl && <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" />}
 
               <span className="truncate text-xs text-muted-foreground">{task.assignee.displayName}</span>
             </div>
-          ) : null}
+          )}
         </button>
 
         <button
           ref={handleRef}
           type="button"
-          disabled={disabled}
+          disabled={dragDisabled}
           aria-label={`Drag ${task.title}`}
-          className="shrink-0 cursor-grab rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none active:cursor-grabbing"
+          className="shrink-0 cursor-grab rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40 active:cursor-grabbing"
         >
           Drag
         </button>
@@ -192,14 +196,16 @@ function TaskColumn({
   status,
   label,
   tasks,
-  disabled,
+  dragDisabled,
+  canCreateTask,
   onOpenTask,
 }: {
   projectId: string;
   status: TaskStatus;
   label: string;
   tasks: TaskDto[];
-  disabled: boolean;
+  dragDisabled: boolean;
+  canCreateTask: boolean;
 
   onOpenTask: (taskId: string) => void;
 }) {
@@ -207,10 +213,9 @@ function TaskColumn({
     id: status,
     accept: "task",
 
-    // Lower priority than cards.
     collisionPriority: -1,
 
-    disabled,
+    disabled: dragDisabled,
   });
 
   return (
@@ -228,7 +233,7 @@ function TaskColumn({
             task={task}
             index={index}
             status={status}
-            disabled={disabled}
+            dragDisabled={dragDisabled}
             onOpen={() => {
               onOpenTask(task.id);
             }}
@@ -236,7 +241,7 @@ function TaskColumn({
         ))}
       </div>
 
-      <QuickCreateTask projectId={projectId} status={status} disabled={disabled} />
+      {canCreateTask && <QuickCreateTask projectId={projectId} status={status} disabled={false} />}
     </section>
   );
 }
@@ -263,6 +268,11 @@ export function ProjectBoardPage() {
   const boardRef = useRef<TaskBoardState | null>(null);
 
   const previousBoardRef = useRef<TaskBoardState | null>(null);
+  const { data: auth } = useMe();
+
+  const canCreateTask = hasPermission(auth, "tasks.create");
+
+  const canEditTask = hasPermission(auth, "tasks.edit");
 
   if (!projectId) {
     return null;
@@ -414,7 +424,7 @@ export function ProjectBoardPage() {
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
           <div className="flex h-full min-w-max gap-3">
             {columns.map((column) => (
-              <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} tasks={board[column.status]} disabled={reorderTasks.isPending} onOpenTask={openTask} />
+              <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} tasks={board[column.status]} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onOpenTask={openTask} />
             ))}
           </div>
         </div>

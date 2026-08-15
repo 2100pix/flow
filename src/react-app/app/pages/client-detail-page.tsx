@@ -6,14 +6,17 @@ import { useMe } from "@/features/auth/hooks/use-me";
 import { useArchiveClient } from "@/features/clients/hooks/use-archive-client";
 import { useClient } from "@/features/clients/hooks/use-client";
 import { useUpdateClient } from "@/features/clients/hooks/use-update-client";
+import { hasPermission } from "@/features/auth/permissions";
+
 import type { ClientDto, ClientStatus } from "@/features/clients/types";
 
 type ClientEditorProps = {
   client: ClientDto;
-  canManage: boolean;
+  canEdit: boolean;
+  canArchive: boolean;
 };
 
-function ClientEditor({ client, canManage }: ClientEditorProps) {
+function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
   const navigate = useNavigate();
 
   const [name, setName] = useState(client.name);
@@ -36,7 +39,7 @@ function ClientEditor({ client, canManage }: ClientEditorProps) {
             <input
               id="client-name"
               value={name}
-              disabled={!canManage}
+              disabled={!canEdit}
               maxLength={120}
               onChange={(event) => {
                 setName(event.target.value);
@@ -53,7 +56,7 @@ function ClientEditor({ client, canManage }: ClientEditorProps) {
             <select
               id="client-status"
               value={status}
-              disabled={!canManage}
+              disabled={!canEdit}
               onChange={(event) => {
                 setStatus(event.target.value as ClientStatus);
               }}
@@ -67,7 +70,7 @@ function ClientEditor({ client, canManage }: ClientEditorProps) {
 
           {updateClient.isError ? <p className="text-sm text-destructive">{updateClient.error.message}</p> : null}
 
-          {canManage ? (
+          {canArchive ? (
             <Button
               disabled={!name.trim() || updateClient.isPending}
               onClick={() => {
@@ -86,7 +89,7 @@ function ClientEditor({ client, canManage }: ClientEditorProps) {
         </div>
       </div>
 
-      {canManage ? (
+      {canArchive ? (
         <div className="rounded-lg border border-destructive/20 p-5">
           <p className="text-sm font-medium">Archive client</p>
 
@@ -132,8 +135,9 @@ export function ClientDetailPage() {
   if (!clientId) {
     return null;
   }
+  const canEdit = hasPermission(auth, "clients.edit");
 
-  const canManage = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+  const canArchive = hasPermission(auth, "clients.archive");
 
   return (
     <div className="p-8">
@@ -150,7 +154,7 @@ export function ClientDetailPage() {
 
         {isError ? <p className="text-sm text-destructive">Unable to load client.</p> : null}
 
-        {client ? <ClientEditor key={client.updatedAt} client={client} canManage={canManage} /> : null}
+        {client ? <ClientEditor key={client.updatedAt} client={client} canEdit={canEdit} canArchive={canArchive} /> : null}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useMe } from "@/features/auth/hooks/use-me";
 
 import { TeamsSettings } from "@/features/teams/components/teams-settings";
 import { RolesSettings } from "@/features/roles/components/roles-settings";
+import { hasPermission } from "@/features/auth/permissions";
 
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 import { cn } from "@/lib/utils";
@@ -48,11 +49,34 @@ export function SettingsPage() {
 
   const activeSectionValue = searchParams.get("section");
 
-  const activeSection: SettingsSection = isSettingsSection(activeSectionValue) ? activeSectionValue : "general";
+  const requestedSection: SettingsSection = isSettingsSection(activeSectionValue) ? activeSectionValue : "general";
 
   const [workspaceName, setWorkspaceName] = useState(() => auth?.workspace.name ?? "");
 
-  const canManageWorkspace = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
+  const canViewSettings = hasPermission(auth, "settings.view");
+
+  const canManageWorkspace = hasPermission(auth, "workspace.manage");
+
+  const visibleSections = settingsSections.filter((section) => {
+    switch (section.id) {
+      case "general":
+        return true;
+
+      case "teams":
+        return hasPermission(auth, "teams.view");
+
+      case "roles":
+        return hasPermission(auth, "roles.view");
+
+      case "task-fields":
+        return hasPermission(auth, "task_fields.view");
+
+      case "task-appearance":
+        return hasPermission(auth, "task_appearance.view");
+    }
+  });
+
+  const activeSection = visibleSections.some((section) => section.id === requestedSection) ? requestedSection : "general";
 
   const normalizedName = workspaceName.trim();
 
@@ -67,7 +91,21 @@ export function SettingsPage() {
 
     setSearchParams(next);
   }
+  if (!auth) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">Loading settings…</p>
+      </div>
+    );
+  }
 
+  if (!canViewSettings) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">You do not have access to workspace settings.</p>
+      </div>
+    );
+  }
   return (
     <div className="p-8">
       <div className="mx-auto max-w-6xl space-y-8">
@@ -79,7 +117,7 @@ export function SettingsPage() {
 
         <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
           <nav className="space-y-1">
-            {settingsSections.map((section) => (
+            {visibleSections.map((section) => (
               <button
                 key={section.id}
                 type="button"
@@ -136,7 +174,7 @@ export function SettingsPage() {
                       <p className="text-xs text-muted-foreground">This name is shown across the Flow workspace.</p>
                     </div>
 
-                    {!canManageWorkspace && <p className="text-sm text-muted-foreground">Only workspace owners and admins can change this setting.</p>}
+                    {!canManageWorkspace && <p className="text-sm text-muted-foreground">You do not have permission to change this setting..</p>}
 
                     {updateWorkspace.isError && <p className="text-sm text-destructive">{updateWorkspace.error.message}</p>}
 

@@ -6,6 +6,8 @@ import { useMe } from "@/features/auth/hooks/use-me";
 import { useMembers } from "@/features/members/hooks/use-members";
 import { useAddTeamMember, useCreateTeam, useDeleteTeam, useRemoveTeamMember, useUpdateTeam } from "@/features/teams/hooks/use-team-mutations";
 import { useTeams } from "@/features/teams/hooks/use-teams";
+import { hasPermission } from "@/features/auth/permissions";
+
 import type { TeamDto } from "@/features/teams/types";
 
 function TeamCard({ team, canManage }: { team: TeamDto; canManage: boolean }) {
@@ -236,8 +238,7 @@ export function TeamsSettings() {
 
   const [name, setName] = useState("");
 
-  const canManage = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
-
+  const canManage = hasPermission(auth, "teams.manage");
   return (
     <section className="space-y-6">
       <div>

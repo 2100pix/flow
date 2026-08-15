@@ -4,65 +4,49 @@ import { Link, NavLink, Outlet } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
+import { hasPermission } from "@/features/auth/permissions";
 import type { AuthContext } from "@/features/auth/types";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import type { ProjectDto } from "@/features/projects/types";
-import { hasPermission } from "@/features/auth/permissions";
-
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "flow:sidebar-collapsed";
 
-const canViewHome = hasPermission(auth, "dashboard.view");
+type NavigationItem = {
+  label: string;
+  href: string;
+  icon: typeof HouseIcon;
+};
 
-const canViewClients = hasPermission(auth, "clients.view");
+const homeNavigationItem: NavigationItem = {
+  label: "Home",
+  href: "/",
+  icon: HouseIcon,
+};
 
-const canCreateClients = hasPermission(auth, "clients.create");
-
-const canViewProjects = hasPermission(auth, "projects.view");
-
-const canCreateProjects = hasPermission(auth, "projects.create");
-
-const canViewMembers = hasPermission(auth, "members.view");
-
-const canViewSettings = hasPermission(auth, "settings.view");
-
-const { data: projects = [] } = useProjects(canViewProjects);
-
-const mainNavigation = [
-  {
-    label: "Home",
-    href: "/",
-    icon: HouseIcon,
-  },
-];
-
-const clientsNavigationItem = {
+const clientsNavigationItem: NavigationItem = {
   label: "Clients",
   href: "/clients",
   icon: BuildingsIcon,
 };
 
-const projectsNavigationItem = {
+const projectsNavigationItem: NavigationItem = {
   label: "Projects",
   href: "/projects",
   icon: FolderIcon,
 };
 
-const manageNavigation = [
-  {
-    label: "Members",
-    href: "/members",
-    icon: UsersIcon,
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: GearSixIcon,
-  },
-];
+const membersNavigationItem: NavigationItem = {
+  label: "Members",
+  href: "/members",
+  icon: UsersIcon,
+};
 
-type NavigationItem = (typeof mainNavigation)[number];
+const settingsNavigationItem: NavigationItem = {
+  label: "Settings",
+  href: "/settings",
+  icon: GearSixIcon,
+};
 
 function NavigationLink({ item, collapsed }: { item: NavigationItem; collapsed: boolean }) {
   const Icon = item.icon;
@@ -96,13 +80,31 @@ function QuickCreateButton({ to, label }: { to: string; label: string }) {
   );
 }
 
-function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolean; projects: ProjectDto[]; canViewClients: boolean; canCreateClients: boolean; canViewProjects: boolean; canCreateProjects: boolean }) {
+function SpaceNavigation({
+  collapsed,
+  projects,
+  canViewClients,
+  canCreateClients,
+  canViewProjects,
+  canCreateProjects,
+}: {
+  collapsed: boolean;
+  projects: ProjectDto[];
+  canViewClients: boolean;
+  canCreateClients: boolean;
+  canViewProjects: boolean;
+  canCreateProjects: boolean;
+}) {
+  if (!canViewClients && !canViewProjects) {
+    return null;
+  }
+
   if (collapsed) {
     return (
       <div className="space-y-1">
-        <NavigationLink item={clientsNavigationItem} collapsed />
+        {canViewClients && <NavigationLink item={clientsNavigationItem} collapsed />}
 
-        <NavigationLink item={projectsNavigationItem} collapsed />
+        {canViewProjects && <NavigationLink item={projectsNavigationItem} collapsed />}
       </div>
     );
   }
@@ -114,42 +116,48 @@ function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolea
       <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">Space</p>
 
       <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <NavigationLink item={clientsNavigationItem} collapsed={false} />
+        {canViewClients && (
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <NavigationLink item={clientsNavigationItem} collapsed={false} />
+            </div>
+
+            {canCreateClients && <QuickCreateButton to="/clients?create=client" label="Create client" />}
           </div>
+        )}
 
-          {canCreate && <QuickCreateButton to="/clients?create=client" label="Create client" />}
-        </div>
+        {canViewProjects && (
+          <>
+            <div className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <NavigationLink item={projectsNavigationItem} collapsed={false} />
+              </div>
 
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <NavigationLink item={projectsNavigationItem} collapsed={false} />
-          </div>
+              {canCreateProjects && <QuickCreateButton to="/projects?create=project" label="Create project" />}
+            </div>
 
-          {canCreate && <QuickCreateButton to="/projects?create=project" label="Create project" />}
-        </div>
+            {visibleProjects.length > 0 && (
+              <div className="space-y-0.5 pb-1 pl-6">
+                {visibleProjects.map((project) => (
+                  <NavLink
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className={({ isActive }) =>
+                      cn("block truncate rounded-md px-2 py-1.5 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
+                    }
+                  >
+                    {project.name}
+                  </NavLink>
+                ))}
 
-        {visibleProjects.length > 0 && (
-          <div className="space-y-0.5 pb-1 pl-6">
-            {visibleProjects.map((project) => (
-              <NavLink
-                key={project.id}
-                to={`/projects/${project.id}`}
-                className={({ isActive }) =>
-                  cn("block truncate rounded-md px-2 py-1.5 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
-                }
-              >
-                {project.name}
-              </NavLink>
-            ))}
-
-            {projects.length > 6 && (
-              <Link to="/projects" className="block rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground">
-                See all projects
-              </Link>
+                {projects.length > 6 && (
+                  <Link to="/projects" className="block rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground">
+                    See all projects
+                  </Link>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -157,6 +165,10 @@ function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolea
 }
 
 function NavigationGroup({ label, items, collapsed }: { label: string; items: NavigationItem[]; collapsed: boolean }) {
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <div>
       {!collapsed && <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">{label}</p>}
@@ -171,7 +183,31 @@ function NavigationGroup({ label, items, collapsed }: { label: string; items: Na
 }
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
-  const { data: projects = [] } = useProjects();
+  /*
+   * Permission checks MUST live
+   * inside AppLayout because auth
+   * only exists here.
+   */
+  const canViewHome = hasPermission(auth, "dashboard.view");
+
+  const canViewClients = hasPermission(auth, "clients.view");
+
+  const canCreateClients = hasPermission(auth, "clients.create");
+
+  const canViewProjects = hasPermission(auth, "projects.view");
+
+  const canCreateProjects = hasPermission(auth, "projects.create");
+
+  const canViewMembers = hasPermission(auth, "members.view");
+
+  const canViewSettings = hasPermission(auth, "settings.view");
+
+  /*
+   * Do not call /api/projects
+   * if this user cannot view
+   * projects.
+   */
+  const { data: projects = [] } = useProjects(canViewProjects);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -180,6 +216,16 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
   });
+
+  const manageNavigation: NavigationItem[] = [];
+
+  if (canViewMembers) {
+    manageNavigation.push(membersNavigationItem);
+  }
+
+  if (canViewSettings) {
+    manageNavigation.push(settingsNavigationItem);
+  }
 
   function toggleSidebar() {
     const nextValue = !sidebarCollapsed;
@@ -197,7 +243,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-label="Flow">
             F
           </div>
-          {/* Replace hardcoded workspace name with workspace data in 8.5K. */}
+
           <p className="truncate text-sm font-semibold tracking-tight">{auth.workspace.name}</p>
         </div>
 
@@ -213,13 +259,13 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           </div>
 
           <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
-            <div className="space-y-1">
-              {mainNavigation.map((item) => (
-                <NavigationLink key={item.href} item={item} collapsed={sidebarCollapsed} />
-              ))}
-            </div>
+            {canViewHome && (
+              <div className="space-y-1">
+                <NavigationLink item={homeNavigationItem} collapsed={sidebarCollapsed} />
+              </div>
+            )}
 
-            <SpaceNavigation collapsed={sidebarCollapsed} projects={projects} canCreate={canCreate} />
+            <SpaceNavigation collapsed={sidebarCollapsed} projects={projects} canViewClients={canViewClients} canCreateClients={canCreateClients} canViewProjects={canViewProjects} canCreateProjects={canCreateProjects} />
 
             <NavigationGroup label="Manage" items={manageNavigation} collapsed={sidebarCollapsed} />
           </nav>

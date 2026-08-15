@@ -3,6 +3,7 @@ import { useMembers } from "@/features/members/hooks/use-members";
 import { useUpdateMemberRole } from "@/features/members/hooks/use-update-member-role";
 import type { MemberDto, UpdateWorkspaceMemberRoleInput, WorkspaceRole } from "@/features/members/types";
 import { useRoles } from "@/features/roles/hooks/use-roles";
+import { hasPermission } from "@/features/auth/permissions";
 
 function getMemberRoleValue(member: MemberDto) {
   if (member.customRole) {
@@ -49,24 +50,29 @@ function getMemberRoleLabel(member: MemberDto) {
 export function MembersPage() {
   const { data: auth } = useMe();
 
-  const { data: members = [], isPending, isError } = useMembers();
+  const canViewMembers = hasPermission(auth, "members.view");
 
-  const { data: roles = [], isPending: rolesPending } = useRoles();
+  const canManageRoles = hasPermission(auth, "members.manage");
+
+  const canViewRoles = hasPermission(auth, "roles.view");
+
+  const { data: members = [], isPending, isError } = useMembers(canViewMembers);
+
+  const { data: roles = [], isPending: rolesPending } = useRoles(canManageRoles && canViewRoles);
 
   const updateMemberRole = useUpdateMemberRole();
 
-  /*
-   * Temporary 8.6G authorization.
-   *
-   * Replace this role check with
-   * hasPermission(auth, "members.manage")
-   * in 8.6H.
-   */
-  const canManageRoles = auth?.workspace.role === "owner" || auth?.workspace.role === "admin";
-
   const customRoles = roles.filter((role) => role.kind === "custom");
 
-  const builtInRoles: WorkspaceRole[] = auth?.workspace.role === "owner" ? ["owner", "admin", "member"] : ["admin", "member"];
+  const builtInRoles: WorkspaceRole[] = auth?.workspace.role === "owner" ? ["owner", "admin", "member"] : auth?.workspace.role === "admin" ? ["admin", "member"] : ["member"];
+
+  if (auth && !canViewMembers) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-muted-foreground">You do not have access to workspace members.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -98,8 +104,11 @@ export function MembersPage() {
                * Backend remains the real
                * security boundary.
                */
-              const canChangeThisMember = canManageRoles && !(auth?.workspace.role === "admin" && member.role === "owner");
+              const isSystemOwner = auth?.workspace.role === "owner";
 
+              const isSystemAdmin = auth?.workspace.role === "admin";
+
+              const canChangeThisMember = canManageRoles && (isSystemOwner || (isSystemAdmin && member.role !== "owner") || (!isSystemOwner && !isSystemAdmin && member.role === "member"));
               return (
                 <div key={member.id} className="flex items-center gap-4 px-4 py-3">
                   {member.avatarUrl ? (

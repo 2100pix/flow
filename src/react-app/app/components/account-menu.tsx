@@ -94,7 +94,7 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
           <div className="px-2 py-2">
             <p className="truncate text-sm font-medium">{auth.user.displayName}</p>
 
-            <p className="mt-0.5 text-xs capitalize text-muted-foreground">{auth.workspace.role}</p>
+            <p className="mt-0.5 text-xs capitalize text-muted-foreground">{auth.workspace.customRole?.name ?? auth.workspace.role}</p>
           </div>
 
           <div className="my-1 h-px bg-border" />
