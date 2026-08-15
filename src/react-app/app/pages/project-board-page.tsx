@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { DotsSixVerticalIcon, PlusIcon } from "@phosphor-icons/react";
 import { move } from "@dnd-kit/helpers";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -54,9 +55,38 @@ function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | nul
 }
 
 function QuickCreateTask({ projectId, status, disabled }: { projectId: string; status: TaskStatus; disabled: boolean }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   const [title, setTitle] = useState("");
 
   const createTask = useCreateTask();
+
+  function closeComposer() {
+    setTitle("");
+    createTask.reset();
+    setIsOpen(false);
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="shrink-0 border-t p-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="w-full justify-start gap-1.5 text-muted-foreground"
+          onClick={() => {
+            createTask.reset();
+            setIsOpen(true);
+          }}
+        >
+          <PlusIcon size={14} />
+          Add task
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -66,7 +96,7 @@ function QuickCreateTask({ projectId, status, disabled }: { projectId: string; s
 
         const value = title.trim();
 
-        if (!value || disabled) {
+        if (!value || disabled || createTask.isPending) {
           return;
         }
 
@@ -82,29 +112,44 @@ function QuickCreateTask({ projectId, status, disabled }: { projectId: string; s
           {
             onSuccess: () => {
               setTitle("");
+              setIsOpen(false);
             },
           },
         );
       }}
     >
-      <div className="flex gap-1.5">
-        <input
-          value={title}
-          maxLength={240}
-          disabled={disabled || createTask.isPending}
-          placeholder="Add task"
-          onChange={(event) => {
-            setTitle(event.target.value);
-          }}
-          className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
-        />
+      <input
+        autoFocus
+        value={title}
+        maxLength={240}
+        disabled={disabled || createTask.isPending}
+        placeholder="Task title"
+        onChange={(event) => {
+          setTitle(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") {
+            return;
+          }
 
-        <Button type="submit" size="sm" disabled={disabled || !title.trim() || createTask.isPending}>
-          Add
-        </Button>
-      </div>
+          event.preventDefault();
+
+          closeComposer();
+        }}
+        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
+      />
 
       {createTask.isError ? <p className="mt-2 text-xs text-destructive">{createTask.error.message}</p> : null}
+
+      <div className="mt-2 flex justify-end gap-1.5">
+        <Button type="button" variant="ghost" size="sm" disabled={createTask.isPending} onClick={closeComposer}>
+          Cancel
+        </Button>
+
+        <Button type="submit" size="sm" disabled={disabled || !title.trim() || createTask.isPending}>
+          {createTask.isPending ? "Adding…" : "Add"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -124,15 +169,15 @@ function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto
   return (
     <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-40" : ""}`}>
       <div className="flex items-start gap-2">
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-          <p className="text-sm font-medium leading-5">{task.title}</p>
+        <button type="button" aria-label={`Open ${task.title}`} onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <p className="line-clamp-2 text-sm font-medium leading-5">{task.title}</p>
+          {task.priority || task.dueDate ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {task.priority ? <span className="rounded-md bg-muted px-1.5 py-0.5 capitalize">{task.priority}</span> : null}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {task.priority && <span className="capitalize">{task.priority}</span>}
-
-            {task.dueDate && <span>{task.dueDate}</span>}
-          </div>
-
+              {task.dueDate ? <span>Due {task.dueDate}</span> : null}
+            </div>
+          ) : null}
           {task.assignee && (
             <div className="mt-3 flex items-center gap-2">
               {task.assignee.avatarUrl && <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" />}
@@ -147,9 +192,10 @@ function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto
           type="button"
           disabled={dragDisabled}
           aria-label={`Drag ${task.title}`}
-          className="shrink-0 cursor-grab rounded-md px-1.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40 active:cursor-grabbing"
+          title={`Drag ${task.title}`}
+          className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30 active:cursor-grabbing"
         >
-          Drag
+          <DotsSixVerticalIcon size={16} weight="bold" />
         </button>
       </div>
     </div>
