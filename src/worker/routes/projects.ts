@@ -34,6 +34,7 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
 
       name: projects.name,
       description: projects.description,
+      visibility: projects.visibility,
       status: projects.status,
       startDate: projects.startDate,
       dueDate: projects.dueDate,
@@ -56,6 +57,7 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
 
     name: project.name,
     description: project.description,
+    visibility: project.visibility,
     status: project.status,
     startDate: project.startDate,
     dueDate: project.dueDate,
@@ -127,6 +129,7 @@ projectsRoutes.post(
       name: input.name,
 
       description: input.description ?? null,
+      visibility: "workspace",
       status: "planning",
       startDate: null,
       dueDate: null,
@@ -146,6 +149,7 @@ projectsRoutes.post(
 
       name: input.name,
       description: input.description ?? null,
+      visibility: "workspace",
       status: "planning",
       startDate: null,
       dueDate: null,
@@ -180,6 +184,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
 
       name: projects.name,
       description: projects.description,
+      visibility: projects.visibility,
       status: projects.status,
       startDate: projects.startDate,
       dueDate: projects.dueDate,
@@ -215,6 +220,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
 
     name: project.name,
     description: project.description,
+    visibility: project.visibility,
     status: project.status,
     startDate: project.startDate,
     dueDate: project.dueDate,
@@ -250,9 +256,7 @@ projectsRoutes.patch(
   async (c) => {
     const auth = c.var.auth;
     const projectId = c.req.param("id");
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
 
     const [project] = await db
@@ -264,6 +268,7 @@ projectsRoutes.patch(
 
         name: projects.name,
         description: projects.description,
+        visibility: projects.visibility,
         status: projects.status,
         startDate: projects.startDate,
         dueDate: projects.dueDate,
@@ -365,6 +370,7 @@ projectsRoutes.patch(
 
       name,
       description,
+      visibility: project.visibility,
       status,
       startDate,
       dueDate,
