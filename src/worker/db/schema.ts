@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
@@ -70,6 +70,58 @@ export const workspaceMembers = sqliteTable(
     index("workspace_members_user_id_idx").on(table.userId),
 
     check("workspace_members_role_check", sql`${table.role} in ('owner', 'admin', 'member')`),
+  ],
+);
+
+export const teams = sqliteTable(
+  "teams",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    name: text("name").notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [index("teams_workspace_id_idx").on(table.workspaceId), uniqueIndex("teams_workspace_name_unique").on(table.workspaceId, table.name)],
+);
+
+export const teamMembers = sqliteTable(
+  "team_members",
+  {
+    teamId: text("team_id")
+      .notNull()
+      .references(() => teams.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.teamId, table.userId],
+    }),
+
+    index("team_members_user_id_idx").on(table.userId),
   ],
 );
 

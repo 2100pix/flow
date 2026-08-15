@@ -9,12 +9,17 @@ import { MembersPage } from "@/app/pages/members-page";
 import { NotFoundPage } from "@/app/pages/not-found-page";
 import { ProjectDetailPage } from "@/app/pages/project-detail-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
-import { SettingsPage } from "@/app/pages/settings-page";
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
 const ProjectBoardPage = lazy(() =>
   import("@/app/pages/project-board-page").then((module) => ({
     default: module.ProjectBoardPage,
+  })),
+);
+
+const SettingsPage = lazy(() =>
+  import("@/app/pages/settings-page").then((module) => ({
+    default: module.SettingsPage,
   })),
 );
 
@@ -45,7 +50,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "/settings",
-        element: <SettingsPage />,
+        element: (
+          <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
+            <SettingsPage />
+          </Suspense>
+        ),
       },
       {
         path: "/clients/:clientId",

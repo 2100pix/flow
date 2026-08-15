@@ -8,6 +8,7 @@ import { membersRoutes } from "./routes/members";
 import { tasksRoutes } from "./routes/tasks";
 import { dashboardRoutes } from "./routes/dashboard";
 import { workspaceRoutes } from "./routes/workspace";
+import { teamsRoutes } from "./routes/teams";
 import { HTTPException } from "hono/http-exception";
 
 import type { AppBindings } from "./types/app-env";
@@ -23,6 +24,7 @@ app.route("/api/projects", projectsRoutes);
 app.route("/api/members", membersRoutes);
 app.route("/api/dashboard", dashboardRoutes);
 app.route("/api/workspace", workspaceRoutes);
+app.route("/api/teams", teamsRoutes);
 
 app.route("/api", tasksRoutes);
 

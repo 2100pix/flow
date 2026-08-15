@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/hooks/use-me";
+import { TeamsSettings } from "@/features/teams/components/teams-settings";
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 import { cn } from "@/lib/utils";
 
@@ -147,8 +148,8 @@ export function SettingsPage() {
                 </div>
               </section>
             )}
-
-            {activeSection !== "general" && (
+            {activeSection === "teams" && <TeamsSettings />}
+            {activeSection !== "general" && activeSection !== "teams" && (
               <section>
                 <div>
                   <h2 className="text-base font-semibold">{settingsSections.find((section) => section.id === activeSection)?.label}</h2>
