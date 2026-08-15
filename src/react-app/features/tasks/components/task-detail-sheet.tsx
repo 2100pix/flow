@@ -10,14 +10,15 @@ import { useMe } from "@/features/auth/hooks/use-me";
 
 import { hasPermission } from "@/features/auth/permissions";
 
-import type { TaskDto, TaskPriority, TaskStatus, UpdateTaskInput } from "../types";
+import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto, UpdateTaskInput } from "../types";
 
 type TaskEditorProps = {
   task: TaskDto;
   onClose: () => void;
+  workflowStatuses: readonly TaskWorkflowStatusDto[];
 };
 
-function TaskEditor({ task, onClose }: TaskEditorProps) {
+function TaskEditor({ task, onClose, workflowStatuses }: TaskEditorProps) {
   const { data: auth } = useMe();
 
   const canEdit = hasPermission(auth, "tasks.edit");
@@ -46,6 +47,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
 
   const archiveTask = useArchiveTask();
 
+  const enabledWorkflowStatuses = workflowStatuses.filter((workflowStatus) => workflowStatus.enabled);
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -100,15 +102,11 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
                 }}
                 className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none"
               >
-                <option value="backlog">Backlog</option>
-
-                <option value="todo">To do</option>
-
-                <option value="in_progress">In progress</option>
-
-                <option value="review">Review</option>
-
-                <option value="done">Done</option>
+                {enabledWorkflowStatuses.map((workflowStatus) => (
+                  <option key={workflowStatus.statusKey} value={workflowStatus.statusKey}>
+                    {workflowStatus.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -276,7 +274,7 @@ function TaskEditor({ task, onClose }: TaskEditorProps) {
   );
 }
 
-export function TaskDetailSheet({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+export function TaskDetailSheet({ taskId, onClose, workflowStatuses }: { taskId: string; onClose: () => void; workflowStatuses: readonly TaskWorkflowStatusDto[] }) {
   const { data: task, isPending, isError } = useTask(taskId);
 
   return (
@@ -294,10 +292,8 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: string; onClose: 
 
         <div className="h-[calc(100%-3.5rem)]">
           {isPending ? <div className="p-6 text-sm text-muted-foreground">Loading task…</div> : null}
-
           {isError ? <div className="p-6 text-sm text-destructive">Unable to load task.</div> : null}
-
-          {task ? <TaskEditor key={task.updatedAt} task={task} onClose={onClose} /> : null}
+          {task ? <TaskEditor key={task.updatedAt} task={task} onClose={onClose} workflowStatuses={workflowStatuses} /> : null}{" "}
         </div>
       </aside>
     </>
