@@ -29,6 +29,13 @@
       "when": 1786713205469,
       "tag": "0003_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786773544339,
+      "tag": "0004_roles",
+      "breakpoints": true
     }
   ]
 }

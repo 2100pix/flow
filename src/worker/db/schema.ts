@@ -125,6 +125,48 @@ export const teamMembers = sqliteTable(
   ],
 );
 
+export const workspaceRoles = sqliteTable(
+  "workspace_roles",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    name: text("name").notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [index("workspace_roles_workspace_id_idx").on(table.workspaceId), uniqueIndex("workspace_roles_workspace_name_unique").on(table.workspaceId, table.name)],
+);
+
+export const workspaceRolePermissions = sqliteTable(
+  "workspace_role_permissions",
+  {
+    roleId: text("role_id")
+      .notNull()
+      .references(() => workspaceRoles.id, {
+        onDelete: "cascade",
+      }),
+
+    permissionKey: text("permission_key").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.roleId, table.permissionKey],
+    }),
+  ],
+);
+
 export const sessions = sqliteTable(
   "sessions",
   {
