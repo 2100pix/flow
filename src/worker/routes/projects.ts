@@ -4,6 +4,7 @@ import { Hono } from "hono";
 
 import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../../shared/contracts/projects";
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
+import { canCreateProjectWithVisibility, canManageProjectMembers, canManageProjectVisibility } from "../../shared/project-privacy";
 
 import { createDb } from "../db";
 import { clients, projectMembers, projects, users, workspaceMembers, workspaceRoles } from "../db/schema";
@@ -96,7 +97,19 @@ projectsRoutes.post(
     const input = c.req.valid("json");
 
     const db = createDb(c.env.flow_db);
+    const visibility = input.visibility ?? "workspace";
 
+    if (!canCreateProjectWithVisibility(auth.workspace.permissions, visibility)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "You do not have permission to create this project",
+          },
+        },
+        403,
+      );
+    }
     const [client] = await db
       .select({
         id: clients.id,
@@ -122,17 +135,13 @@ projectsRoutes.post(
 
     const now = new Date();
 
-    await db.insert(projects).values({
+    const projectInsert = db.insert(projects).values({
       id,
-
       workspaceId: auth.workspace.id,
-
       clientId: client.id,
-
       name: input.name,
-
       description: input.description ?? null,
-      visibility: "workspace",
+      visibility,
       status: "planning",
       startDate: null,
       dueDate: null,
@@ -141,6 +150,20 @@ projectsRoutes.post(
       createdAt: now,
       updatedAt: now,
     });
+
+    if (visibility === "private") {
+      await db.batch([
+        projectInsert,
+
+        db.insert(projectMembers).values({
+          projectId: id,
+          userId: auth.user.id,
+          createdAt: now,
+        }),
+      ]);
+    } else {
+      await projectInsert;
+    }
 
     const data: ProjectDto = {
       id,
@@ -157,9 +180,7 @@ projectsRoutes.post(
       startDate: null,
       dueDate: null,
       discordChannelUrl: null,
-
       createdAt: now.toISOString(),
-
       updatedAt: now.toISOString(),
     };
 
@@ -177,6 +198,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
   const projectId = c.req.param("id");
 
   const db = createDb(c.env.flow_db);
+
   const access = await findAccessibleProject(db, auth, projectId);
 
   if (!access) {
@@ -273,7 +295,19 @@ projectsRoutes.patch(
     const projectId = c.req.param("id");
     const input = c.req.valid("json");
     const db = createDb(c.env.flow_db);
+    const access = await findAccessibleProject(db, auth, projectId);
 
+    if (!access) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Project not found",
+          },
+        },
+        404,
+      );
+    }
     const [project] = await db
       .select({
         id: projects.id,
@@ -308,6 +342,19 @@ projectsRoutes.patch(
       );
     }
 
+    const visibility = input.visibility ?? project.visibility;
+
+    if (visibility !== project.visibility && !canManageProjectVisibility(auth.workspace.permissions)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "You do not have permission to change project visibility",
+          },
+        },
+        403,
+      );
+    }
     let selectedClient = {
       id: project.clientId,
       name: project.clientName,
@@ -370,6 +417,7 @@ projectsRoutes.patch(
         clientId: selectedClient.id,
         name,
         description,
+        visibility,
         status,
         startDate,
         dueDate,
@@ -385,7 +433,7 @@ projectsRoutes.patch(
 
       name,
       description,
-      visibility: project.visibility,
+      visibility,
       status,
       startDate,
       dueDate,
@@ -408,15 +456,9 @@ projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive")
 
   const db = createDb(c.env.flow_db);
 
-  const [project] = await db
-    .select({
-      id: projects.id,
-    })
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-    .limit(1);
+  const access = await findAccessibleProject(db, auth, projectId);
 
-  if (!project) {
+  if (!access) {
     return c.json(
       {
         error: {
@@ -454,15 +496,9 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
 
   const db = createDb(c.env.flow_db);
 
-  const [project] = await db
-    .select({
-      id: projects.id,
-    })
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-    .limit(1);
+  const access = await findAccessibleProject(db, auth, projectId);
 
-  if (!project) {
+  if (!access) {
     return c.json(
       {
         error: {
@@ -540,15 +576,9 @@ projectsRoutes.post(
 
     const db = createDb(c.env.flow_db);
 
-    const [project] = await db
-      .select({
-        id: projects.id,
-      })
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-      .limit(1);
+    const access = await findAccessibleProject(db, auth, projectId);
 
-    if (!project) {
+    if (!access) {
       return c.json(
         {
           error: {
@@ -557,6 +587,18 @@ projectsRoutes.post(
           },
         },
         404,
+      );
+    }
+
+    if (!canManageProjectMembers(auth.workspace.permissions, access.project.visibility)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "You do not have permission to manage project members",
+          },
+        },
+        403,
       );
     }
 
@@ -651,15 +693,9 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
 
   const db = createDb(c.env.flow_db);
 
-  const [project] = await db
-    .select({
-      id: projects.id,
-    })
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
-    .limit(1);
+  const access = await findAccessibleProject(db, auth, projectId);
 
-  if (!project) {
+  if (!access) {
     return c.json(
       {
         error: {
@@ -668,6 +704,18 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
         },
       },
       404,
+    );
+  }
+
+  if (!canManageProjectMembers(auth.workspace.permissions, access.project.visibility)) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to manage project members",
+        },
+      },
+      403,
     );
   }
 
