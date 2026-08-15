@@ -251,6 +251,12 @@ export const projects = sqliteTable(
 
     description: text("description"),
 
+    visibility: text("visibility", {
+      enum: ["workspace", "private"],
+    })
+      .default("workspace")
+      .notNull(),
+
     status: text("status", {
       enum: ["planning", "active", "on_hold", "completed"],
     }).notNull(),
@@ -273,7 +279,15 @@ export const projects = sqliteTable(
       mode: "timestamp",
     }),
   },
-  (table) => [index("projects_workspace_id_idx").on(table.workspaceId), index("projects_client_id_idx").on(table.clientId), check("projects_status_check", sql`${table.status} in ('planning', 'active', 'on_hold', 'completed')`)],
+  (table) => [
+    index("projects_workspace_id_idx").on(table.workspaceId),
+
+    index("projects_client_id_idx").on(table.clientId),
+
+    check("projects_visibility_check", sql`${table.visibility} in ('workspace', 'private')`),
+
+    check("projects_status_check", sql`${table.status} in ('planning', 'active', 'on_hold', 'completed')`),
+  ],
 );
 
 export const projectMembers = sqliteTable(
