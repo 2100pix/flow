@@ -6,6 +6,7 @@ import type { TaskStatus } from "../../shared/contracts/tasks";
 
 import { createDb } from "../db";
 import { clients, projects, tasks } from "../db/schema";
+import { filterAccessibleProjects } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -27,11 +28,26 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
 
   const activeClients = await db.$count(clients, and(eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)));
 
-  const activeProjects = await db.$count(projects, and(eq(projects.workspaceId, auth.workspace.id), eq(projects.status, "active"), isNull(projects.archivedAt)));
-
-  const [taskSummary] = await db
+  const projectAccessRows = await db
     .select({
-      openTasks: sql<number>`
+      id: projects.id,
+      visibility: projects.visibility,
+      status: projects.status,
+    })
+    .from(projects)
+    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+  const accessibleProjects = await filterAccessibleProjects(db, auth, projectAccessRows);
+
+  const accessibleProjectIds = accessibleProjects.map((project) => project.id);
+
+  const activeProjects = accessibleProjects.filter((project) => project.status === "active").length;
+
+  const [taskSummary] =
+    accessibleProjectIds.length > 0
+      ? await db
+          .select({
+            openTasks: sql<number>`
             coalesce(
               sum(
                 case
@@ -44,7 +60,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      myTasks: sql<number>`
+            myTasks: sql<number>`
             coalesce(
               sum(
                 case
@@ -59,7 +75,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      backlog: sql<number>`
+            backlog: sql<number>`
             coalesce(
               sum(
                 case
@@ -72,7 +88,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      todo: sql<number>`
+            todo: sql<number>`
             coalesce(
               sum(
                 case
@@ -85,7 +101,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      inProgress: sql<number>`
+            inProgress: sql<number>`
             coalesce(
               sum(
                 case
@@ -98,7 +114,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      review: sql<number>`
+            review: sql<number>`
             coalesce(
               sum(
                 case
@@ -111,7 +127,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             )
           `,
 
-      done: sql<number>`
+            done: sql<number>`
             coalesce(
               sum(
                 case
@@ -123,10 +139,11 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
               0
             )
           `,
-    })
-    .from(tasks)
-    .innerJoin(projects, eq(tasks.projectId, projects.id))
-    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), ne(projects.status, "completed"), isNull(tasks.archivedAt)));
+          })
+          .from(tasks)
+          .innerJoin(projects, eq(tasks.projectId, projects.id))
+          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt)))
+      : [];
 
   const taskStatus: Record<TaskStatus, number> = {
     backlog: Number(taskSummary?.backlog ?? 0),
@@ -140,30 +157,32 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
     done: Number(taskSummary?.done ?? 0),
   };
 
-  const myTaskRows = await db
-    .select({
-      id: tasks.id,
+  const myTaskRows =
+    accessibleProjectIds.length > 0
+      ? await db
+          .select({
+            id: tasks.id,
 
-      projectId: projects.id,
+            projectId: projects.id,
 
-      projectName: projects.name,
+            projectName: projects.name,
 
-      title: tasks.title,
+            title: tasks.title,
 
-      status: tasks.status,
+            status: tasks.status,
 
-      priority: tasks.priority,
+            priority: tasks.priority,
 
-      dueDate: tasks.dueDate,
+            dueDate: tasks.dueDate,
 
-      updatedAt: tasks.updatedAt,
-    })
-    .from(tasks)
-    .innerJoin(projects, eq(tasks.projectId, projects.id))
-    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), ne(projects.status, "completed"), isNull(tasks.archivedAt), ne(tasks.status, "done"), eq(tasks.assigneeId, auth.user.id)))
-    .orderBy(desc(tasks.updatedAt))
-    .limit(6);
-
+            updatedAt: tasks.updatedAt,
+          })
+          .from(tasks)
+          .innerJoin(projects, eq(tasks.projectId, projects.id))
+          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), ne(tasks.status, "done"), eq(tasks.assigneeId, auth.user.id)))
+          .orderBy(desc(tasks.updatedAt))
+          .limit(6)
+      : [];
   const myTasks: DashboardTaskDto[] = myTaskRows.map((task) => ({
     id: task.id,
 
@@ -180,27 +199,30 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
     dueDate: task.dueDate,
   }));
 
-  const recentProjectRows = await db
-    .select({
-      id: projects.id,
+  const recentProjectRows =
+    accessibleProjectIds.length > 0
+      ? await db
+          .select({
+            id: projects.id,
 
-      clientId: clients.id,
+            clientId: clients.id,
 
-      clientName: clients.name,
+            clientName: clients.name,
 
-      name: projects.name,
+            name: projects.name,
 
-      status: projects.status,
+            status: projects.status,
 
-      dueDate: projects.dueDate,
+            dueDate: projects.dueDate,
 
-      updatedAt: projects.updatedAt,
-    })
-    .from(projects)
-    .innerJoin(clients, eq(projects.clientId, clients.id))
-    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), ne(projects.status, "completed")))
-    .orderBy(desc(projects.updatedAt))
-    .limit(5);
+            updatedAt: projects.updatedAt,
+          })
+          .from(projects)
+          .innerJoin(clients, eq(projects.clientId, clients.id))
+          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed")))
+          .orderBy(desc(projects.updatedAt))
+          .limit(5)
+      : [];
 
   const recentProjectIds = recentProjectRows.map((project) => project.id);
 
