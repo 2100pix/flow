@@ -5,15 +5,18 @@ import { Button } from "@/components/ui/button";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
 
-export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+type CreateProjectDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  canCreatePrivate: boolean;
+};
+
+export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
-
   const [description, setDescription] = useState("");
-
   const [clientId, setClientId] = useState("");
-
+  const [visibility, setVisibility] = useState<"workspace" | "private">("workspace");
   const { data: clients = [] } = useClients();
-
   const createProject = useCreateProject();
 
   if (!open) {
@@ -57,13 +60,14 @@ export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose:
                 name: projectName,
                 clientId,
                 description: projectDescription || undefined,
+                visibility: canCreatePrivate ? visibility : "workspace",
               },
               {
                 onSuccess: () => {
                   setName("");
                   setDescription("");
                   setClientId("");
-
+                  setVisibility("workspace");
                   onClose();
                 },
               },
@@ -128,6 +132,28 @@ export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose:
                 </option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="create-project-visibility" className="text-sm font-medium">
+              Visibility
+            </label>
+
+            <select
+              id="create-project-visibility"
+              value={visibility}
+              onChange={(event) => {
+                setVisibility(event.target.value as "workspace" | "private");
+              }}
+              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="workspace">Workspace</option>
+
+              {canCreatePrivate ? <option value="private">Private</option> : null}
+            </select>
+
+            <p className="text-xs leading-5 text-muted-foreground">
+              {visibility === "private" ? "Only project members and authorized private-project roles can access this project." : "Workspace members with project access can discover this project."}
+            </p>
           </div>
 
           {activeClients.length === 0 && <p className="text-sm text-muted-foreground">An active client is required before creating a project.</p>}
