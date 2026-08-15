@@ -318,6 +318,42 @@ export const projectMembers = sqliteTable(
   ],
 );
 
+export const projectTaskStatuses = sqliteTable(
+  "project_task_statuses",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    statusKey: text("status_key", {
+      enum: ["backlog", "todo", "in_progress", "review", "done"],
+    }).notNull(),
+
+    label: text("label").notNull(),
+
+    position: integer("position").notNull(),
+
+    enabled: integer("enabled", {
+      mode: "boolean",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.projectId, table.statusKey],
+    }),
+
+    uniqueIndex("project_task_statuses_project_position_unique").on(table.projectId, table.position),
+
+    check("project_task_statuses_status_key_check", sql`${table.statusKey} in ('backlog', 'todo', 'in_progress', 'review', 'done')`),
+
+    check("project_task_statuses_position_check", sql`${table.position} >= 0`),
+
+    check("project_task_statuses_enabled_check", sql`${table.enabled} in (0, 1)`),
+  ],
+);
+
 export const tasks = sqliteTable(
   "tasks",
   {
