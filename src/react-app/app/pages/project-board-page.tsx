@@ -167,7 +167,7 @@ function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto
   });
 
   return (
-    <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-40" : ""}`}>
+    <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-50" : ""}`}>
       <div className="flex items-start gap-2">
         <button type="button" aria-label={`Open ${task.title}`} onClick={onOpen} className="min-w-0 flex-1 text-left">
           <p className="line-clamp-2 text-sm font-medium leading-5">{task.title}</p>
@@ -230,7 +230,7 @@ function TaskColumn({
   });
 
   return (
-    <section ref={ref} className={`flex h-full min-h-0 w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 ${isDropTarget ? "ring-1 ring-ring" : ""}`}>
+    <section ref={ref} className={`flex h-full min-h-0 w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 transition-[background-color,box-shadow] ${isDropTarget ? "bg-muted/40 ring-2 ring-ring/40" : ""}`}>
       <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
         <h2 className="text-sm font-medium">{label}</h2>
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
@@ -333,6 +333,8 @@ export function ProjectBoardPage() {
   return (
     <DragDropProvider
       onDragStart={() => {
+        reorderTasks.reset();
+
         const snapshot = cloneBoard(board);
 
         previousBoardRef.current = snapshot;
@@ -406,11 +408,7 @@ export function ProjectBoardPage() {
             input,
           },
           {
-            onSuccess: () => {
-              resetDragState();
-            },
-
-            onError: () => {
+            onSettled: () => {
               resetDragState();
             },
           },
@@ -425,10 +423,14 @@ export function ProjectBoardPage() {
 
           <div className="mt-2">
             <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
-
             <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p>
+            {reorderTasks.isPending || reorderTasks.isError ? (
+              <div className="mt-2 text-sm" aria-live="polite">
+                {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
 
-            {reorderTasks.isError ? <p className="mt-2 text-sm text-destructive">Unable to save task order.</p> : null}
+                {reorderTasks.isError ? <p className="text-destructive">Unable to save task order. Previous order restored.</p> : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain p-6">
