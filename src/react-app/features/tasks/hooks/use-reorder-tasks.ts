@@ -15,7 +15,7 @@ export function useReorderTasks() {
   return useMutation({
     mutationFn: ({ projectId, input }: ReorderVariables) => reorderProjectTasks(projectId, input),
 
-    onSuccess: async (_response, variables) => {
+    onSettled: async (_response, _error, variables) => {
       await queryClient.invalidateQueries({
         queryKey: projectTasksQueryKey(variables.projectId),
       });
