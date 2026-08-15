@@ -11,36 +11,11 @@ import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useReorderTasks } from "@/features/tasks/hooks/use-reorder-tasks";
 import { useMe } from "@/features/auth/hooks/use-me";
+import { useProjectTaskWorkflow } from "@/features/tasks/hooks/use-project-task-workflow";
 
 import { hasPermission } from "@/features/auth/permissions";
 
 import type { ReorderTasksInput, TaskDto, TaskStatus } from "@/features/tasks/types";
-
-const columns: {
-  status: TaskStatus;
-  label: string;
-}[] = [
-  {
-    status: "backlog",
-    label: "Backlog",
-  },
-  {
-    status: "todo",
-    label: "To do",
-  },
-  {
-    status: "in_progress",
-    label: "In progress",
-  },
-  {
-    status: "review",
-    label: "Review",
-  },
-  {
-    status: "done",
-    label: "Done",
-  },
-];
 
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
@@ -57,31 +32,21 @@ function buildBoard(tasks: TaskDto[]): TaskBoardState {
     board[task.status].push(task);
   }
 
-  for (const column of columns) {
-    board[column.status].sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const columnTasks of Object.values(board)) {
+    columnTasks.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   return board;
 }
 
 function cloneBoard(board: TaskBoardState): TaskBoardState {
-  return {
-    backlog: [...board.backlog],
-
-    todo: [...board.todo],
-
-    in_progress: [...board.in_progress],
-
-    review: [...board.review],
-
-    done: [...board.done],
-  };
+  return Object.fromEntries((Object.entries(board) as [TaskStatus, TaskDto[]][]).map(([status, tasks]) => [status, [...tasks]])) as TaskBoardState;
 }
 
 function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | null {
-  for (const column of columns) {
-    if (board[column.status].some((task) => task.id === taskId)) {
-      return column.status;
+  for (const [status, tasks] of Object.entries(board) as [TaskStatus, TaskDto[]][]) {
+    if (tasks.some((task) => task.id === taskId)) {
+      return status;
     }
   }
 
@@ -256,6 +221,7 @@ export function ProjectBoardPage() {
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
 
   const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
+  const { data: workflow, isPending: workflowPending, isError: workflowError } = useProjectTaskWorkflow(projectId);
 
   const reorderTasks = useReorderTasks();
 
@@ -273,6 +239,8 @@ export function ProjectBoardPage() {
   const canCreateTask = hasPermission(auth, "tasks.create");
 
   const canEditTask = hasPermission(auth, "tasks.edit");
+
+  const columns = useMemo(() => workflow?.statuses.filter((status) => status.enabled) ?? [], [workflow]);
 
   if (!projectId) {
     return null;
@@ -311,11 +279,11 @@ export function ProjectBoardPage() {
     );
   }
 
-  if (projectPending || tasksPending) {
+  if (projectPending || tasksPending || workflowPending) {
     return <div className="p-8 text-sm text-muted-foreground">Loading board…</div>;
   }
 
-  if (projectError || tasksError || !project) {
+  if (projectError || tasksError || workflowError || !project || !workflow) {
     return <div className="p-8 text-sm text-destructive">Unable to load board.</div>;
   }
 
@@ -420,16 +388,23 @@ export function ProjectBoardPage() {
             {reorderTasks.isError ? <p className="mt-2 text-sm text-destructive">Unable to save task order.</p> : null}
           </div>
         </div>
-
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
           <div className="flex h-full min-w-max gap-3">
             {columns.map((column) => (
-              <TaskColumn key={column.status} projectId={project.id} status={column.status} label={column.label} tasks={board[column.status]} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onOpenTask={openTask} />
+              <TaskColumn
+                key={column.statusKey}
+                projectId={project.id}
+                status={column.statusKey}
+                label={column.label}
+                tasks={board[column.statusKey]}
+                dragDisabled={!canEditTask || reorderTasks.isPending}
+                canCreateTask={canCreateTask}
+                onOpenTask={openTask}
+              />
             ))}
           </div>
         </div>
-
-        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} /> : null}
+        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} workflowStatuses={workflow.statuses} /> : null}
       </div>
     </DragDropProvider>
   );
