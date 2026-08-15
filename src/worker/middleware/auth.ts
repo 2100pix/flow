@@ -16,7 +16,7 @@ import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
 
 import { INVS_WORKSPACE_ID } from "../lib/workspace";
 
-import type { AuthContext, WorkspaceRole } from "../types/auth";
+import type { AuthContext } from "../types/auth";
 
 import type { AppBindings } from "../types/app-env";
 
@@ -179,32 +179,6 @@ export function hasPermission(auth: AuthContext, permission: PermissionKey) {
 export function requirePermission(permission: PermissionKey) {
   return createMiddleware<AuthEnv>(async (c, next) => {
     if (!hasPermission(c.var.auth, permission)) {
-      return c.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-
-            message: "You do not have permission to perform this action",
-          },
-        },
-        403,
-      );
-    }
-
-    await next();
-  });
-}
-
-/*
- * Temporary during the 8.6H
- * migration.
- *
- * Remove after every route has
- * moved to requirePermission().
- */
-export function requireRole(...allowedRoles: WorkspaceRole[]) {
-  return createMiddleware<AuthEnv>(async (c, next) => {
-    if (!allowedRoles.includes(c.var.auth.workspace.role)) {
       return c.json(
         {
           error: {

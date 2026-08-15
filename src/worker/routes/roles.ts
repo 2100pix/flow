@@ -109,6 +109,18 @@ rolesRoutes.post(
 
     const input = c.req.valid("json");
 
+    if (!canGrantPermissions(auth, input.permissions)) {
+      return c.json(
+        {
+          error: {
+            code: "CANNOT_GRANT_PERMISSION",
+            message: "You cannot grant permissions you do not have",
+          },
+        },
+        403,
+      );
+    }
+
     const db = createDb(c.env.flow_db);
 
     if (isReservedRoleName(input.name)) {
@@ -164,18 +176,7 @@ rolesRoutes.post(
         })),
       );
     }
-    if (!canGrantPermissions(auth, input.permissions)) {
-      return c.json(
-        {
-          error: {
-            code: "CANNOT_GRANT_PERMISSION",
 
-            message: "You cannot grant permissions you do not have",
-          },
-        },
-        403,
-      );
-    }
     const data: RoleDto = {
       id,
       name: input.name,
@@ -218,6 +219,18 @@ rolesRoutes.patch(
     const roleId = c.req.param("roleId");
 
     const input = c.req.valid("json");
+
+    if (!canGrantPermissions(auth, input.permissions)) {
+      return c.json(
+        {
+          error: {
+            code: "CANNOT_GRANT_PERMISSION",
+            message: "You cannot grant permissions you do not have",
+          },
+        },
+        403,
+      );
+    }
 
     const db = createDb(c.env.flow_db);
 

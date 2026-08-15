@@ -6,7 +6,7 @@ import type { TaskStatus } from "../../shared/contracts/tasks";
 
 import { createDb } from "../db";
 import { clients, projects, tasks } from "../db/schema";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -20,7 +20,7 @@ type DashboardEnv = {
 
 export const dashboardRoutes = new Hono<DashboardEnv>();
 
-dashboardRoutes.get("/", requireAuth, async (c) => {
+dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async (c) => {
   const auth = c.var.auth;
 
   const db = createDb(c.env.flow_db);

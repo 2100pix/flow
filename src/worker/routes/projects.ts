@@ -427,7 +427,7 @@ projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive")
 /**
  * * bagian member project
  */
-projectsRoutes.get("/:id/members", requireAuth, async (c) => {
+projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
 

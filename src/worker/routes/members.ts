@@ -4,8 +4,12 @@ import { Hono } from "hono";
 
 import { updateWorkspaceMemberRoleSchema, type MemberDto } from "../../shared/contracts/members";
 import { createDb } from "../db";
-import { users, workspaceMembers, workspaceRoles } from "../db/schema";
+import { users, workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import { permissionKeySchema } from "../../shared/permissions";
+
+import { builtInRoleDefinitions } from "../../shared/roles";
+
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -19,7 +23,7 @@ type MembersEnv = {
 
 export const membersRoutes = new Hono<MembersEnv>();
 
-membersRoutes.get("/", requireAuth, async (c) => {
+membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c) => {
   const auth = c.var.auth;
 
   const db = createDb(c.env.flow_db);
@@ -201,39 +205,6 @@ membersRoutes.patch(
           403,
         );
       }
-
-      nextRole = input.role;
-
-      nextCustomRoleId = null;
-    } else {
-      const [customRole] = await db
-        .select({
-          id: workspaceRoles.id,
-
-          name: workspaceRoles.name,
-        })
-        .from(workspaceRoles)
-        .where(
-          and(
-            eq(workspaceRoles.id, input.roleId),
-
-            eq(workspaceRoles.workspaceId, auth.workspace.id),
-          ),
-        )
-        .limit(1);
-
-      if (!customRole) {
-        return c.json(
-          {
-            error: {
-              code: "ROLE_NOT_FOUND",
-
-              message: "Custom role not found",
-            },
-          },
-          404,
-        );
-      }
       const definition = builtInRoleDefinitions.find((role) => role.key === input.role);
 
       if (!definition) {
@@ -258,6 +229,7 @@ membersRoutes.patch(
             {
               error: {
                 code: "CANNOT_GRANT_PERMISSION",
+
                 message: "You cannot grant permissions you do not have",
               },
             },
@@ -265,13 +237,71 @@ membersRoutes.patch(
           );
         }
       }
+      nextRole = input.role;
+
+      nextCustomRoleId = null;
+    } else {
+      const customRoleRows = await db
+        .select({
+          id: workspaceRoles.id,
+
+          name: workspaceRoles.name,
+
+          permissionKey: workspaceRolePermissions.permissionKey,
+        })
+        .from(workspaceRoles)
+        .leftJoin(workspaceRolePermissions, eq(workspaceRolePermissions.roleId, workspaceRoles.id))
+        .where(and(eq(workspaceRoles.id, input.roleId), eq(workspaceRoles.workspaceId, auth.workspace.id)));
+
+      if (customRoleRows.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "ROLE_NOT_FOUND",
+
+              message: "Custom role not found",
+            },
+          },
+          404,
+        );
+      }
+
+      const customRole = {
+        id: customRoleRows[0].id,
+        name: customRoleRows[0].name,
+      };
+
+      const customRolePermissions = customRoleRows.flatMap((row) => {
+        const parsed = permissionKeySchema.safeParse(row.permissionKey);
+
+        return parsed.success ? [parsed.data] : [];
+      });
+
+      if (!isSystemAdministrator) {
+        const allowed = new Set(auth.workspace.permissions);
+
+        const exceedsCaller = customRolePermissions.some((permission) => !allowed.has(permission));
+
+        if (exceedsCaller) {
+          return c.json(
+            {
+              error: {
+                code: "CANNOT_GRANT_PERMISSION",
+
+                message: "You cannot grant permissions you do not have",
+              },
+            },
+            403,
+          );
+        }
+      }
+
       nextRole = "member";
 
       nextCustomRoleId = customRole.id;
 
       nextCustomRole = {
         id: customRole.id,
-
         name: customRole.name,
       };
     }

@@ -70,7 +70,7 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
 
           {updateClient.isError ? <p className="text-sm text-destructive">{updateClient.error.message}</p> : null}
 
-          {canArchive ? (
+          {canEdit ? (
             <Button
               disabled={!name.trim() || updateClient.isPending}
               onClick={() => {
