@@ -1,13 +1,12 @@
 import * as z from "zod";
 
-import type { ProjectVisibility } from "../project-privacy";
+import { projectVisibilitySchema, type ProjectVisibility } from "../project-privacy";
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const createProjectSchema = z.object({
   clientId: z.string().trim().min(1),
-
   name: z.string().trim().min(1).max(160),
-
+  visibility: projectVisibilitySchema.optional(),
   description: z.string().trim().max(5000).optional(),
 });
 
@@ -25,17 +24,12 @@ export const discordChannelUrlSchema = z.url().refine(
 export const updateProjectSchema = z
   .object({
     clientId: z.string().trim().min(1).optional(),
-
     name: z.string().trim().min(1).max(160).optional(),
-
     description: z.string().trim().max(5000).nullable().optional(),
-
+    visibility: projectVisibilitySchema.optional(),
     status: projectStatusSchema.optional(),
-
     startDate: z.iso.date().nullable().optional(),
-
     dueDate: z.iso.date().nullable().optional(),
-
     discordChannelUrl: discordChannelUrlSchema.nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
