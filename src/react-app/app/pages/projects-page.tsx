@@ -50,8 +50,12 @@ export function ProjectsPage() {
 
             <p className="mt-1 text-sm text-muted-foreground">Active work across workspace clients.</p>
           </div>
-
-          {canCreate && <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} />}
+          {canCreate ? (
+            <Button type="button" onClick={openCreate}>
+              <PlusIcon />
+              New project
+            </Button>
+          ) : null}
         </div>
 
         {isPending && <p className="text-sm text-muted-foreground">Loading projects…</p>}
@@ -95,8 +99,7 @@ export function ProjectsPage() {
           </div>
         )}
       </div>
-
-      {canCreate && <CreateProjectDialog open={createOpen} onClose={closeCreate} />}
+      {canCreate ? <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} /> : null}{" "}
     </div>
   );
 }
