@@ -13,6 +13,7 @@ import { useAddProjectMember } from "@/features/members/hooks/use-add-project-me
 import { useMembers } from "@/features/members/hooks/use-members";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
+import { TaskWorkflowSettings } from "@/features/tasks/components/task-workflow-settings";
 
 import type { ProjectDto, ProjectStatus } from "@/features/projects/types";
 
@@ -395,6 +396,9 @@ export function ProjectDetailPage() {
   const canManageTeam = canEdit && (project?.visibility === "workspace" || (project?.visibility === "private" && canManagePrivate));
   const canViewMembers = hasPermission(auth, "members.view");
 
+  const canViewTaskWorkflow = hasPermission(auth, "tasks.view");
+  const canManageTaskWorkflow = hasPermission(auth, "tasks.edit");
+
   return (
     <div className="p-8">
       <div className="mx-auto max-w-5xl space-y-8">
@@ -426,7 +430,7 @@ export function ProjectDetailPage() {
         {project ? (
           <>
             <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} canManageVisibility={canManageVisibility} />
-
+            {canViewTaskWorkflow ? <TaskWorkflowSettings projectId={project.id} canManage={canManageTaskWorkflow} /> : null}
             <ProjectTeam projectId={project.id} canManage={canManageTeam} canViewMembers={canViewMembers} isPrivate={project.visibility === "private"} />
           </>
         ) : null}

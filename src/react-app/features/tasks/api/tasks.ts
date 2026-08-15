@@ -1,9 +1,23 @@
 import { apiFetch } from "@/lib/api";
 
-import type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, ReorderTasksInput, ReorderTasksResponse, TaskResponse, TaskWorkflowResponse, UpdateTaskInput } from "../types";
+import type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, ReorderTasksInput, ReorderTasksResponse, TaskResponse, TaskWorkflowResponse, UpdateTaskInput, UpdateTaskWorkflowInput } from "../types";
 
 export async function getProjectTaskWorkflow(projectId: string) {
   const response = await apiFetch<TaskWorkflowResponse>(`/api/projects/${projectId}/task-workflow`);
+
+  return response.data;
+}
+
+export async function updateProjectTaskWorkflow(projectId: string, input: UpdateTaskWorkflowInput) {
+  const response = await apiFetch<TaskWorkflowResponse>(`/api/projects/${projectId}/task-workflow`, {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(input),
+  });
 
   return response.data;
 }
