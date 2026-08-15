@@ -1,5 +1,6 @@
 import * as z from "zod";
 
+import type { ProjectVisibility } from "../project-privacy";
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const createProjectSchema = z.object({
@@ -62,6 +63,7 @@ export type ProjectDto = {
 
   name: string;
   description: string | null;
+  visibility: ProjectVisibility;
   status: ProjectStatus;
   startDate: string | null;
   dueDate: string | null;
