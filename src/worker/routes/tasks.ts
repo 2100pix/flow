@@ -3,8 +3,9 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } from "../../shared/contracts/tasks";
+import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
 import { createDb } from "../db";
-import { projectMembers, projects, tasks, users, workspaceMembers } from "../db/schema";
+import { projectMembers, projectTaskStatuses, projects, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
@@ -20,6 +21,46 @@ type TasksEnv = {
 };
 
 export const tasksRoutes = new Hono<TasksEnv>();
+
+type Db = ReturnType<typeof createDb>;
+
+async function loadTaskWorkflow(db: Db, projectId: string): Promise<TaskWorkflowStatusDto[] | null> {
+  const result = await db
+    .select({
+      statusKey: projectTaskStatuses.statusKey,
+      label: projectTaskStatuses.label,
+      position: projectTaskStatuses.position,
+      enabled: projectTaskStatuses.enabled,
+    })
+    .from(projectTaskStatuses)
+    .where(eq(projectTaskStatuses.projectId, projectId))
+    .orderBy(asc(projectTaskStatuses.position));
+
+  const statuses: TaskWorkflowStatusDto[] = result.map((status) => ({
+    statusKey: status.statusKey,
+    label: status.label,
+    position: status.position,
+    enabled: status.enabled,
+  }));
+
+  if (statuses.length !== defaultTaskWorkflowStatuses.length) {
+    return null;
+  }
+
+  if (statuses.some((status, index) => status.position !== index)) {
+    return null;
+  }
+
+  const valid = updateTaskWorkflowSchema.safeParse({
+    statuses: statuses.map(({ statusKey, label, enabled }) => ({
+      statusKey,
+      label,
+      enabled,
+    })),
+  }).success;
+
+  return valid ? statuses : null;
+}
 
 tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
@@ -146,8 +187,35 @@ tasksRoutes.post(
         404,
       );
     }
+    const workflow = await loadTaskWorkflow(db, projectId);
+
+    if (!workflow) {
+      return c.json(
+        {
+          error: {
+            code: "WORKFLOW_INTEGRITY_ERROR",
+            message: "Project task workflow is invalid",
+          },
+        },
+        500,
+      );
+    }
 
     const status = input.status ?? "backlog";
+
+    const workflowStatus = workflow.find((item) => item.statusKey === status);
+
+    if (!workflowStatus?.enabled) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_STATUS_DISABLED",
+            message: "Task status is disabled for this project",
+          },
+        },
+        400,
+      );
+    }
 
     const [position] = await db
       .select({
@@ -242,6 +310,35 @@ tasksRoutes.patch(
 
     const db = createDb(c.env.flow_db);
 
+    const workflow = await loadTaskWorkflow(db, projectId);
+
+    if (!workflow) {
+      return c.json(
+        {
+          error: {
+            code: "WORKFLOW_INTEGRITY_ERROR",
+            message: "Project task workflow is invalid",
+          },
+        },
+        500,
+      );
+    }
+
+    const enabledStatusKeys = new Set(workflow.filter((status) => status.enabled).map((status) => status.statusKey));
+
+    const referencesDisabledStatus = input.columns.some((column) => !enabledStatusKeys.has(column.status));
+
+    if (referencesDisabledStatus) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_STATUS_DISABLED",
+            message: "Task status is disabled for this project",
+          },
+        },
+        400,
+      );
+    }
     const access = await findAccessibleProject(db, auth, projectId);
 
     if (!access) {
@@ -388,6 +485,7 @@ tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), 
       404,
     );
   }
+
   const data: TaskDto = {
     id: task.id,
     projectId: task.projectId,
@@ -536,7 +634,35 @@ tasksRoutes.patch(
         404,
       );
     }
+    if (input.status !== undefined) {
+      const workflow = await loadTaskWorkflow(db, task.projectId);
 
+      if (!workflow) {
+        return c.json(
+          {
+            error: {
+              code: "WORKFLOW_INTEGRITY_ERROR",
+              message: "Project task workflow is invalid",
+            },
+          },
+          500,
+        );
+      }
+
+      const workflowStatus = workflow.find((status) => status.statusKey === input.status);
+
+      if (!workflowStatus?.enabled) {
+        return c.json(
+          {
+            error: {
+              code: "TASK_STATUS_DISABLED",
+              message: "Task status is disabled for this project",
+            },
+          },
+          400,
+        );
+      }
+    }
     let assignee: TaskDto["assignee"] = null;
 
     const assigneeId = input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
