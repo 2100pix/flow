@@ -512,6 +512,17 @@ tasksRoutes.patch(
       .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
       .limit(1);
 
+    if (!task) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_NOT_FOUND",
+            message: "Task not found",
+          },
+        },
+        404,
+      );
+    }
     const access = await findAccessibleProject(db, auth, task.projectId);
 
     if (!access) {
@@ -645,6 +656,17 @@ tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archi
     .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
     .limit(1);
 
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
   const access = await findAccessibleProject(db, auth, task.projectId);
 
   if (!access) {
