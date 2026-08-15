@@ -236,18 +236,24 @@ function TaskColumn({
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
-        {tasks.map((task, index) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            index={index}
-            status={status}
-            dragDisabled={dragDisabled}
-            onOpen={() => {
-              onOpenTask(task.id);
-            }}
-          />
-        ))}
+        {tasks.length === 0 ? (
+          <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-border/60 px-3">
+            <p className="text-center text-xs text-muted-foreground">No tasks</p>
+          </div>
+        ) : (
+          tasks.map((task, index) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              index={index}
+              status={status}
+              dragDisabled={dragDisabled}
+              onOpen={() => {
+                onOpenTask(task.id);
+              }}
+            />
+          ))
+        )}
       </div>
       {canCreateTask && <QuickCreateTask projectId={projectId} status={status} disabled={false} />}
     </section>
@@ -323,12 +329,32 @@ export function ProjectBoardPage() {
   }
 
   if (projectPending || tasksPending || workflowPending) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading board…</div>;
+    return (
+      <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading board…</p>
+      </div>
+    );
   }
 
   if (projectError || tasksError || workflowError || !project || !workflow) {
-    return <div className="p-8 text-sm text-destructive">Unable to load board.</div>;
+    return (
+      <div className="flex h-[calc(100vh-3rem)] items-center justify-center px-6">
+        <div className="text-center">
+          <p className="text-sm font-medium text-destructive">Unable to load board.</p>
+
+          <Link to="/projects" className="mt-2 inline-block text-sm text-muted-foreground hover:text-foreground">
+            Back to projects
+          </Link>
+        </div>
+      </div>
+    );
   }
+
+  const totalActiveTasks = tasks.length;
+
+  const taskCountLabel = `${totalActiveTasks} active ${totalActiveTasks === 1 ? "task" : "tasks"}`;
+
+  const visibilityLabel = project.visibility === "private" ? "Private" : "Workspace";
 
   return (
     <DragDropProvider
@@ -416,22 +442,36 @@ export function ProjectBoardPage() {
       }}
     >
       <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
-        <div className="shrink-0 border-b px-8 py-5">
+        <div className="shrink-0 border-b px-6 py-4">
           <Link to={`/projects/${project.id}`} className="text-sm text-muted-foreground hover:text-foreground">
             Project overview
           </Link>
 
-          <div className="mt-2">
-            <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p>
-            {reorderTasks.isPending || reorderTasks.isError ? (
-              <div className="mt-2 text-sm" aria-live="polite">
-                {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-semibold tracking-tight">{project.name}</h1>
 
-                {reorderTasks.isError ? <p className="text-destructive">Unable to save task order. Previous order restored.</p> : null}
-              </div>
-            ) : null}
+              <p className="mt-1 truncate text-sm text-muted-foreground">{project.client.name}</p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              <span>{taskCountLabel}</span>
+
+              <span aria-hidden="true" className="text-border">
+                ·
+              </span>
+
+              <span className="rounded-md border bg-muted/40 px-2 py-1">{visibilityLabel}</span>
+            </div>
           </div>
+
+          {reorderTasks.isPending || reorderTasks.isError ? (
+            <div className="mt-2 text-sm" aria-live="polite">
+              {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
+
+              {reorderTasks.isError ? <p className="text-destructive">Unable to save task order. Previous order restored.</p> : null}
+            </div>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain p-6">
           <div className="flex h-full min-w-max gap-3">
