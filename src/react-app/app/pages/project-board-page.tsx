@@ -60,7 +60,7 @@ function QuickCreateTask({ projectId, status, disabled }: { projectId: string; s
 
   return (
     <form
-      className="border-t p-2"
+      className="shrink-0 border-t p-2"
       onSubmit={(event) => {
         event.preventDefault();
 
@@ -184,14 +184,12 @@ function TaskColumn({
   });
 
   return (
-    <section ref={ref} className={`flex w-[290px] shrink-0 flex-col rounded-lg border bg-muted/20 ${isDropTarget ? "ring-1 ring-ring" : ""}`}>
-      <div className="flex items-center justify-between border-b px-3 py-2.5">
+    <section ref={ref} className={`flex h-full min-h-0 w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 ${isDropTarget ? "ring-1 ring-ring" : ""}`}>
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
         <h2 className="text-sm font-medium">{label}</h2>
-
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
       </div>
-
-      <div className="min-h-28 flex-1 space-y-2 p-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
         {tasks.map((task, index) => (
           <TaskCard
             key={task.id}
@@ -205,7 +203,6 @@ function TaskColumn({
           />
         ))}
       </div>
-
       {canCreateTask && <QuickCreateTask projectId={projectId} status={status} disabled={false} />}
     </section>
   );
@@ -374,7 +371,7 @@ export function ProjectBoardPage() {
         );
       }}
     >
-      <div className="flex h-screen min-w-0 flex-col">
+      <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
         <div className="shrink-0 border-b px-8 py-5">
           <Link to={`/projects/${project.id}`} className="text-sm text-muted-foreground hover:text-foreground">
             Project overview
@@ -388,7 +385,7 @@ export function ProjectBoardPage() {
             {reorderTasks.isError ? <p className="mt-2 text-sm text-destructive">Unable to save task order.</p> : null}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-6">
+        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain p-6">
           <div className="flex h-full min-w-max gap-3">
             {columns.map((column) => (
               <TaskColumn
