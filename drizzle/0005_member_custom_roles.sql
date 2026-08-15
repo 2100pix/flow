@@ -1,4 +1,6 @@
-PRAGMA foreign_keys=OFF;--> statement-breakpoint
+PRAGMA defer_foreign_keys=ON;
+--> statement-breakpoint
+
 CREATE TABLE `__new_workspace_members` (
 	`workspace_id` text NOT NULL,
 	`user_id` text NOT NULL,
@@ -13,8 +15,36 @@ CREATE TABLE `__new_workspace_members` (
 	CONSTRAINT "workspace_members_custom_role_check" CHECK("__new_workspace_members"."role" = 'member' or "__new_workspace_members"."custom_role_id" is null)
 );
 --> statement-breakpoint
-INSERT INTO `__new_workspace_members`("workspace_id", "user_id", "role", "custom_role_id", "created_at") SELECT "workspace_id", "user_id", "role", NULL, "created_at" FROM `workspace_members`;--> statement-breakpointDROP TABLE `workspace_members`;--> statement-breakpoint
-ALTER TABLE `__new_workspace_members` RENAME TO `workspace_members`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
-CREATE INDEX `workspace_members_user_id_idx` ON `workspace_members` (`user_id`);--> statement-breakpoint
-CREATE INDEX `workspace_members_custom_role_id_idx` ON `workspace_members` (`custom_role_id`);
+
+INSERT INTO `__new_workspace_members`(
+	"workspace_id",
+	"user_id",
+	"role",
+	"custom_role_id",
+	"created_at"
+)
+SELECT
+	"workspace_id",
+	"user_id",
+	"role",
+	NULL,
+	"created_at"
+FROM `workspace_members`;
+--> statement-breakpoint
+
+DROP TABLE `workspace_members`;
+--> statement-breakpoint
+
+ALTER TABLE `__new_workspace_members`
+RENAME TO `workspace_members`;
+--> statement-breakpoint
+
+CREATE INDEX `workspace_members_user_id_idx`
+ON `workspace_members` (`user_id`);
+--> statement-breakpoint
+
+CREATE INDEX `workspace_members_custom_role_id_idx`
+ON `workspace_members` (`custom_role_id`);
+--> statement-breakpoint
+
+PRAGMA defer_foreign_keys=OFF;
