@@ -8,6 +8,7 @@ import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/cont
 import { createDb } from "../db";
 import { clients, projectMembers, projects, users, workspaceMembers, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
+import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -47,7 +48,9 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
     .where(and(eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .orderBy(desc(projects.updatedAt));
 
-  const data: ProjectDto[] = result.map((project) => ({
+  const accessibleProjects = await filterAccessibleProjects(db, auth, result);
+
+  const data: ProjectDto[] = accessibleProjects.map((project) => ({
     id: project.id,
 
     client: {
@@ -174,7 +177,19 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
   const projectId = c.req.param("id");
 
   const db = createDb(c.env.flow_db);
+  const access = await findAccessibleProject(db, auth, projectId);
 
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
   const [project] = await db
     .select({
       id: projects.id,
