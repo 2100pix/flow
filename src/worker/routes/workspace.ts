@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { updateWorkspaceSchema, type WorkspaceDto } from "../../shared/contracts/workspace";
 import { createDb } from "../db";
 import { workspaces } from "../db/schema";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -22,7 +22,7 @@ export const workspaceRoutes = new Hono<WorkspaceEnv>();
 workspaceRoutes.patch(
   "/",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("workspace.manage"),
   zValidator("json", updateWorkspaceSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -38,11 +38,8 @@ workspaceRoutes.patch(
   }),
   async (c) => {
     const auth = c.var.auth;
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const now = new Date();
 
     await db

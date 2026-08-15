@@ -6,9 +6,9 @@ import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../..
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
 
 import { createDb } from "../db";
-import { clients, projectMembers, projects, users, workspaceMembers } from "../db/schema";
+import { clients, projectMembers, projects, users, workspaceMembers, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -21,7 +21,7 @@ type ProjectsEnv = {
 };
 
 export const projectsRoutes = new Hono<ProjectsEnv>();
-projectsRoutes.get("/", requireAuth, async (c) => {
+projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (c) => {
   const auth = c.var.auth;
   const db = createDb(c.env.flow_db);
 
@@ -72,7 +72,7 @@ projectsRoutes.get("/", requireAuth, async (c) => {
 projectsRoutes.post(
   "/",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("projects.create"),
   zValidator("json", createProjectSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -165,7 +165,7 @@ projectsRoutes.post(
   },
 );
 
-projectsRoutes.get("/:id", requireAuth, async (c) => {
+projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
 
@@ -233,7 +233,7 @@ projectsRoutes.get("/:id", requireAuth, async (c) => {
 projectsRoutes.patch(
   "/:id",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("projects.edit"),
   zValidator("json", updateProjectSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -381,7 +381,7 @@ projectsRoutes.patch(
   },
 );
 
-projectsRoutes.delete("/:id", requireAuth, requireRole("owner", "admin"), async (c) => {
+projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
 
@@ -459,20 +459,31 @@ projectsRoutes.get("/:id/members", requireAuth, async (c) => {
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
+      customRoleId: workspaceRoles.id,
+      customRoleName: workspaceRoles.name,
       addedAt: projectMembers.createdAt,
     })
     .from(projectMembers)
     .innerJoin(users, eq(projectMembers.userId, users.id))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+    .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
     .where(eq(projectMembers.projectId, projectId))
     .orderBy(asc(users.displayName));
 
   const data: ProjectMemberDto[] = result.map((member) => ({
     user: {
-      id: member.id,
+      id: member.userId,
       displayName: member.displayName,
       avatarUrl: member.avatarUrl,
       role: member.role,
+
+      customRole:
+        member.customRoleId && member.customRoleName
+          ? {
+              id: member.customRoleId,
+              name: member.customRoleName,
+            }
+          : null,
     },
 
     addedAt: member.addedAt.toISOString(),
@@ -486,7 +497,7 @@ projectsRoutes.get("/:id/members", requireAuth, async (c) => {
 projectsRoutes.post(
   "/:id/members",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("projects.edit"),
   zValidator("json", addProjectMemberSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -534,6 +545,8 @@ projectsRoutes.post(
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
         role: workspaceMembers.role,
+        customRoleId: workspaceRoles.id,
+        customRoleName: workspaceRoles.name,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.id))
@@ -585,10 +598,18 @@ projectsRoutes.post(
 
     const data: ProjectMemberDto = {
       user: {
-        id: member.id,
+        id: member.userId,
         displayName: member.displayName,
         avatarUrl: member.avatarUrl,
         role: member.role,
+
+        customRole:
+          member.customRoleId && member.customRoleName
+            ? {
+                id: member.customRoleId,
+                name: member.customRoleName,
+              }
+            : null,
       },
 
       addedAt: membership.addedAt.toISOString(),
@@ -600,7 +621,7 @@ projectsRoutes.post(
   },
 );
 
-projectsRoutes.delete("/:id/members/:userId", requireAuth, requireRole("owner", "admin"), async (c) => {
+projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("projects.edit"), async (c) => {
   const auth = c.var.auth;
 
   const projectId = c.req.param("id");

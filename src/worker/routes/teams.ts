@@ -4,9 +4,9 @@ import { Hono } from "hono";
 
 import { addTeamMemberSchema, createTeamSchema, updateTeamSchema, type TeamDto } from "../../shared/contracts/teams";
 import { createDb } from "../db";
-import { teamMembers, teams, users, workspaceMembers } from "../db/schema";
+import { teamMembers, teams, users, workspaceMembers, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -20,7 +20,7 @@ type TeamsEnv = {
 
 export const teamsRoutes = new Hono<TeamsEnv>();
 
-teamsRoutes.get("/", requireAuth, async (c) => {
+teamsRoutes.get("/", requireAuth, requirePermission("teams.view"), async (c) => {
   const auth = c.var.auth;
 
   const db = createDb(c.env.flow_db);
@@ -43,12 +43,15 @@ teamsRoutes.get("/", requireAuth, async (c) => {
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
+      customRoleId: workspaceRoles.id,
+      customRoleName: workspaceRoles.name,
       addedAt: teamMembers.createdAt,
     })
     .from(teamMembers)
     .innerJoin(teams, eq(teamMembers.teamId, teams.id))
     .innerJoin(users, eq(teamMembers.userId, users.id))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+    .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
     .where(eq(teams.workspaceId, auth.workspace.id));
 
   const data: TeamDto[] = teamRows.map((team) => ({
@@ -63,6 +66,14 @@ teamsRoutes.get("/", requireAuth, async (c) => {
           displayName: member.displayName,
           avatarUrl: member.avatarUrl,
           role: member.role,
+
+          customRole:
+            member.customRoleId && member.customRoleName
+              ? {
+                  id: member.customRoleId,
+                  name: member.customRoleName,
+                }
+              : null,
         },
 
         addedAt: member.addedAt.toISOString(),
@@ -81,7 +92,7 @@ teamsRoutes.get("/", requireAuth, async (c) => {
 teamsRoutes.post(
   "/",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("teams.manage"),
   zValidator("json", createTeamSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -137,7 +148,7 @@ teamsRoutes.post(
 teamsRoutes.patch(
   "/:teamId",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("teams.manage"),
   zValidator("json", updateTeamSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -197,11 +208,14 @@ teamsRoutes.patch(
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
         role: workspaceMembers.role,
+        customRoleId: workspaceRoles.id,
+        customRoleName: workspaceRoles.name,
         addedAt: teamMembers.createdAt,
       })
       .from(teamMembers)
       .innerJoin(users, eq(teamMembers.userId, users.id))
       .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+      .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
       .where(eq(teamMembers.teamId, teamId));
 
     const data: TeamDto = {
@@ -214,6 +228,14 @@ teamsRoutes.patch(
           displayName: member.displayName,
           avatarUrl: member.avatarUrl,
           role: member.role,
+
+          customRole:
+            member.customRoleId && member.customRoleName
+              ? {
+                  id: member.customRoleId,
+                  name: member.customRoleName,
+                }
+              : null,
         },
 
         addedAt: member.addedAt.toISOString(),
@@ -230,7 +252,7 @@ teamsRoutes.patch(
   },
 );
 
-teamsRoutes.delete("/:teamId", requireAuth, requireRole("owner", "admin"), async (c) => {
+teamsRoutes.delete("/:teamId", requireAuth, requirePermission("teams.manage"), async (c) => {
   const auth = c.var.auth;
 
   const teamId = c.req.param("teamId");
@@ -269,7 +291,7 @@ teamsRoutes.delete("/:teamId", requireAuth, requireRole("owner", "admin"), async
 teamsRoutes.post(
   "/:teamId/members",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("teams.manage"),
   zValidator("json", addTeamMemberSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -360,7 +382,7 @@ teamsRoutes.post(
   },
 );
 
-teamsRoutes.delete("/:teamId/members/:userId", requireAuth, requireRole("owner", "admin"), async (c) => {
+teamsRoutes.delete("/:teamId/members/:userId", requireAuth, requirePermission("teams.manage"), async (c) => {
   const auth = c.var.auth;
 
   const teamId = c.req.param("teamId");

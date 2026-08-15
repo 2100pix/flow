@@ -6,7 +6,7 @@ import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } 
 import { createDb } from "../db";
 import { projectMembers, projects, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
-import { requireAuth } from "../middleware/auth";
+import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -20,7 +20,7 @@ type TasksEnv = {
 
 export const tasksRoutes = new Hono<TasksEnv>();
 
-tasksRoutes.get("/projects/:projectId/tasks", requireAuth, async (c) => {
+tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
 
   const projectId = c.req.param("projectId");
@@ -115,6 +115,7 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, async (c) => {
 tasksRoutes.post(
   "/projects/:projectId/tasks",
   requireAuth,
+  requirePermission("tasks.create"),
   zValidator("json", createTaskSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -229,6 +230,7 @@ tasksRoutes.post(
 tasksRoutes.patch(
   "/projects/:projectId/tasks/reorder",
   requireAuth,
+  requirePermission("tasks.edit"),
   zValidator("json", reorderTasksSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -343,7 +345,7 @@ tasksRoutes.patch(
   },
 );
 
-tasksRoutes.get("/tasks/:taskId", requireAuth, async (c) => {
+tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
 
   const taskId = c.req.param("taskId");
@@ -446,11 +448,47 @@ tasksRoutes.patch(
   }),
   async (c) => {
     const auth = c.var.auth;
-
     const taskId = c.req.param("taskId");
-
     const input = c.req.valid("json");
+    const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
 
+    const assignsTask = input.assigneeId !== undefined;
+
+    if (!editsTask && !assignsTask) {
+      return c.json(
+        {
+          error: {
+            code: "NO_CHANGES",
+            message: "No task changes provided",
+          },
+        },
+        400,
+      );
+    }
+
+    if (editsTask && !hasPermission(auth, "tasks.edit")) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "You do not have permission to edit tasks",
+          },
+        },
+        403,
+      );
+    }
+
+    if (assignsTask && !hasPermission(auth, "tasks.assign")) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "You do not have permission to assign tasks",
+          },
+        },
+        403,
+      );
+    }
     const db = createDb(c.env.flow_db);
 
     const [task] = await db
@@ -593,7 +631,7 @@ tasksRoutes.patch(
   },
 );
 
-tasksRoutes.delete("/tasks/:taskId", requireAuth, async (c) => {
+tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archive"), async (c) => {
   const auth = c.var.auth;
 
   const taskId = c.req.param("taskId");

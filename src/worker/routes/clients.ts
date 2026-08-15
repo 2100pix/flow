@@ -6,7 +6,7 @@ import { createClientSchema, updateClientSchema, type ClientDto } from "../../sh
 import { createDb } from "../db";
 import { clients, projects } from "../db/schema";
 import { createId } from "../lib/id";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -20,7 +20,7 @@ type ClientsEnv = {
 
 export const clientsRoutes = new Hono<ClientsEnv>();
 
-clientsRoutes.get("/", requireAuth, async (c) => {
+clientsRoutes.get("/", requireAuth, requirePermission("clients.view"), async (c) => {
   const auth = c.var.auth;
   const db = createDb(c.env.flow_db);
 
@@ -54,7 +54,7 @@ clientsRoutes.get("/", requireAuth, async (c) => {
 clientsRoutes.post(
   "/",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("clients.create"),
   zValidator("json", createClientSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -105,7 +105,7 @@ clientsRoutes.post(
   },
 );
 
-clientsRoutes.get("/:id", requireAuth, async (c) => {
+clientsRoutes.get("/:id", requireAuth, requirePermission("clients.view"), async (c) => {
   const auth = c.var.auth;
   const clientId = c.req.param("id");
 
@@ -153,7 +153,7 @@ clientsRoutes.get("/:id", requireAuth, async (c) => {
 clientsRoutes.patch(
   "/:id",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("clients.edit"),
   zValidator("json", updateClientSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -234,7 +234,7 @@ clientsRoutes.patch(
   },
 );
 
-clientsRoutes.delete("/:id", requireAuth, requireRole("owner", "admin"), async (c) => {
+clientsRoutes.delete("/:id", requireAuth, requirePermission("clients.archive"), async (c) => {
   const auth = c.var.auth;
   const clientId = c.req.param("id");
 

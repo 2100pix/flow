@@ -7,9 +7,10 @@ import { builtInRoleDefinitions, isReservedRoleName } from "../../shared/roles";
 import { createDb } from "../db";
 import { workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
+import type { PermissionKey } from "../../shared/permissions";
 
 type RolesEnv = {
   Bindings: AppBindings;
@@ -18,10 +19,21 @@ type RolesEnv = {
     auth: AuthContext;
   };
 };
+function canGrantPermissions(auth: AuthContext, requested: readonly PermissionKey[]) {
+  const isSystemAdministrator = auth.workspace.role === "owner" || auth.workspace.role === "admin";
+
+  if (isSystemAdministrator) {
+    return true;
+  }
+
+  const allowed = new Set(auth.workspace.permissions);
+
+  return requested.every((permission) => allowed.has(permission));
+}
 
 export const rolesRoutes = new Hono<RolesEnv>();
 
-rolesRoutes.get("/", requireAuth, async (c) => {
+rolesRoutes.get("/", requireAuth, requirePermission("roles.view"), async (c) => {
   const auth = c.var.auth;
 
   const db = createDb(c.env.flow_db);
@@ -78,7 +90,7 @@ rolesRoutes.get("/", requireAuth, async (c) => {
 rolesRoutes.post(
   "/",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("roles.manage"),
   zValidator("json", createRoleSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -152,7 +164,18 @@ rolesRoutes.post(
         })),
       );
     }
+    if (!canGrantPermissions(auth, input.permissions)) {
+      return c.json(
+        {
+          error: {
+            code: "CANNOT_GRANT_PERMISSION",
 
+            message: "You cannot grant permissions you do not have",
+          },
+        },
+        403,
+      );
+    }
     const data: RoleDto = {
       id,
       name: input.name,
@@ -175,7 +198,7 @@ rolesRoutes.post(
 rolesRoutes.patch(
   "/:roleId",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("roles.manage"),
   zValidator("json", updateRoleSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -290,7 +313,7 @@ rolesRoutes.patch(
   },
 );
 
-rolesRoutes.delete("/:roleId", requireAuth, requireRole("owner", "admin"), async (c) => {
+rolesRoutes.delete("/:roleId", requireAuth, requirePermission("roles.manage"), async (c) => {
   const auth = c.var.auth;
 
   const roleId = c.req.param("roleId");

@@ -1,3 +1,5 @@
+import type { PermissionKey } from "../../../shared/permissions";
+
 export type WorkspaceRole = "owner" | "admin" | "member";
 
 export type AuthContext = {
@@ -10,7 +12,15 @@ export type AuthContext = {
   workspace: {
     id: string;
     name: string;
+
     role: WorkspaceRole;
+
+    customRole: {
+      id: string;
+      name: string;
+    } | null;
+
+    permissions: PermissionKey[];
   };
 };
 

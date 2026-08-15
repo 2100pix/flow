@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { updateWorkspaceMemberRoleSchema, type MemberDto } from "../../shared/contracts/members";
 import { createDb } from "../db";
 import { users, workspaceMembers, workspaceRoles } from "../db/schema";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -78,7 +78,7 @@ membersRoutes.get("/", requireAuth, async (c) => {
 membersRoutes.patch(
   "/:userId/role",
   requireAuth,
-  requireRole("owner", "admin"),
+  requirePermission("members.manage"),
   zValidator("json", updateWorkspaceMemberRoleSchema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -95,12 +95,11 @@ membersRoutes.patch(
   }),
   async (c) => {
     const auth = c.var.auth;
-
     const userId = c.req.param("userId");
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
+    const isSystemOwner = auth.workspace.role === "owner";
+    const isSystemAdministrator = isSystemOwner || auth.workspace.role === "admin";
 
     const [targetMember] = await db
       .select({
@@ -130,6 +129,17 @@ membersRoutes.patch(
           },
         },
         404,
+      );
+    }
+    if ((targetMember.role === "owner" || targetMember.role === "admin") && !isSystemAdministrator) {
+      return c.json(
+        {
+          error: {
+            code: "SYSTEM_ROLE_PROTECTED",
+            message: "You cannot change a system administrator",
+          },
+        },
+        403,
       );
     }
 
@@ -168,6 +178,29 @@ membersRoutes.patch(
           403,
         );
       }
+      if (input.role === "owner" && !isSystemOwner) {
+        return c.json(
+          {
+            error: {
+              code: "OWNER_REQUIRED",
+              message: "Only a workspace owner can assign the owner role",
+            },
+          },
+          403,
+        );
+      }
+
+      if (input.role === "admin" && !isSystemAdministrator) {
+        return c.json(
+          {
+            error: {
+              code: "ADMIN_REQUIRED",
+              message: "You cannot assign the admin role",
+            },
+          },
+          403,
+        );
+      }
 
       nextRole = input.role;
 
@@ -201,7 +234,37 @@ membersRoutes.patch(
           404,
         );
       }
+      const definition = builtInRoleDefinitions.find((role) => role.key === input.role);
 
+      if (!definition) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_ROLE",
+              message: "Role is invalid",
+            },
+          },
+          400,
+        );
+      }
+
+      if (!isSystemAdministrator) {
+        const allowed = new Set(auth.workspace.permissions);
+
+        const exceedsCaller = definition.permissions.some((permission) => !allowed.has(permission));
+
+        if (exceedsCaller) {
+          return c.json(
+            {
+              error: {
+                code: "CANNOT_GRANT_PERMISSION",
+                message: "You cannot grant permissions you do not have",
+              },
+            },
+            403,
+          );
+        }
+      }
       nextRole = "member";
 
       nextCustomRoleId = customRole.id;

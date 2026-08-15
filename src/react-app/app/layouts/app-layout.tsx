@@ -7,9 +7,27 @@ import { Button } from "@/components/ui/button";
 import type { AuthContext } from "@/features/auth/types";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import type { ProjectDto } from "@/features/projects/types";
+import { hasPermission } from "@/features/auth/permissions";
+
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "flow:sidebar-collapsed";
+
+const canViewHome = hasPermission(auth, "dashboard.view");
+
+const canViewClients = hasPermission(auth, "clients.view");
+
+const canCreateClients = hasPermission(auth, "clients.create");
+
+const canViewProjects = hasPermission(auth, "projects.view");
+
+const canCreateProjects = hasPermission(auth, "projects.create");
+
+const canViewMembers = hasPermission(auth, "members.view");
+
+const canViewSettings = hasPermission(auth, "settings.view");
+
+const { data: projects = [] } = useProjects(canViewProjects);
 
 const mainNavigation = [
   {
@@ -78,7 +96,7 @@ function QuickCreateButton({ to, label }: { to: string; label: string }) {
   );
 }
 
-function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolean; projects: ProjectDto[]; canCreate: boolean }) {
+function SpaceNavigation({ collapsed, projects, canCreate }: { collapsed: boolean; projects: ProjectDto[]; canViewClients: boolean; canCreateClients: boolean; canViewProjects: boolean; canCreateProjects: boolean }) {
   if (collapsed) {
     return (
       <div className="space-y-1">
@@ -154,8 +172,6 @@ function NavigationGroup({ label, items, collapsed }: { label: string; items: Na
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
   const { data: projects = [] } = useProjects();
-
-  const canCreate = auth.workspace.role === "owner" || auth.workspace.role === "admin";
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {

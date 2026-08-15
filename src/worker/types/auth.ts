@@ -1,3 +1,5 @@
+import type { PermissionKey } from "../../shared/permissions";
+
 import type { workspaceMembers } from "../db/schema";
 
 type WorkspaceMember = typeof workspaceMembers.$inferSelect;
@@ -14,6 +16,14 @@ export type AuthContext = {
   workspace: {
     id: string;
     name: string;
+
     role: WorkspaceRole;
+
+    customRole: {
+      id: string;
+      name: string;
+    } | null;
+
+    permissions: PermissionKey[];
   };
 };

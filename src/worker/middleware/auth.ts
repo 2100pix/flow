@@ -1,12 +1,23 @@
 import { and, eq, gt } from "drizzle-orm";
+
 import { deleteCookie, getCookie } from "hono/cookie";
+
 import { createMiddleware } from "hono/factory";
 
+import { permissionKeySchema, type PermissionKey } from "../../shared/permissions";
+
+import { builtInRoleDefinitions } from "../../shared/roles";
+
 import { createDb } from "../db";
-import { sessions, users, workspaceMembers, workspaces } from "../db/schema";
+
+import { sessions, users, workspaceMembers, workspaceRolePermissions, workspaceRoles, workspaces } from "../db/schema";
+
 import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
+
 import { INVS_WORKSPACE_ID } from "../lib/workspace";
+
 import type { AuthContext, WorkspaceRole } from "../types/auth";
+
 import type { AppBindings } from "../types/app-env";
 
 type AuthEnv = {
@@ -39,9 +50,15 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const [result] = await db
     .select({
       userId: users.id,
+
       displayName: users.displayName,
+
       avatarUrl: users.avatarUrl,
+
       role: workspaceMembers.role,
+
+      customRoleId: workspaceMembers.customRoleId,
+
       workspaceName: workspaces.name,
     })
     .from(sessions)
@@ -72,32 +89,127 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
+  const builtInRole = builtInRoleDefinitions.find((role) => role.key === result.role);
+
+  if (!builtInRole) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_ROLE",
+          message: "Workspace role is invalid",
+        },
+      },
+      403,
+    );
+  }
+
+  let permissions: PermissionKey[] = [...builtInRole.permissions];
+
+  let customRole: {
+    id: string;
+    name: string;
+  } | null = null;
+
+  if (result.role === "member" && result.customRoleId) {
+    const roleRows = await db
+      .select({
+        id: workspaceRoles.id,
+
+        name: workspaceRoles.name,
+
+        permissionKey: workspaceRolePermissions.permissionKey,
+      })
+      .from(workspaceRoles)
+      .leftJoin(workspaceRolePermissions, eq(workspaceRolePermissions.roleId, workspaceRoles.id))
+      .where(and(eq(workspaceRoles.id, result.customRoleId), eq(workspaceRoles.workspaceId, INVS_WORKSPACE_ID)));
+
+    if (roleRows.length === 0) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_CUSTOM_ROLE",
+            message: "Custom role is invalid",
+          },
+        },
+        403,
+      );
+    }
+
+    customRole = {
+      id: roleRows[0].id,
+      name: roleRows[0].name,
+    };
+
+    permissions = roleRows.flatMap((row) => {
+      const parsed = permissionKeySchema.safeParse(row.permissionKey);
+
+      return parsed.success ? [parsed.data] : [];
+    });
+  }
+
   c.set("auth", {
     user: {
       id: result.userId,
+
       displayName: result.displayName,
+
       avatarUrl: result.avatarUrl,
     },
 
     workspace: {
       id: INVS_WORKSPACE_ID,
+
       name: result.workspaceName,
+
       role: result.role,
+
+      customRole,
+
+      permissions,
     },
   });
 
   await next();
 });
 
-export function requireRole(...allowedRoles: WorkspaceRole[]) {
-  return createMiddleware<AuthEnv>(async (c, next) => {
-    const auth = c.var.auth;
+export function hasPermission(auth: AuthContext, permission: PermissionKey) {
+  return auth.workspace.permissions.includes(permission);
+}
 
-    if (!allowedRoles.includes(auth.workspace.role)) {
+export function requirePermission(permission: PermissionKey) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    if (!hasPermission(c.var.auth, permission)) {
       return c.json(
         {
           error: {
             code: "FORBIDDEN",
+
+            message: "You do not have permission to perform this action",
+          },
+        },
+        403,
+      );
+    }
+
+    await next();
+  });
+}
+
+/*
+ * Temporary during the 8.6H
+ * migration.
+ *
+ * Remove after every route has
+ * moved to requirePermission().
+ */
+export function requireRole(...allowedRoles: WorkspaceRole[]) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    if (!allowedRoles.includes(c.var.auth.workspace.role)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+
             message: "You do not have permission to perform this action",
           },
         },
