@@ -52,7 +52,10 @@ The global application header occupies 3rem of viewport height.
 
 The board therefore must use the remaining application viewport:
 
+```text
 100vh - 3rem
+```
+
 The board itself must not create an additional document-level vertical scroll.
 
 Layout:
@@ -489,22 +492,22 @@ Those require separate architecture decisions.
 
 ## Implementation Sequence
 
-8.9B — Board Viewport + Column Scrolling
+### 8.9B — Board Viewport + Column Scrolling
 
 Fix application-shell height ownership and give every column an independent task scroll region.
 
-8.9C — Task Cards + Quick Create
+### 8.9C — Task Cards + Quick Create
 
 Improve card hierarchy, replace permanent composer with collapsed quick-create interaction, and replace text drag affordance.
 
-8.9D — Drag/Drop Feedback + Recovery
+### 8.9D — Drag/Drop Feedback + Recovery
 
 Harden optimistic drag state, mutation feedback, rollback behavior, and drop-target presentation.
 
-8.9E — Board Header + States Polish
+### 8.9E — Board Header + States Polish
 
 Polish board context, counts, empty states, loading states, and board-scoped errors.
 
-8.9F — Runtime Board UX Matrix
+### 8.9F — Runtime Board UX Matrix
 
 Validate long columns, empty columns, permissions, task creation, same-column reorder, cross-column movement, mutation failure, custom workflow labels/order, disabled statuses, and private-project ACL.
