@@ -175,7 +175,7 @@ projectsRoutes.post(
 
       name: input.name,
       description: input.description ?? null,
-      visibility: "workspace",
+      visibility,
       status: "planning",
       startDate: null,
       dueDate: null,
@@ -529,7 +529,7 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
 
   const data: ProjectMemberDto[] = result.map((member) => ({
     user: {
-      id: member.userId,
+      id: member.id,
       displayName: member.displayName,
       avatarUrl: member.avatarUrl,
       role: member.role,
@@ -661,7 +661,7 @@ projectsRoutes.post(
 
     const data: ProjectMemberDto = {
       user: {
-        id: member.userId,
+        id: member.id,
         displayName: member.displayName,
         avatarUrl: member.avatarUrl,
         role: member.role,
