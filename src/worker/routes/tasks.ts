@@ -310,6 +310,20 @@ tasksRoutes.patch(
 
     const db = createDb(c.env.flow_db);
 
+    const access = await findAccessibleProject(db, auth, projectId);
+
+    if (!access) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_NOT_FOUND",
+            message: "Project not found",
+          },
+        },
+        404,
+      );
+    }
+
     const workflow = await loadTaskWorkflow(db, projectId);
 
     if (!workflow) {
@@ -337,19 +351,6 @@ tasksRoutes.patch(
           },
         },
         400,
-      );
-    }
-    const access = await findAccessibleProject(db, auth, projectId);
-
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
-        },
-        404,
       );
     }
 
