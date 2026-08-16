@@ -10,7 +10,7 @@ import { createId } from "../lib/id";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
-import type { PermissionKey } from "../../shared/permissions";
+import { parsePermissionKeys, type PermissionKey } from "../../shared/permissions";
 
 type RolesEnv = {
   Bindings: AppBindings;
@@ -69,18 +69,37 @@ rolesRoutes.get("/", requireAuth, requirePermission("roles.view"), async (c) => 
     updatedAt: null,
   }));
 
-  const customRoles: RoleDto[] = roleRows.map((role) => ({
-    id: role.id,
-    name: role.name,
-    kind: "custom",
-    systemKey: null,
+  const customRoles: RoleDto[] = [];
 
-    permissions: permissionRows.filter((permission) => permission.roleId === role.id).map((permission) => permission.permissionKey) as RoleDto["permissions"],
+  for (const role of roleRows) {
+    const rawPermissions = permissionRows.filter((permission) => permission.roleId === role.id).map((permission) => permission.permissionKey);
 
-    createdAt: role.createdAt.toISOString(),
+    const parsedPermissions = parsePermissionKeys(rawPermissions);
 
-    updatedAt: role.updatedAt.toISOString(),
-  }));
+    if (!parsedPermissions) {
+      return c.json(
+        {
+          error: {
+            code: "ROLE_PERMISSION_INTEGRITY_ERROR",
+            message: "Stored role permissions are invalid",
+          },
+        },
+        500,
+      );
+    }
+
+    customRoles.push({
+      id: role.id,
+      name: role.name,
+      kind: "custom",
+      systemKey: null,
+      permissions: parsedPermissions,
+
+      createdAt: role.createdAt.toISOString(),
+
+      updatedAt: role.updatedAt.toISOString(),
+    });
+  }
 
   return c.json({
     data: [...builtInRoles, ...customRoles],

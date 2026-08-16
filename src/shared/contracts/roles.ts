@@ -1,19 +1,12 @@
 import * as z from "zod";
 
-import { permissionKeySchema, permissionKeys, type PermissionKey } from "../permissions";
+import { permissionKeyListSchema, type PermissionKey } from "../permissions";
 import type { BuiltInRoleKey } from "../roles";
-
-const permissionsSchema = z
-  .array(permissionKeySchema)
-  .max(permissionKeys.length)
-  .refine((permissions) => new Set(permissions).size === permissions.length, {
-    message: "Permissions must be unique",
-  });
 
 export const createRoleSchema = z.object({
   name: z.string().trim().min(1).max(120),
 
-  permissions: permissionsSchema,
+  permissions: permissionKeyListSchema,
 });
 
 export const updateRoleSchema = createRoleSchema;

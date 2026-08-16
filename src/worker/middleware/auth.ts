@@ -1,23 +1,14 @@
 import { and, eq, gt } from "drizzle-orm";
-
 import { deleteCookie, getCookie } from "hono/cookie";
-
 import { createMiddleware } from "hono/factory";
-
-import { permissionKeySchema, type PermissionKey } from "../../shared/permissions";
-
+import { parsePermissionKeys, type PermissionKey } from "../../shared/permissions";
 import { builtInRoleDefinitions } from "../../shared/roles";
-
 import { createDb } from "../db";
 
 import { sessions, users, workspaceMembers, workspaceRolePermissions, workspaceRoles, workspaces } from "../db/schema";
-
 import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
-
 import { INVS_WORKSPACE_ID } from "../lib/workspace";
-
 import type { AuthContext } from "../types/auth";
-
 import type { AppBindings } from "../types/app-env";
 
 type AuthEnv = {
@@ -140,11 +131,22 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       name: roleRows[0].name,
     };
 
-    permissions = roleRows.flatMap((row) => {
-      const parsed = permissionKeySchema.safeParse(row.permissionKey);
+    const rawPermissionKeys = roleRows.length === 1 && roleRows[0].permissionKey === null ? [] : roleRows.map((row) => row.permissionKey);
+    const parsedPermissions = parsePermissionKeys(rawPermissionKeys);
 
-      return parsed.success ? [parsed.data] : [];
-    });
+    if (!parsedPermissions) {
+      return c.json(
+        {
+          error: {
+            code: "ROLE_PERMISSION_INTEGRITY_ERROR",
+            message: "Stored role permissions are invalid",
+          },
+        },
+        500,
+      );
+    }
+
+    permissions = parsedPermissions;
   }
 
   c.set("auth", {
