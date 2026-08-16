@@ -83,6 +83,32 @@ export const workspaceMembers = sqliteTable(
   ],
 );
 
+export const workspaceAccessRequests = sqliteTable(
+  "workspace_access_requests",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    requestedAt: integer("requested_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.workspaceId, table.userId],
+    }),
+  ],
+);
+
 export const teams = sqliteTable(
   "teams",
   {

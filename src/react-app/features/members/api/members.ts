@@ -31,3 +31,23 @@ export async function removeProjectMember(projectId: string, userId: string) {
     method: "DELETE",
   });
 }
+
+export async function getMemberAccessRequests() {
+  const response = await apiFetch<MemberAccessRequestsResponse>("/api/members/access-requests");
+
+  return response.data;
+}
+
+export async function approveMemberAccessRequest(userId: string) {
+  const response = await apiFetch<MemberResponse>(`/api/members/access-requests/${userId}/approve`, {
+    method: "POST",
+  });
+
+  return response.data;
+}
+
+export async function rejectMemberAccessRequest(userId: string) {
+  await apiFetch(`/api/members/access-requests/${userId}`, {
+    method: "DELETE",
+  });
+}
