@@ -1,5 +1,4 @@
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
-import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } from "../../shared/contracts/tasks";
@@ -148,258 +147,255 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
   });
 });
 
-tasksRoutes.post(
-  "/projects/:projectId/tasks",
-  requireAuth,
-  requirePermission("tasks.create"),
-  zValidator("json", createTaskSchema, (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid task data",
-          },
-        },
-        400,
-      );
-    }
-  }),
-  async (c) => {
-    const auth = c.var.auth;
+tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("tasks.create"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("projectId");
+  const db = createDb(c.env.flow_db);
+  const access = await findAccessibleProject(db, auth, projectId);
 
-    const projectId = c.req.param("projectId");
-
-    const input = c.req.valid("json");
-
-    const db = createDb(c.env.flow_db);
-
-    const access = await findAccessibleProject(db, auth, projectId);
-
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
-        },
-        404,
-      );
-    }
-    const workflow = await loadTaskWorkflow(db, projectId);
-
-    if (!workflow) {
-      return c.json(
-        {
-          error: {
-            code: "WORKFLOW_INTEGRITY_ERROR",
-            message: "Project task workflow is invalid",
-          },
-        },
-        500,
-      );
-    }
-
-    const status = input.status ?? "backlog";
-
-    const workflowStatus = workflow.find((item) => item.statusKey === status);
-
-    if (!workflowStatus?.enabled) {
-      return c.json(
-        {
-          error: {
-            code: "TASK_STATUS_DISABLED",
-            message: "Task status is disabled for this project",
-          },
-        },
-        400,
-      );
-    }
-
-    const [position] = await db
-      .select({
-        maxSortOrder: max(tasks.sortOrder),
-      })
-      .from(tasks)
-      .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
-
-    const sortOrder = (position?.maxSortOrder ?? 0) + 100;
-
-    const id = createId("tsk");
-
-    const now = new Date();
-
-    await db.insert(tasks).values({
-      id,
-      projectId,
-
-      title: input.title,
-      description: null,
-
-      status,
-      priority: null,
-
-      assigneeId: null,
-      dueDate: null,
-
-      sortOrder,
-
-      discordThreadUrl: null,
-
-      createdBy: auth.user.id,
-
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const data: TaskDto = {
-      id,
-      projectId,
-
-      title: input.title,
-      description: null,
-
-      status,
-      priority: null,
-
-      assignee: null,
-      dueDate: null,
-
-      sortOrder,
-
-      discordThreadUrl: null,
-
-      createdAt: now.toISOString(),
-
-      updatedAt: now.toISOString(),
-    };
-
+  if (!access) {
     return c.json(
       {
-        data,
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
       },
-      201,
+      404,
     );
-  },
-);
+  }
 
-tasksRoutes.patch(
-  "/projects/:projectId/tasks/reorder",
-  requireAuth,
-  requirePermission("tasks.edit"),
-  zValidator("json", reorderTasksSchema, (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid task order",
-          },
+  const body = await c.req.json().catch(() => undefined);
+  const parsed = createTaskSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid task data",
         },
-        400,
-      );
-    }
-  }),
-  async (c) => {
-    const auth = c.var.auth;
-    const projectId = c.req.param("projectId");
-    const input = c.req.valid("json");
-    const db = createDb(c.env.flow_db);
-    const access = await findAccessibleProject(db, auth, projectId);
+      },
+      400,
+    );
+  }
 
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
+  const input = parsed.data;
+  const workflow = await loadTaskWorkflow(db, projectId);
+
+  if (!workflow) {
+    return c.json(
+      {
+        error: {
+          code: "WORKFLOW_INTEGRITY_ERROR",
+          message: "Project task workflow is invalid",
         },
-        404,
-      );
-    }
+      },
+      500,
+    );
+  }
 
-    const workflow = await loadTaskWorkflow(db, projectId);
+  const status = input.status ?? "backlog";
+  const workflowStatus = workflow.find((item) => item.statusKey === status);
 
-    if (!workflow) {
-      return c.json(
-        {
-          error: {
-            code: "WORKFLOW_INTEGRITY_ERROR",
-            message: "Project task workflow is invalid",
-          },
+  if (!workflowStatus?.enabled) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_STATUS_DISABLED",
+          message: "Task status is disabled for this project",
         },
-        500,
-      );
-    }
+      },
+      400,
+    );
+  }
 
-    const enabledStatusKeys = new Set(workflow.filter((status) => status.enabled).map((status) => status.statusKey));
+  const [position] = await db
+    .select({
+      maxSortOrder: max(tasks.sortOrder),
+    })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
 
-    const referencesDisabledStatus = input.columns.some((column) => !enabledStatusKeys.has(column.status));
+  const sortOrder = (position?.maxSortOrder ?? 0) + 100;
+  const id = createId("tsk");
+  const now = new Date();
+  await db.insert(tasks).values({
+    id,
+    projectId,
 
-    if (referencesDisabledStatus) {
-      return c.json(
-        {
-          error: {
-            code: "TASK_STATUS_DISABLED",
-            message: "Task status is disabled for this project",
-          },
+    title: input.title,
+    description: null,
+
+    status,
+    priority: null,
+
+    assigneeId: null,
+    dueDate: null,
+
+    sortOrder,
+
+    discordThreadUrl: null,
+
+    createdBy: auth.user.id,
+
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const data: TaskDto = {
+    id,
+    projectId,
+
+    title: input.title,
+    description: null,
+
+    status,
+    priority: null,
+
+    assignee: null,
+    dueDate: null,
+
+    sortOrder,
+
+    discordThreadUrl: null,
+
+    createdAt: now.toISOString(),
+
+    updatedAt: now.toISOString(),
+  };
+
+  return c.json(
+    {
+      data,
+    },
+    201,
+  );
+});
+
+tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePermission("tasks.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("projectId");
+  const db = createDb(c.env.flow_db);
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
         },
-        400,
-      );
-    }
+      },
+      404,
+    );
+  }
 
-    const statuses = input.columns.map((column) => column.status);
+  const body = await c.req.json().catch(() => undefined);
+  const parsed = reorderTasksSchema.safeParse(body);
 
-    const receivedIds = input.columns.flatMap((column) => column.taskIds);
-
-    const currentTasks = await db
-      .select({
-        id: tasks.id,
-      })
-      .from(tasks)
-      .where(and(eq(tasks.projectId, projectId), inArray(tasks.status, statuses), isNull(tasks.archivedAt)));
-
-    const currentIds = new Set(currentTasks.map((task) => task.id));
-
-    if (currentIds.size !== receivedIds.length || receivedIds.some((taskId) => !currentIds.has(taskId))) {
-      return c.json(
-        {
-          error: {
-            code: "BOARD_CHANGED",
-            message: "Task board changed; reload and try again",
-          },
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid task order",
         },
-        409,
-      );
-    }
+      },
+      400,
+    );
+  }
 
-    if (receivedIds.length === 0) {
-      return c.json({
-        data: {
-          success: true as const,
+  const input = parsed.data;
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
         },
-      });
-    }
+      },
+      404,
+    );
+  }
 
-    const REORDER_UPDATE_CHUNK_SIZE = 20;
+  const workflow = await loadTaskWorkflow(db, projectId);
 
-    const updateStatements: D1PreparedStatement[] = [];
+  if (!workflow) {
+    return c.json(
+      {
+        error: {
+          code: "WORKFLOW_INTEGRITY_ERROR",
+          message: "Project task workflow is invalid",
+        },
+      },
+      500,
+    );
+  }
 
-    for (const column of input.columns) {
-      for (let start = 0; start < column.taskIds.length; start += REORDER_UPDATE_CHUNK_SIZE) {
-        const chunk = column.taskIds.slice(start, start + REORDER_UPDATE_CHUNK_SIZE);
+  const enabledStatusKeys = new Set(workflow.filter((status) => status.enabled).map((status) => status.statusKey));
+  const referencesDisabledStatus = input.columns.some((column) => !enabledStatusKeys.has(column.status));
 
-        if (chunk.length === 0) {
-          continue;
-        }
+  if (referencesDisabledStatus) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_STATUS_DISABLED",
+          message: "Task status is disabled for this project",
+        },
+      },
+      400,
+    );
+  }
 
-        const sortOrderCases = chunk.map(() => "WHEN id = ? THEN ?").join(" ");
+  const statuses = input.columns.map((column) => column.status);
+  const receivedIds = input.columns.flatMap((column) => column.taskIds);
 
-        const idPlaceholders = chunk.map(() => "?").join(", ");
+  const currentTasks = await db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), inArray(tasks.status, statuses), isNull(tasks.archivedAt)));
 
-        const statement = c.env.flow_db.prepare(`
+  const currentIds = new Set(currentTasks.map((task) => task.id));
+
+  if (currentIds.size !== receivedIds.length || receivedIds.some((taskId) => !currentIds.has(taskId))) {
+    return c.json(
+      {
+        error: {
+          code: "BOARD_CHANGED",
+          message: "Task board changed; reload and try again",
+        },
+      },
+      409,
+    );
+  }
+
+  if (receivedIds.length === 0) {
+    return c.json({
+      data: {
+        success: true as const,
+      },
+    });
+  }
+
+  const REORDER_UPDATE_CHUNK_SIZE = 20;
+  const updateStatements: D1PreparedStatement[] = [];
+
+  for (const column of input.columns) {
+    for (let start = 0; start < column.taskIds.length; start += REORDER_UPDATE_CHUNK_SIZE) {
+      const chunk = column.taskIds.slice(start, start + REORDER_UPDATE_CHUNK_SIZE);
+
+      if (chunk.length === 0) {
+        continue;
+      }
+
+      const sortOrderCases = chunk.map(() => "WHEN id = ? THEN ?").join(" ");
+      const idPlaceholders = chunk.map(() => "?").join(", ");
+
+      const statement = c.env.flow_db.prepare(`
           UPDATE tasks
           SET
             status = ?,
@@ -413,31 +409,30 @@ tasksRoutes.patch(
             AND archived_at IS NULL
         `);
 
-        const bindings: Array<string | number> = [column.status];
+      const bindings: Array<string | number> = [column.status];
 
-        chunk.forEach((taskId, chunkIndex) => {
-          const absoluteIndex = start + chunkIndex;
+      chunk.forEach((taskId, chunkIndex) => {
+        const absoluteIndex = start + chunkIndex;
 
-          bindings.push(taskId, (absoluteIndex + 1) * 100);
-        });
+        bindings.push(taskId, (absoluteIndex + 1) * 100);
+      });
 
-        bindings.push(projectId, ...chunk);
+      bindings.push(projectId, ...chunk);
 
-        updateStatements.push(statement.bind(...bindings));
-      }
+      updateStatements.push(statement.bind(...bindings));
     }
+  }
 
-    if (updateStatements.length > 0) {
-      await c.env.flow_db.batch(updateStatements);
-    }
+  if (updateStatements.length > 0) {
+    await c.env.flow_db.batch(updateStatements);
+  }
 
-    return c.json({
-      data: {
-        success: true as const,
-      },
-    });
-  },
-);
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
 
 tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
@@ -537,247 +532,255 @@ tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), 
   });
 });
 
-tasksRoutes.patch(
-  "/tasks/:taskId",
-  requireAuth,
-  zValidator("json", updateTaskSchema, (result, c) => {
-    if (!result.success) {
+tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const canEditTasks = hasPermission(auth, "tasks.edit");
+
+  const canAssignTasks = hasPermission(auth, "tasks.assign");
+
+  if (!canEditTasks && !canAssignTasks) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to modify tasks",
+        },
+      },
+      403,
+    );
+  }
+
+  const db = createDb(c.env.flow_db);
+
+  const [task] = await db
+    .select({
+      id: tasks.id,
+      projectId: tasks.projectId,
+
+      title: tasks.title,
+      description: tasks.description,
+
+      status: tasks.status,
+      priority: tasks.priority,
+
+      assigneeId: tasks.assigneeId,
+
+      dueDate: tasks.dueDate,
+
+      sortOrder: tasks.sortOrder,
+
+      discordThreadUrl: tasks.discordThreadUrl,
+
+      createdAt: tasks.createdAt,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
+    .limit(1);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const access = await findAccessibleProject(db, auth, task.projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = updateTaskSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid task data",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
+
+  const assignsTask = input.assigneeId !== undefined;
+
+  if (editsTask && !canEditTasks) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to edit tasks",
+        },
+      },
+      403,
+    );
+  }
+
+  if (assignsTask && !canAssignTasks) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to assign tasks",
+        },
+      },
+      403,
+    );
+  }
+  if (input.status !== undefined) {
+    const workflow = await loadTaskWorkflow(db, task.projectId);
+
+    if (!workflow) {
       return c.json(
         {
           error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid task data",
+            code: "WORKFLOW_INTEGRITY_ERROR",
+            message: "Project task workflow is invalid",
+          },
+        },
+        500,
+      );
+    }
+
+    const workflowStatus = workflow.find((status) => status.statusKey === input.status);
+
+    if (!workflowStatus?.enabled) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_STATUS_DISABLED",
+            message: "Task status is disabled for this project",
           },
         },
         400,
       );
     }
-  }),
-  async (c) => {
-    const auth = c.var.auth;
-    const taskId = c.req.param("taskId");
-    const input = c.req.valid("json");
-    const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
+  }
+  let assignee: TaskDto["assignee"] = null;
 
-    const assignsTask = input.assigneeId !== undefined;
+  const assigneeId = input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
 
-    if (!editsTask && !assignsTask) {
-      return c.json(
-        {
-          error: {
-            code: "NO_CHANGES",
-            message: "No task changes provided",
-          },
-        },
-        400,
-      );
-    }
-
-    if (editsTask && !hasPermission(auth, "tasks.edit")) {
-      return c.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "You do not have permission to edit tasks",
-          },
-        },
-        403,
-      );
-    }
-
-    if (assignsTask && !hasPermission(auth, "tasks.assign")) {
-      return c.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "You do not have permission to assign tasks",
-          },
-        },
-        403,
-      );
-    }
-    const db = createDb(c.env.flow_db);
-
-    const [task] = await db
+  if (assigneeId) {
+    const [member] = await db
       .select({
-        id: tasks.id,
-        projectId: tasks.projectId,
-
-        title: tasks.title,
-        description: tasks.description,
-
-        status: tasks.status,
-        priority: tasks.priority,
-
-        assigneeId: tasks.assigneeId,
-
-        dueDate: tasks.dueDate,
-
-        sortOrder: tasks.sortOrder,
-
-        discordThreadUrl: tasks.discordThreadUrl,
-
-        createdAt: tasks.createdAt,
+        id: users.id,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
       })
-      .from(tasks)
-      .innerJoin(projects, eq(tasks.projectId, projects.id))
-      .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
+      .from(projectMembers)
+      .innerJoin(users, eq(projectMembers.userId, users.id))
+      .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+      .where(and(eq(projectMembers.projectId, task.projectId), eq(projectMembers.userId, assigneeId)))
       .limit(1);
 
-    if (!task) {
+    if (!member) {
       return c.json(
         {
           error: {
-            code: "TASK_NOT_FOUND",
-            message: "Task not found",
+            code: "ASSIGNEE_NOT_AVAILABLE",
+            message: "Assignee must be a project member",
           },
         },
-        404,
+        400,
       );
     }
-    const access = await findAccessibleProject(db, auth, task.projectId);
 
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "TASK_NOT_FOUND",
-            message: "Task not found",
-          },
-        },
-        404,
-      );
-    }
-    if (input.status !== undefined) {
-      const workflow = await loadTaskWorkflow(db, task.projectId);
+    assignee = {
+      id: member.id,
+      displayName: member.displayName,
+      avatarUrl: member.avatarUrl,
+    };
+  }
 
-      if (!workflow) {
-        return c.json(
-          {
-            error: {
-              code: "WORKFLOW_INTEGRITY_ERROR",
-              message: "Project task workflow is invalid",
-            },
-          },
-          500,
-        );
-      }
+  const status = input.status ?? task.status;
 
-      const workflowStatus = workflow.find((status) => status.statusKey === input.status);
+  let sortOrder = task.sortOrder;
 
-      if (!workflowStatus?.enabled) {
-        return c.json(
-          {
-            error: {
-              code: "TASK_STATUS_DISABLED",
-              message: "Task status is disabled for this project",
-            },
-          },
-          400,
-        );
-      }
-    }
-    let assignee: TaskDto["assignee"] = null;
-
-    const assigneeId = input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
-
-    if (assigneeId) {
-      const [member] = await db
-        .select({
-          id: users.id,
-          displayName: users.displayName,
-          avatarUrl: users.avatarUrl,
-        })
-        .from(projectMembers)
-        .innerJoin(users, eq(projectMembers.userId, users.id))
-        .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
-        .where(and(eq(projectMembers.projectId, task.projectId), eq(projectMembers.userId, assigneeId)))
-        .limit(1);
-
-      if (!member) {
-        return c.json(
-          {
-            error: {
-              code: "ASSIGNEE_NOT_AVAILABLE",
-              message: "Assignee must be a project member",
-            },
-          },
-          400,
-        );
-      }
-
-      assignee = {
-        id: member.id,
-        displayName: member.displayName,
-        avatarUrl: member.avatarUrl,
-      };
-    }
-
-    const status = input.status ?? task.status;
-
-    let sortOrder = task.sortOrder;
-
-    if (status !== task.status) {
-      const [position] = await db
-        .select({
-          maxSortOrder: max(tasks.sortOrder),
-        })
-        .from(tasks)
-        .where(and(eq(tasks.projectId, task.projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
-
-      sortOrder = (position?.maxSortOrder ?? 0) + 100;
-    }
-
-    const title = input.title ?? task.title;
-
-    const description = input.description !== undefined ? input.description : task.description;
-
-    const priority = input.priority !== undefined ? input.priority : task.priority;
-
-    const dueDate = input.dueDate !== undefined ? input.dueDate : task.dueDate;
-
-    const discordThreadUrl = input.discordThreadUrl !== undefined ? input.discordThreadUrl : task.discordThreadUrl;
-
-    const now = new Date();
-
-    await db
-      .update(tasks)
-      .set({
-        title,
-        description,
-        status,
-        priority,
-        assigneeId,
-        dueDate,
-        sortOrder,
-        discordThreadUrl,
-        updatedAt: now,
+  if (status !== task.status) {
+    const [position] = await db
+      .select({
+        maxSortOrder: max(tasks.sortOrder),
       })
-      .where(and(eq(tasks.id, taskId), eq(tasks.projectId, task.projectId), isNull(tasks.archivedAt)));
+      .from(tasks)
+      .where(and(eq(tasks.projectId, task.projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
 
-    const data: TaskDto = {
-      id: task.id,
-      projectId: task.projectId,
+    sortOrder = (position?.maxSortOrder ?? 0) + 100;
+  }
 
+  const title = input.title ?? task.title;
+
+  const description = input.description !== undefined ? input.description : task.description;
+
+  const priority = input.priority !== undefined ? input.priority : task.priority;
+
+  const dueDate = input.dueDate !== undefined ? input.dueDate : task.dueDate;
+
+  const discordThreadUrl = input.discordThreadUrl !== undefined ? input.discordThreadUrl : task.discordThreadUrl;
+
+  const now = new Date();
+
+  await db
+    .update(tasks)
+    .set({
       title,
       description,
       status,
       priority,
-      assignee,
+      assigneeId,
       dueDate,
       sortOrder,
       discordThreadUrl,
+      updatedAt: now,
+    })
+    .where(and(eq(tasks.id, taskId), eq(tasks.projectId, task.projectId), isNull(tasks.archivedAt)));
 
-      createdAt: task.createdAt.toISOString(),
+  const data: TaskDto = {
+    id: task.id,
+    projectId: task.projectId,
 
-      updatedAt: now.toISOString(),
-    };
+    title,
+    description,
+    status,
+    priority,
+    assignee,
+    dueDate,
+    sortOrder,
+    discordThreadUrl,
 
-    return c.json({
-      data,
-    });
-  },
-);
+    createdAt: task.createdAt.toISOString(),
+
+    updatedAt: now.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
 
 tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archive"), async (c) => {
   const auth = c.var.auth;

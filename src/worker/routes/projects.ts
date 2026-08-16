@@ -484,164 +484,151 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
   });
 });
 
-projectsRoutes.patch(
-  "/:id",
-  requireAuth,
-  requirePermission("projects.edit"),
-  zValidator("json", updateProjectSchema, (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid project data",
-          },
-        },
-        400,
-      );
-    }
-  }),
-  async (c) => {
-    const auth = c.var.auth;
-    const projectId = c.req.param("id");
-    const input = c.req.valid("json");
-    const db = createDb(c.env.flow_db);
-    const access = await findAccessibleProject(db, auth, projectId);
+projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
 
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
         },
-        404,
-      );
-    }
-    const [project] = await db
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = updateProjectSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid project data",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+  const [project] = await db
+    .select({
+      id: projects.id,
+
+      clientId: clients.id,
+      clientName: clients.name,
+
+      name: projects.name,
+      description: projects.description,
+      visibility: projects.visibility,
+      status: projects.status,
+      startDate: projects.startDate,
+      dueDate: projects.dueDate,
+      discordChannelUrl: projects.discordChannelUrl,
+
+      createdAt: projects.createdAt,
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const visibility = input.visibility ?? project.visibility;
+
+  if (visibility !== project.visibility && !canManageProjectVisibility(auth.workspace.permissions)) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to change project visibility",
+        },
+      },
+      403,
+    );
+  }
+  let selectedClient = {
+    id: project.clientId,
+    name: project.clientName,
+  };
+
+  if (input.clientId !== undefined && input.clientId !== project.clientId) {
+    const [targetClient] = await db
       .select({
-        id: projects.id,
-
-        clientId: clients.id,
-        clientName: clients.name,
-
-        name: projects.name,
-        description: projects.description,
-        visibility: projects.visibility,
-        status: projects.status,
-        startDate: projects.startDate,
-        dueDate: projects.dueDate,
-        discordChannelUrl: projects.discordChannelUrl,
-
-        createdAt: projects.createdAt,
+        id: clients.id,
+        name: clients.name,
       })
-      .from(projects)
-      .innerJoin(clients, eq(projects.clientId, clients.id))
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+      .from(clients)
+      .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
       .limit(1);
 
-    if (!project) {
+    if (!targetClient) {
       return c.json(
         {
           error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
-        },
-        404,
-      );
-    }
-
-    const visibility = input.visibility ?? project.visibility;
-
-    if (visibility !== project.visibility && !canManageProjectVisibility(auth.workspace.permissions)) {
-      return c.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "You do not have permission to change project visibility",
-          },
-        },
-        403,
-      );
-    }
-    let selectedClient = {
-      id: project.clientId,
-      name: project.clientName,
-    };
-
-    if (input.clientId !== undefined && input.clientId !== project.clientId) {
-      const [targetClient] = await db
-        .select({
-          id: clients.id,
-          name: clients.name,
-        })
-        .from(clients)
-        .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
-        .limit(1);
-
-      if (!targetClient) {
-        return c.json(
-          {
-            error: {
-              code: "CLIENT_NOT_AVAILABLE",
-              message: "An active client is required",
-            },
-          },
-          400,
-        );
-      }
-
-      selectedClient = targetClient;
-    }
-
-    const startDate = input.startDate !== undefined ? input.startDate : project.startDate;
-
-    const dueDate = input.dueDate !== undefined ? input.dueDate : project.dueDate;
-
-    if (startDate && dueDate && startDate > dueDate) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PROJECT_DATES",
-            message: "Due date cannot be before start date",
+            code: "CLIENT_NOT_AVAILABLE",
+            message: "An active client is required",
           },
         },
         400,
       );
     }
 
-    const now = new Date();
+    selectedClient = targetClient;
+  }
 
-    const name = input.name ?? project.name;
+  const startDate = input.startDate !== undefined ? input.startDate : project.startDate;
 
-    const description = input.description !== undefined ? input.description : project.description;
+  const dueDate = input.dueDate !== undefined ? input.dueDate : project.dueDate;
 
-    const status = input.status ?? project.status;
+  if (startDate && dueDate && startDate > dueDate) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_PROJECT_DATES",
+          message: "Due date cannot be before start date",
+        },
+      },
+      400,
+    );
+  }
 
-    const discordChannelUrl = input.discordChannelUrl !== undefined ? input.discordChannelUrl : project.discordChannelUrl;
+  const now = new Date();
 
-    await db
-      .update(projects)
-      .set({
-        clientId: selectedClient.id,
-        name,
-        description,
-        visibility,
-        status,
-        startDate,
-        dueDate,
-        discordChannelUrl,
-        updatedAt: now,
-      })
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+  const name = input.name ?? project.name;
 
-    const data: ProjectDto = {
-      id: project.id,
+  const description = input.description !== undefined ? input.description : project.description;
 
-      client: selectedClient,
+  const status = input.status ?? project.status;
 
+  const discordChannelUrl = input.discordChannelUrl !== undefined ? input.discordChannelUrl : project.discordChannelUrl;
+
+  await db
+    .update(projects)
+    .set({
+      clientId: selectedClient.id,
       name,
       description,
       visibility,
@@ -649,17 +636,32 @@ projectsRoutes.patch(
       startDate,
       dueDate,
       discordChannelUrl,
+      updatedAt: now,
+    })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
 
-      createdAt: project.createdAt.toISOString(),
+  const data: ProjectDto = {
+    id: project.id,
 
-      updatedAt: now.toISOString(),
-    };
+    client: selectedClient,
 
-    return c.json({
-      data,
-    });
-  },
-);
+    name,
+    description,
+    visibility,
+    status,
+    startDate,
+    dueDate,
+    discordChannelUrl,
+
+    createdAt: project.createdAt.toISOString(),
+
+    updatedAt: now.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
 
 projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive"), async (c) => {
   const auth = c.var.auth;
@@ -762,138 +764,133 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
   });
 });
 
-projectsRoutes.post(
-  "/:id/members",
-  requireAuth,
-  requirePermission("projects.edit"),
-  zValidator("json", addProjectMemberSchema, (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid member data",
-          },
+projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+  const db = createDb(c.env.flow_db);
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
         },
-        400,
-      );
-    }
-  }),
-  async (c) => {
-    const auth = c.var.auth;
-    const projectId = c.req.param("id");
-
-    const input = c.req.valid("json");
-
-    const db = createDb(c.env.flow_db);
-
-    const access = await findAccessibleProject(db, auth, projectId);
-
-    if (!access) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_NOT_FOUND",
-            message: "Project not found",
-          },
-        },
-        404,
-      );
-    }
-
-    if (!canManageProjectMembers(auth.workspace.permissions, access.project.visibility)) {
-      return c.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "You do not have permission to manage project members",
-          },
-        },
-        403,
-      );
-    }
-
-    const [member] = await db
-      .select({
-        id: users.id,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
-        role: workspaceMembers.role,
-        customRoleId: workspaceRoles.id,
-        customRoleName: workspaceRoles.name,
-      })
-      .from(workspaceMembers)
-      .innerJoin(users, eq(workspaceMembers.userId, users.id))
-      .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.userId, input.userId)))
-      .limit(1);
-
-    if (!member) {
-      return c.json(
-        {
-          error: {
-            code: "MEMBER_NOT_FOUND",
-            message: "Workspace member not found",
-          },
-        },
-        404,
-      );
-    }
-
-    const now = new Date();
-
-    await db
-      .insert(projectMembers)
-      .values({
-        projectId,
-        userId: member.id,
-        createdAt: now,
-      })
-      .onConflictDoNothing();
-
-    const [membership] = await db
-      .select({
-        addedAt: projectMembers.createdAt,
-      })
-      .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, member.id)))
-      .limit(1);
-
-    if (!membership) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_MEMBER_PERSISTENCE_FAILED",
-            message: "Failed to add project member",
-          },
-        },
-        500,
-      );
-    }
-
-    const data: ProjectMemberDto = {
-      user: {
-        id: member.id,
-        displayName: member.displayName,
-        avatarUrl: member.avatarUrl,
-        role: member.role,
-
-        customRole:
-          member.customRoleId && member.customRoleName
-            ? {
-                id: member.customRoleId,
-                name: member.customRoleName,
-              }
-            : null,
       },
+      404,
+    );
+  }
 
-      addedAt: membership.addedAt.toISOString(),
-    };
+  if (!canManageProjectMembers(auth.workspace.permissions, access.project.visibility)) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "You do not have permission to manage project members",
+        },
+      },
+      403,
+    );
+  }
 
-    return c.json({
-      data,
-    });
-  },
-);
+  const body = await c.req.json().catch(() => undefined);
+  const parsed = addProjectMemberSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid member data",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const [member] = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+      role: workspaceMembers.role,
+      customRoleId: workspaceRoles.id,
+      customRoleName: workspaceRoles.name,
+    })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(workspaceMembers.userId, users.id))
+    .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.userId, input.userId)))
+    .limit(1);
+
+  if (!member) {
+    return c.json(
+      {
+        error: {
+          code: "MEMBER_NOT_FOUND",
+          message: "Workspace member not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const now = new Date();
+
+  await db
+    .insert(projectMembers)
+    .values({
+      projectId,
+      userId: member.id,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
+
+  const [membership] = await db
+    .select({
+      addedAt: projectMembers.createdAt,
+    })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, member.id)))
+    .limit(1);
+
+  if (!membership) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_MEMBER_PERSISTENCE_FAILED",
+          message: "Failed to add project member",
+        },
+      },
+      500,
+    );
+  }
+
+  const data: ProjectMemberDto = {
+    user: {
+      id: member.id,
+      displayName: member.displayName,
+      avatarUrl: member.avatarUrl,
+      role: member.role,
+
+      customRole:
+        member.customRoleId && member.customRoleName
+          ? {
+              id: member.customRoleId,
+              name: member.customRoleName,
+            }
+          : null,
+    },
+
+    addedAt: membership.addedAt.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
 
 projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("projects.edit"), async (c) => {
   const auth = c.var.auth;
