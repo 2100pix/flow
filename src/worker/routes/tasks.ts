@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
@@ -303,13 +303,9 @@ tasksRoutes.patch(
   }),
   async (c) => {
     const auth = c.var.auth;
-
     const projectId = c.req.param("projectId");
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const access = await findAccessibleProject(db, auth, projectId);
 
     if (!access) {
@@ -387,36 +383,53 @@ tasksRoutes.patch(
       });
     }
 
-    const statusCase: SQL[] = [sql`(case`];
+    const REORDER_UPDATE_CHUNK_SIZE = 20;
 
-    const sortOrderCase: SQL[] = [sql`(case`];
+    const updateStatements: D1PreparedStatement[] = [];
 
     for (const column of input.columns) {
-      column.taskIds.forEach((taskId, index) => {
-        statusCase.push(sql`when ${tasks.id} = ${taskId} then ${column.status}`);
+      for (let start = 0; start < column.taskIds.length; start += REORDER_UPDATE_CHUNK_SIZE) {
+        const chunk = column.taskIds.slice(start, start + REORDER_UPDATE_CHUNK_SIZE);
 
-        sortOrderCase.push(sql`when ${tasks.id} = ${taskId} then ${(index + 1) * 100}`);
-      });
+        if (chunk.length === 0) {
+          continue;
+        }
+
+        const sortOrderCases = chunk.map(() => "WHEN id = ? THEN ?").join(" ");
+
+        const idPlaceholders = chunk.map(() => "?").join(", ");
+
+        const statement = c.env.flow_db.prepare(`
+          UPDATE tasks
+          SET
+            status = ?,
+            sort_order = CASE
+              ${sortOrderCases}
+              ELSE sort_order
+            END,
+            updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+          WHERE project_id = ?
+            AND id IN (${idPlaceholders})
+            AND archived_at IS NULL
+        `);
+
+        const bindings: Array<string | number> = [column.status];
+
+        chunk.forEach((taskId, chunkIndex) => {
+          const absoluteIndex = start + chunkIndex;
+
+          bindings.push(taskId, (absoluteIndex + 1) * 100);
+        });
+
+        bindings.push(projectId, ...chunk);
+
+        updateStatements.push(statement.bind(...bindings));
+      }
     }
 
-    statusCase.push(sql`else ${tasks.status} end)`);
-
-    sortOrderCase.push(sql`else ${tasks.sortOrder} end)`);
-
-    const nextStatus = sql.join(statusCase, sql.raw(" "));
-
-    const nextSortOrder = sql.join(sortOrderCase, sql.raw(" "));
-
-    const now = new Date();
-
-    await db
-      .update(tasks)
-      .set({
-        status: nextStatus,
-        sortOrder: nextSortOrder,
-        updatedAt: now,
-      })
-      .where(and(eq(tasks.projectId, projectId), inArray(tasks.id, receivedIds), isNull(tasks.archivedAt)));
+    if (updateStatements.length > 0) {
+      await c.env.flow_db.batch(updateStatements);
+    }
 
     return c.json({
       data: {
