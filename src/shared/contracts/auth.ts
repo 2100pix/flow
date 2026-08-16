@@ -1,12 +1,4 @@
-export type PendingAccessStatus = "pending" | "approved" | "rejected";
-
-export type PendingAccessStatusResponse = {
-  data: {
-    status: PendingAccessStatus;
-  };
-};
-
-export type PendingAccessCompleteResponse = {
+export type PendingAccessContinueResponse = {
   data: {
     success: true;
   };

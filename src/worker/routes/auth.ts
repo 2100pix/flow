@@ -4,7 +4,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import { createDb } from "../db";
 import { sessions, users, workspaceAccessRequestSessions, workspaceAccessRequests, workspaceMembers } from "../db/schema";
-import type { PendingAccessCompleteResponse, PendingAccessStatusResponse } from "../../shared/contracts/auth";
+import type { PendingAccessContinueResponse } from "../../shared/contracts/auth";
 import { createId } from "../lib/id";
 import { createSessionToken, getSessionExpiresAt, hashSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../lib/session";
 import { createPendingSessionToken, getPendingSessionExpiresAt, hashPendingSessionToken, PENDING_SESSION_COOKIE, PENDING_SESSION_TTL_SECONDS } from "../lib/pending-session";
@@ -322,109 +322,7 @@ authRoutes.post("/logout", async (c) => {
   });
 });
 
-authRoutes.get("/pending/status", async (c) => {
-  const pendingSessionToken = getCookie(c, PENDING_SESSION_COOKIE);
-  const secure = new URL(c.req.url).protocol === "https:";
-
-  if (!pendingSessionToken) {
-    return c.json(
-      {
-        error: {
-          code: "PENDING_SESSION_REQUIRED",
-          message: "Pending session is required",
-        },
-      },
-      401,
-    );
-  }
-
-  const pendingSessionId = await hashPendingSessionToken(pendingSessionToken);
-
-  const db = createDb(c.env.flow_db);
-  const workspaceId = c.env.FLOW_WORKSPACE_ID;
-  const now = new Date();
-
-  const [pendingSession] = await db
-    .select({
-      userId: workspaceAccessRequestSessions.userId,
-      expiresAt: workspaceAccessRequestSessions.expiresAt,
-    })
-    .from(workspaceAccessRequestSessions)
-    .where(and(eq(workspaceAccessRequestSessions.id, pendingSessionId), eq(workspaceAccessRequestSessions.workspaceId, workspaceId)))
-    .limit(1);
-
-  if (!pendingSession) {
-    deleteCookie(c, PENDING_SESSION_COOKIE, {
-      path: "/api/auth/pending",
-      secure,
-    });
-
-    return c.json(
-      {
-        error: {
-          code: "PENDING_SESSION_INVALID",
-          message: "Pending session is invalid",
-        },
-      },
-      401,
-    );
-  }
-
-  if (pendingSession.expiresAt.getTime() <= now.getTime()) {
-    await db.delete(workspaceAccessRequestSessions).where(eq(workspaceAccessRequestSessions.id, pendingSessionId));
-
-    deleteCookie(c, PENDING_SESSION_COOKIE, {
-      path: "/api/auth/pending",
-      secure,
-    });
-
-    return c.json(
-      {
-        error: {
-          code: "PENDING_SESSION_EXPIRED",
-          message: "Pending session has expired",
-        },
-      },
-      401,
-    );
-  }
-
-  const [membership] = await db
-    .select({
-      userId: workspaceMembers.userId,
-    })
-    .from(workspaceMembers)
-    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, pendingSession.userId)))
-    .limit(1);
-
-  if (membership) {
-    const response: PendingAccessStatusResponse = {
-      data: {
-        status: "approved",
-      },
-    };
-
-    return c.json(response);
-  }
-
-  const [accessRequest] = await db
-    .select({
-      userId: workspaceAccessRequests.userId,
-    })
-    .from(workspaceAccessRequests)
-    .where(and(eq(workspaceAccessRequests.workspaceId, workspaceId), eq(workspaceAccessRequests.userId, pendingSession.userId)))
-    .limit(1);
-
-  const response: PendingAccessStatusResponse = {
-    data: {
-      status: accessRequest ? "pending" : "rejected",
-    },
-  };
-
-  return c.json(response);
-});
-
-authRoutes.post("/pending/complete", async (c) => {
+authRoutes.post("/pending/continue", async (c) => {
   const pendingSessionToken = getCookie(c, PENDING_SESSION_COOKIE);
   const secure = new URL(c.req.url).protocol === "https:";
 
@@ -561,7 +459,7 @@ authRoutes.post("/pending/complete", async (c) => {
     path: "/",
   });
 
-  const response: PendingAccessCompleteResponse = {
+  const response: PendingAccessContinueResponse = {
     data: {
       success: true,
     },

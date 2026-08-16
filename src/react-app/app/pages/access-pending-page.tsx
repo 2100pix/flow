@@ -1,34 +1,19 @@
-import { useEffect } from "react";
-
 import { Button } from "@/components/ui/button";
-import { useCompletePendingAccess } from "@/features/auth/hooks/use-complete-pending-access";
-import { usePendingAccessStatus } from "@/features/auth/hooks/use-pending-access-status";
+import { useContinuePendingAccess } from "@/features/auth/hooks/use-continue-pending-access";
+import { ApiError } from "@/lib/api";
 
 export function AccessPendingPage() {
-  const pendingStatus = usePendingAccessStatus();
-  const completeAccess = useCompletePendingAccess();
+  const continueAccess = useContinuePendingAccess();
 
-  const status = pendingStatus.data;
+  const errorCode = continueAccess.error instanceof ApiError ? continueAccess.error.code : null;
 
-  useEffect(() => {
-    if (status !== "approved" || completeAccess.status !== "idle") {
-      return;
-    }
+  const stillPending = errorCode === "ACCESS_REQUEST_PENDING";
 
-    completeAccess.mutate(undefined, {
-      onSuccess: () => {
-        window.location.replace("/");
-      },
-    });
-  }, [completeAccess, status]);
+  const rejected = errorCode === "ACCESS_REQUEST_REJECTED";
 
-  const pending = pendingStatus.isPending || status === "pending";
+  const sessionUnavailable = errorCode === "PENDING_SESSION_REQUIRED" || errorCode === "PENDING_SESSION_INVALID" || errorCode === "PENDING_SESSION_EXPIRED";
 
-  const approved = status === "approved";
-
-  const rejected = status === "rejected";
-
-  const sessionUnavailable = pendingStatus.isError;
+  const unexpectedError = continueAccess.isError && !stillPending && !rejected && !sessionUnavailable;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
@@ -37,33 +22,38 @@ export function AccessPendingPage() {
           <p className="text-sm font-semibold">Flow</p>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">{rejected ? "Access not approved" : sessionUnavailable ? "Session expired" : approved ? "Access approved" : "Access pending"}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{rejected ? "Access not approved" : sessionUnavailable ? "Session expired" : "Access pending"}</h1>
 
             <p className="text-sm text-muted-foreground">
               {rejected
                 ? "Your workspace access request was not approved."
                 : sessionUnavailable
                   ? "Your temporary access session is no longer available."
-                  : approved
-                    ? "Your access was approved. Finishing sign in…"
+                  : stillPending
+                    ? "Your access is still waiting for workspace approval."
                     : "Your account is waiting for workspace approval."}
             </p>
           </div>
         </div>
 
-        {pending ? <p className="text-sm text-muted-foreground">This page will continue automatically once your access is approved.</p> : null}
-
-        {completeAccess.isError ? (
+        {!rejected && !sessionUnavailable ? (
           <div className="space-y-3">
-            <p className="text-sm text-destructive">Unable to finish signing in.</p>
+            <p className="text-sm text-muted-foreground">Check again after a workspace administrator approves your access.</p>
+
+            {unexpectedError ? <p className="text-sm text-destructive">Unable to check access. Try again.</p> : null}
 
             <Button
               className="w-full"
+              disabled={continueAccess.isPending}
               onClick={() => {
-                completeAccess.reset();
+                continueAccess.mutate(undefined, {
+                  onSuccess: () => {
+                    window.location.replace("/");
+                  },
+                });
               }}
             >
-              Try again
+              {continueAccess.isPending ? "Checking access…" : "Check access"}
             </Button>
           </div>
         ) : null}

@@ -34,4 +34,4 @@ export type LogoutResponse = {
   };
 };
 
-export type { PendingAccessCompleteResponse, PendingAccessStatus, PendingAccessStatusResponse } from "../../../shared/contracts/auth";
+export type { PendingAccessContinueResponse } from "../../../shared/contracts/auth";
