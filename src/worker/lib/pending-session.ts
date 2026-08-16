@@ -2,7 +2,7 @@ import { createSessionToken, hashSessionToken } from "./session";
 
 export const PENDING_SESSION_COOKIE = "flow_pending_session";
 
-export const PENDING_SESSION_TTL_SECONDS = 60 * 60;
+export const PENDING_SESSION_TTL_SECONDS = 60 * 60 * 24;
 
 export function createPendingSessionToken() {
   return createSessionToken();

@@ -88,7 +88,13 @@ Pending sessions use a substantially shorter TTL than normal Flow sessions.
 
 Initial TTL:
 
-`60 minutes`
+`24 hours`
+
+The pending session is only an onboarding-continuity credential.
+
+It does not grant workspace membership, workspace permissions, or access to protected Flow routes.
+
+A longer TTL allows a user to return to the pending page later without repeating Discord OAuth, while still keeping the credential finite.
 
 ---
 
@@ -111,26 +117,6 @@ The cookie must not be treated as a normal application session.
 It is only sent to pending-auth endpoints.
 
 ---
-
-## Pending status endpoint
-
-Endpoint:
-
-`GET /api/auth/pending/status`
-
-This endpoint does not use normal `requireAuth`.
-
-It authenticates only the pending-session cookie.
-
-The endpoint:
-
-1. hashes the pending token
-2. loads the pending session
-3. rejects missing or expired sessions
-4. checks workspace membership
-5. checks whether the access request still exists
-
-Possible authenticated states:
 
 ### Pending
 
@@ -169,19 +155,25 @@ The endpoint must not return:
 
 ---
 
-## Session completion endpoint
+## Manual continuation endpoint
 
 Endpoint:
 
-`POST /api/auth/pending/complete`
+`POST /api/auth/pending/continue`
 
 This endpoint does not use normal `requireAuth`.
 
-It authenticates the pending-session cookie.
+It authenticates only the pending-session cookie.
 
-Before creating a normal Flow session it must independently verify that workspace membership currently exists.
+The endpoint is called only when the user explicitly chooses `Check access`.
 
-It must never trust a previous `approved` status response.
+The endpoint:
+
+1. hashes the pending token
+2. loads the pending session for the configured workspace
+3. rejects missing or expired pending sessions
+4. independently checks current workspace membership
+5. checks the access request only when membership does not exist
 
 If membership exists:
 
@@ -191,14 +183,22 @@ If membership exists:
 4. set the normal Flow session cookie
 5. return success
 
-The browser then navigates to `/`.
+The browser then performs a full navigation to `/`.
 
-If membership does not exist:
+If membership does not exist and the access request still exists:
 
-- existing access request → access is still pending
-- missing access request → access was rejected
+- return `ACCESS_REQUEST_PENDING`
+- keep the pending session
+- create no normal session
 
-No normal Flow session is created.
+If membership does not exist and the access request no longer exists:
+
+- return `ACCESS_REQUEST_REJECTED`
+- create no normal session
+
+The client cannot provide or select an approval state.
+
+Current workspace membership is always the authoritative condition for session creation.
 
 ---
 
@@ -208,15 +208,49 @@ No normal Flow session is created.
 
 It does not use `/api/me`.
 
-While a valid pending session exists, the page polls:
+The page performs no automatic polling.
 
-`GET /api/auth/pending/status`
+While the page remains open and idle:
 
-Initial polling interval:
+- no pending-status request is sent
+- no periodic Worker request is sent
+- no periodic D1 query is performed
 
-`5 seconds`
+The page displays:
 
-When status is:
+`Check access`
+
+When the user selects `Check access`, the browser calls:
+
+`POST /api/auth/pending/continue`
+
+Possible results:
+
+### Approved
+
+The endpoint creates the normal Flow session.
+
+The browser performs a full navigation to:
+
+`/`
+
+### Pending
+
+The page informs the user that workspace approval is still pending.
+
+No automatic retry is scheduled.
+
+### Rejected
+
+The page informs the user that the access request was not approved.
+
+The user may sign in again later to create a new access request.
+
+### Invalid or expired pending session
+
+The page informs the user that the temporary session is no longer available.
+
+The user must complete Discord OAuth again.
 
 ### pending
 
@@ -226,7 +260,7 @@ Continue waiting.
 
 Call:
 
-`POST /api/auth/pending/complete`
+`POST /api/auth/pending/continue`
 
 After success, perform a full navigation to:
 
@@ -262,7 +296,9 @@ Approval does not create a normal session directly.
 
 Approval does not need access to the requester's browser or pending token.
 
-The waiting browser discovers the new membership through the pending status endpoint.
+Approval does not contact or wake the requester's browser.
+
+The waiting browser discovers the new membership only when the user explicitly selects `Check access`.
 
 ---
 
@@ -310,8 +346,8 @@ The user is redirected to `/`.
 
 A pending-session credential may only:
 
-- inspect its own onboarding state
-- exchange itself for a normal Flow session after membership exists
+- attempt continuation of its own onboarding flow
+- exchange itself for a normal Flow session after current membership exists
 
 A pending-session credential may not:
 
@@ -333,8 +369,8 @@ A pending-session credential may not:
 2. A pending session is not a Flow workspace session.
 3. A pending access request does not grant membership.
 4. A normal Flow session is created only after current membership is verified.
-5. Status polling cannot create membership.
-6. Client-side `approved` state is never trusted for session creation.
+5. Checking access cannot create membership.
+6. A client request cannot claim or supply an approved state.
 7. Pending tokens are random and stored only as hashes in D1.
 8. Pending tokens have a short finite lifetime.
 9. Pending endpoints expose no workspace data.
@@ -343,6 +379,8 @@ A pending-session credential may not:
 12. Existing `requireAuth` behavior remains unchanged.
 13. The existing `sessions` table remains reserved for real workspace sessions.
 14. The existing pending-only access-request model remains unchanged.
+15. An idle pending page performs no periodic Worker requests.
+16. An idle pending page performs no periodic D1 queries.
 
 ---
 
@@ -357,8 +395,13 @@ This milestone does not add:
 - approval history
 - rejection history
 - multi-workspace selection
+- automatic polling
 - WebSockets
 - Server-Sent Events
+- background approval notifications
+- multi-day pending credentials
 - long-lived pending credentials
 
-Polling is sufficient for the initial implementation.
+Manual continuation is intentional for the current implementation.
+
+Pending duration alone must not generate recurring Worker or D1 traffic.

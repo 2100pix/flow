@@ -1,18 +1,6 @@
 import { ApiError, apiFetch } from "@/lib/api";
 
-import type { AuthContext, LogoutResponse, MeResponse, PendingAccessCompleteResponse, PendingAccessStatusResponse } from "../types";
-
-export async function getPendingAccessStatus() {
-  const response = await apiFetch<PendingAccessStatusResponse>("/api/auth/pending/status");
-
-  return response.data.status;
-}
-
-export async function completePendingAccess() {
-  return apiFetch<PendingAccessCompleteResponse>("/api/auth/pending/complete", {
-    method: "POST",
-  });
-}
+import type { AuthContext, LogoutResponse, MeResponse, PendingAccessContinueResponse } from "../types";
 
 export async function getMe(): Promise<AuthContext | null> {
   try {
@@ -30,6 +18,12 @@ export async function getMe(): Promise<AuthContext | null> {
 
 export async function logout() {
   return apiFetch<LogoutResponse>("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
+export async function continuePendingAccess() {
+  return apiFetch<PendingAccessContinueResponse>("/api/auth/pending/continue", {
     method: "POST",
   });
 }
