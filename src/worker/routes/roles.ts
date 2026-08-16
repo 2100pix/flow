@@ -179,7 +179,7 @@ rolesRoutes.post(
 
     const now = new Date();
 
-    await db.insert(workspaceRoles).values({
+    const roleInsert = db.insert(workspaceRoles).values({
       id,
       workspaceId: auth.workspace.id,
       name: input.name,
@@ -188,12 +188,18 @@ rolesRoutes.post(
     });
 
     if (input.permissions.length > 0) {
-      await db.insert(workspaceRolePermissions).values(
-        input.permissions.map((permissionKey) => ({
-          roleId: id,
-          permissionKey,
-        })),
-      );
+      await db.batch([
+        roleInsert,
+
+        db.insert(workspaceRolePermissions).values(
+          input.permissions.map((permissionKey) => ({
+            roleId: id,
+            permissionKey,
+          })),
+        ),
+      ]);
+    } else {
+      await roleInsert;
     }
 
     const data: RoleDto = {
@@ -310,7 +316,7 @@ rolesRoutes.patch(
 
     const now = new Date();
 
-    await db
+    const roleUpdate = db
       .update(workspaceRoles)
       .set({
         name: input.name,
@@ -318,15 +324,22 @@ rolesRoutes.patch(
       })
       .where(and(eq(workspaceRoles.id, roleId), eq(workspaceRoles.workspaceId, auth.workspace.id)));
 
-    await db.delete(workspaceRolePermissions).where(eq(workspaceRolePermissions.roleId, roleId));
+    const permissionsDelete = db.delete(workspaceRolePermissions).where(eq(workspaceRolePermissions.roleId, roleId));
 
     if (input.permissions.length > 0) {
-      await db.insert(workspaceRolePermissions).values(
-        input.permissions.map((permissionKey) => ({
-          roleId,
-          permissionKey,
-        })),
-      );
+      await db.batch([
+        roleUpdate,
+        permissionsDelete,
+
+        db.insert(workspaceRolePermissions).values(
+          input.permissions.map((permissionKey) => ({
+            roleId,
+            permissionKey,
+          })),
+        ),
+      ]);
+    } else {
+      await db.batch([roleUpdate, permissionsDelete]);
     }
 
     const data: RoleDto = {
