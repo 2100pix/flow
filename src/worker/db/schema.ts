@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { permissionKeys } from "../../shared/permissions";
+
+const permissionKeySql = sql.raw(permissionKeys.map((key) => `'${key.replaceAll("'", "''")}'`).join(", "));
 
 export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
@@ -171,6 +174,8 @@ export const workspaceRolePermissions = sqliteTable(
     primaryKey({
       columns: [table.roleId, table.permissionKey],
     }),
+
+    check("workspace_role_permissions_permission_key_check", sql`${table.permissionKey} in (${permissionKeySql})`),
   ],
 );
 
