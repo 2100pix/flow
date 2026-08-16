@@ -9,14 +9,15 @@ type CreateProjectDialogProps = {
   open: boolean;
   onClose: () => void;
   canCreatePrivate: boolean;
+  canViewClients: boolean;
 };
 
-export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onClose, canCreatePrivate, canViewClients }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState("");
   const [visibility, setVisibility] = useState<"workspace" | "private">("workspace");
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClients(open && canViewClients);
   const createProject = useCreateProject();
 
   if (!open) {
@@ -41,135 +42,137 @@ export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateP
             <XIcon />
           </Button>
         </div>
+        {!canViewClients ? (
+          <div className="mt-5 rounded-lg border border-dashed p-4">
+            <p className="text-sm text-muted-foreground">Client access is required to create a project.</p>
+          </div>
+        ) : (
+          <form
+            className="mt-5 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const projectName = name.trim();
+              const projectDescription = description.trim();
+              if (!projectName || !clientId) {
+                return;
+              }
 
-        <form
-          className="mt-5 space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-
-            const projectName = name.trim();
-
-            const projectDescription = description.trim();
-
-            if (!projectName || !clientId) {
-              return;
-            }
-
-            createProject.mutate(
-              {
-                name: projectName,
-                clientId,
-                description: projectDescription || undefined,
-                visibility: canCreatePrivate ? visibility : "workspace",
-              },
-              {
-                onSuccess: () => {
-                  setName("");
-                  setDescription("");
-                  setClientId("");
-                  setVisibility("workspace");
-                  onClose();
+              createProject.mutate(
+                {
+                  name: projectName,
+                  clientId,
+                  description: projectDescription || undefined,
+                  visibility: canCreatePrivate ? visibility : "workspace",
                 },
-              },
-            );
-          }}
-        >
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-name" className="text-sm font-medium">
-              Project name
-            </label>
+                {
+                  onSuccess: () => {
+                    setName("");
+                    setDescription("");
+                    setClientId("");
+                    setVisibility("workspace");
+                    onClose();
+                  },
+                },
+              );
+            }}
+          >
+            <div className="space-y-1.5">
+              <label htmlFor="create-project-name" className="text-sm font-medium">
+                Project name
+              </label>
 
-            <input
-              id="create-project-name"
-              value={name}
-              maxLength={160}
-              autoFocus
-              placeholder="Website 2027"
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </div>
+              <input
+                id="create-project-name"
+                value={name}
+                maxLength={160}
+                autoFocus
+                placeholder="Website 2027"
+                onChange={(event) => {
+                  setName(event.target.value);
+                }}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-description" className="text-sm font-medium">
-              Description
-              <span className="ml-1 font-normal text-muted-foreground">optional</span>
-            </label>
+            <div className="space-y-1.5">
+              <label htmlFor="create-project-description" className="text-sm font-medium">
+                Description
+                <span className="ml-1 font-normal text-muted-foreground">optional</span>
+              </label>
 
-            <textarea
-              id="create-project-description"
-              value={description}
-              maxLength={5000}
-              rows={4}
-              placeholder="Short project description"
-              onChange={(event) => {
-                setDescription(event.target.value);
-              }}
-              className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </div>
+              <textarea
+                id="create-project-description"
+                value={description}
+                maxLength={5000}
+                rows={4}
+                placeholder="Short project description"
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                }}
+                className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-client" className="text-sm font-medium">
-              Client
-            </label>
+            <div className="space-y-1.5">
+              <label htmlFor="create-project-client" className="text-sm font-medium">
+                Client
+              </label>
 
-            <select
-              id="create-project-client"
-              value={clientId}
-              onChange={(event) => {
-                setClientId(event.target.value);
-              }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="">Select client</option>
+              <select
+                id="create-project-client"
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                }}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Select client</option>
 
-              {activeClients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-visibility" className="text-sm font-medium">
-              Visibility
-            </label>
+                {activeClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="create-project-visibility" className="text-sm font-medium">
+                Visibility
+              </label>
 
-            <select
-              id="create-project-visibility"
-              value={visibility}
-              onChange={(event) => {
-                setVisibility(event.target.value as "workspace" | "private");
-              }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="workspace">Workspace</option>
+              <select
+                id="create-project-visibility"
+                value={visibility}
+                onChange={(event) => {
+                  setVisibility(event.target.value as "workspace" | "private");
+                }}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="workspace">Workspace</option>
 
-              {canCreatePrivate ? <option value="private">Private</option> : null}
-            </select>
+                {canCreatePrivate ? <option value="private">Private</option> : null}
+              </select>
 
-            <p className="text-xs leading-5 text-muted-foreground">
-              {visibility === "private" ? "Only project members and authorized private-project roles can access this project." : "Workspace members with project access can discover this project."}
-            </p>
-          </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {visibility === "private" ? "Only project members and authorized private-project roles can access this project." : "Workspace members with project access can discover this project."}
+              </p>
+            </div>
 
-          {activeClients.length === 0 && <p className="text-sm text-muted-foreground">An active client is required before creating a project.</p>}
+            {activeClients.length === 0 && <p className="text-sm text-muted-foreground">An active client is required before creating a project.</p>}
 
-          {createProject.isError && <p className="text-sm text-destructive">{createProject.error.message}</p>}
+            {createProject.isError && <p className="text-sm text-destructive">{createProject.error.message}</p>}
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
 
-            <Button type="submit" disabled={!name.trim() || !clientId || createProject.isPending}>
-              {createProject.isPending ? "Creating…" : "Create project"}
-            </Button>
-          </div>
-        </form>
+              <Button type="submit" disabled={!name.trim() || !clientId || createProject.isPending}>
+                {createProject.isPending ? "Creating…" : "Create project"}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

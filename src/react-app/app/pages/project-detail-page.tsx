@@ -22,11 +22,13 @@ type ProjectEditorProps = {
   canEdit: boolean;
   canArchive: boolean;
   canManageVisibility: boolean;
+  canViewClients: boolean;
 };
 
-function ProjectEditor({ project, canEdit, canArchive, canManageVisibility }: ProjectEditorProps) {
+function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canViewClients }: ProjectEditorProps) {
   const navigate = useNavigate();
-  const { data: clients = [] } = useClients();
+  const canChangeClient = canEdit && canViewClients;
+  const { data: clients = [] } = useClients(canChangeClient);
   const [clientId, setClientId] = useState(project.client.id);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
@@ -61,26 +63,29 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility }: Pr
           </div>
 
           <div>
-            <label htmlFor="project-client" className="mb-1.5 block text-sm font-medium">
+            <label htmlFor={canChangeClient ? "project-client" : undefined} className="mb-1.5 block text-sm font-medium">
               Client
             </label>
 
-            <select
-              id="project-client"
-              value={clientId}
-              disabled={!canEdit}
-              onChange={(event) => {
-                setClientId(event.target.value);
-              }}
-              className="h-8 w-full max-w-sm rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
-            >
-              {availableClients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                  {client.status === "inactive" ? " (inactive)" : ""}
-                </option>
-              ))}
-            </select>
+            {canChangeClient ? (
+              <select
+                id="project-client"
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                }}
+                className="h-8 w-full max-w-sm rounded-lg border border-input bg-background px-2.5 text-sm outline-none"
+              >
+                {availableClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                    {client.status === "inactive" ? " (inactive)" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm text-foreground">{project.client.name}</p>
+            )}
           </div>
 
           <div>
@@ -218,7 +223,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility }: Pr
                   projectId: project.id,
 
                   input: {
-                    clientId,
+                    ...(canChangeClient ? { clientId } : {}),
                     name: name.trim(),
                     description: description.trim() || null,
                     status,
@@ -389,6 +394,7 @@ export function ProjectDetailPage() {
   if (!projectId) {
     return null;
   }
+  const canViewClients = hasPermission(auth, "clients.view");
   const canEdit = hasPermission(auth, "projects.edit");
   const canManagePrivate = hasPermission(auth, "projects.private.manage");
   const canManageVisibility = canEdit && canManagePrivate;
@@ -429,7 +435,7 @@ export function ProjectDetailPage() {
 
         {project ? (
           <>
-            <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} canManageVisibility={canManageVisibility} />
+            <ProjectEditor key={project.updatedAt} project={project} canEdit={canEdit} canArchive={canArchive} canManageVisibility={canManageVisibility} canViewClients={canViewClients} />{" "}
             {canViewTaskWorkflow ? <TaskWorkflowSettings projectId={project.id} canManage={canManageTaskWorkflow} /> : null}
             <ProjectTeam projectId={project.id} canManage={canManageTeam} canViewMembers={canViewMembers} isPrivate={project.visibility === "private"} />
           </>
