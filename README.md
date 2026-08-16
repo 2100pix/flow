@@ -1,44 +1,35 @@
-# React + Vite + Hono + Cloudflare Workers
+# Flow
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/vite-react-template)
+Flow is a project and task management application for teams.
 
-This template provides a minimal setup for building a React application with TypeScript and Vite, designed to run on Cloudflare Workers. It features hot module replacement, ESLint integration, and the flexibility of Workers deployments.
+**Current release:** `v0.1.0`
 
-![React + TypeScript + Vite + Cloudflare Workers](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/fc7b4b62-442b-4769-641b-ad4422d74300/public)
+Flow is currently being validated in a real workspace before broader product development.
 
-<!-- dash-content-start -->
+## Current Capabilities
 
-🚀 Supercharge your web development with this powerful stack:
+- Discord authentication
+- Workspace roles and permissions
+- Client management
+- Project management
+- Private and workspace-visible projects
+- Project members
+- Task boards
+- Custom task workflows
+- Task assignment
+- Dashboard
+- Role-based access control
+- Project-level privacy and ACL enforcement
 
-- [**React**](https://react.dev/) - A modern UI library for building interactive interfaces
-- [**Vite**](https://vite.dev/) - Lightning-fast build tooling and development server
-- [**Hono**](https://hono.dev/) - Ultralight, modern backend framework
-- [**Cloudflare Workers**](https://developers.cloudflare.com/workers/) - Edge computing platform for global deployment
+## Stack
 
-### ✨ Key Features
-
-- 🔥 Hot Module Replacement (HMR) for rapid development
-- 📦 TypeScript support out of the box
-- 🛠️ ESLint configuration included
-- ⚡ Zero-config deployment to Cloudflare's global network
-- 🎯 API routes with Hono's elegant routing
-- 🔄 Full-stack development setup
-- 🔎 Built-in Observability to monitor your Worker
-
-Get started in minutes with local development or deploy directly via the Cloudflare dashboard. Perfect for building modern, performant web applications at the edge.
-
-<!-- dash-content-end -->
-
-## Getting Started
-
-To start a new project with this template, run:
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/vite-react-template
-```
-
-A live deployment of this template is available at:
-[https://react-vite-template.templates.workers.dev](https://react-vite-template.templates.workers.dev)
+- React
+- TypeScript
+- Vite
+- Hono
+- Cloudflare Workers
+- Cloudflare D1
+- Drizzle ORM
 
 ## Development
 
@@ -48,43 +39,70 @@ Install dependencies:
 npm install
 ```
 
-Start the development server with:
+Create local environment variables based on:
+
+```text
+.dev.vars.example
+```
+
+Run the development server:
 
 ```bash
 npm run dev
 ```
 
-Your application will be available at [http://localhost:5173](http://localhost:5173).
+## Validation
 
-## Production
-
-Build your project for production:
+Run the project validation gates before committing or deploying:
 
 ```bash
-npm run build
+npm run lint
+npm run check
+git diff --check
 ```
 
-Preview your build locally:
+## Deployment
+
+Flow is deployed on Cloudflare Workers.
+
+Production:
+
+```text
+https://flow.normalbase.workers.dev
+```
+
+Deploy using the production environment configuration:
 
 ```bash
-npm run preview
+npx wrangler deploy --secrets-file .env.production.local
 ```
 
-Deploy your project to Cloudflare Workers:
+Environment and secret files must not be committed to the repository.
 
-```bash
-npm run build && npm run deploy
+## Database
+
+Flow uses Cloudflare D1.
+
+Database migrations are stored in:
+
+```text
+drizzle/
 ```
 
-Monitor your workers:
+Workspace seed data is stored in:
 
-```bash
-npx wrangler tail
+```text
+scripts/seed.sql
 ```
 
-## Additional Resources
+Production migrations should only be applied after reviewing the pending migration set and validating database integrity.
 
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Vite Documentation](https://vitejs.dev/guide/)
-- [React Documentation](https://reactjs.org/)
-- [Hono Documentation](https://hono.dev/)
+## Versioning
+
+`v0.1.0` represents the first production-verified MVP baseline.
+
+Development after `v0.1.0` may introduce new product features, interface changes, and architecture changes without modifying the original MVP checkpoint.
+
+## Status
+
+**MVP v0.1.0 — Production Verified**
