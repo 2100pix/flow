@@ -77,7 +77,7 @@ Every mutation remains protected by backend permission and resource access check
 
 Validation has two classes.
 
-# Transport validation
+### Transport validation
 
 Validation that can safely occur before resource lookup:
 
@@ -85,7 +85,7 @@ method routing,
 authentication,
 required workspace-level permission where its result does not disclose resource existence.
 
-# Resource-sensitive validation
+### Resource-sensitive validation
 
 Validation that must occur only after canonical resource access is established:
 
@@ -291,7 +291,7 @@ At minimum, inaccessible auxiliary queries must not execute.
 
 ## Resource Non-Disclosure Matrix
 
-# Project-scoped collection
+### Project-scoped collection
 
 GET /projects/:projectId/tasks
 GET /projects/:projectId/task-workflow
@@ -304,7 +304,7 @@ Inaccessible private project:
 
 regardless of malformed request body.
 
-# Task-by-ID
+### Task-by-ID
 
 GET /tasks/:taskId
 PATCH /tasks/:taskId
@@ -381,7 +381,7 @@ error semantics
 
 ## Implementation Sequence
 
-# 8.10B — Private Resource Non-Disclosure Ordering
+### 8.10B — Private Resource Non-Disclosure Ordering
 
 Audit project-scoped and task-by-ID mutations.
 
@@ -389,7 +389,7 @@ Move resource/ACL establishment ahead of resource-sensitive payload validation.
 
 Preserve canonical private 404 behavior for malformed requests.
 
-# 8.10C — Role + Permission Integrity
+### 8.10C — Role + Permission Integrity
 
 Remove unsafe database permission casts.
 
@@ -397,29 +397,29 @@ Use one runtime permission parser across auth and role APIs.
 
 Fail closed on invalid permission storage.
 
-# 8.10D — Mutation Atomicity
+### 8.10D — Mutation Atomicity
 
 Make logical multi-table role writes atomic.
 
 Audit other multi-write mutations for partial-success states.
 
-# 8.10E — Permission-Aware UI Fetching
+### 8.10E — Permission-Aware UI Fetching
 
 Remove unnecessary auxiliary queries from read-only or unauthorized UI paths.
 
 Project detail client fetching is a known audit target.
 
-# 8.10F — Session + Auth Failure Hardening
+### 8.10F — Session + Auth Failure Hardening
 
 Validate session expiry, logout, invalid memberships, invalid custom roles, cookie behavior, and frontend 401 handling.
 
-# 8.10G — Database Integrity Hardening
+### 8.10G — Database Integrity Hardening
 
 Add only stable DB constraints that materially strengthen runtime invariants.
 
 Validate every migration locally.
 
-# 8.10H — Full Auth/DB/UI Runtime Matrix
+### 8.10H — Full Auth/DB/UI Runtime Matrix
 
 Run the final security and integrity matrix across:
 
@@ -434,7 +434,3 @@ private project member,
 private project non-member,
 malformed requests,
 corrupted local integrity probes.
-
-## Validation 8.10A
-
-Tidak ada runtime change.
