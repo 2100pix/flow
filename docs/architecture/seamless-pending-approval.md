@@ -118,43 +118,6 @@ It is only sent to pending-auth endpoints.
 
 ---
 
-### Pending
-
-Access request exists and workspace membership does not exist.
-
-Response:
-
-`pending`
-
-### Approved
-
-Workspace membership exists.
-
-Response:
-
-`approved`
-
-### Rejected
-
-Workspace membership does not exist and the access request no longer exists.
-
-Response:
-
-`rejected`
-
-The endpoint must not return:
-
-- workspace name
-- workspace members
-- workspace permissions
-- workspace roles
-- clients
-- projects
-- tasks
-- internal workspace data
-
----
-
 ## Manual continuation endpoint
 
 Endpoint:
@@ -199,6 +162,17 @@ If membership does not exist and the access request no longer exists:
 The client cannot provide or select an approval state.
 
 Current workspace membership is always the authoritative condition for session creation.
+
+The endpoint must not return:
+
+- workspace name
+- workspace members
+- workspace permissions
+- workspace roles
+- clients
+- projects
+- tasks
+- internal workspace data
 
 ---
 
@@ -251,32 +225,6 @@ The user may sign in again later to create a new access request.
 The page informs the user that the temporary session is no longer available.
 
 The user must complete Discord OAuth again.
-
-### pending
-
-Continue waiting.
-
-### approved
-
-Call:
-
-`POST /api/auth/pending/continue`
-
-After success, perform a full navigation to:
-
-`/`
-
-### rejected
-
-Stop polling and inform the user that access was not approved.
-
-The user may sign in again later to create a new access request.
-
-### invalid or expired pending session
-
-Stop polling.
-
-The user must complete Discord login again.
 
 ---
 
