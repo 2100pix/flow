@@ -1,4 +1,4 @@
-PRAGMA foreign_keys=OFF;--> statement-breakpoint
+PRAGMA defer_foreign_keys=ON;
 CREATE TABLE `__new_workspace_role_permissions` (
 	`role_id` text NOT NULL,
 	`permission_key` text NOT NULL,
@@ -10,4 +10,4 @@ CREATE TABLE `__new_workspace_role_permissions` (
 INSERT INTO `__new_workspace_role_permissions`("role_id", "permission_key") SELECT "role_id", "permission_key" FROM `workspace_role_permissions`;--> statement-breakpoint
 DROP TABLE `workspace_role_permissions`;--> statement-breakpoint
 ALTER TABLE `__new_workspace_role_permissions` RENAME TO `workspace_role_permissions`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;
+PRAGMA defer_foreign_keys=OFF;
