@@ -43,9 +43,19 @@ export const permissionKeys = [
 ] as const;
 
 export const permissionKeySchema = z.enum(permissionKeys);
-
 export type PermissionKey = (typeof permissionKeys)[number];
+export const permissionKeyListSchema = z
+  .array(permissionKeySchema)
+  .max(permissionKeys.length)
+  .refine((permissions) => new Set(permissions).size === permissions.length, {
+    message: "Permissions must be unique",
+  });
 
+export function parsePermissionKeys(values: readonly unknown[]): PermissionKey[] | null {
+  const parsed = permissionKeyListSchema.safeParse([...values]);
+
+  return parsed.success ? parsed.data : null;
+}
 export const permissionCatalog: Array<{
   key: PermissionKey;
   group: string;
