@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import { createDb } from "../db";
-import { sessions, users, workspaceMembers } from "../db/schema";
+import { sessions, users, workspaceAccessRequests, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { createSessionToken, getSessionExpiresAt, hashSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../lib/session";
 import type { AppBindings } from "../types/app-env";
@@ -229,15 +229,16 @@ authRoutes.get("/discord/callback", async (c) => {
   }
 
   if (!membership) {
-    return c.json(
-      {
-        error: {
-          code: "WORKSPACE_ACCESS_DENIED",
-          message: "You do not have access to this workspace",
-        },
-      },
-      403,
-    );
+    await db
+      .insert(workspaceAccessRequests)
+      .values({
+        workspaceId,
+        userId: flowUser.id,
+        requestedAt: now,
+      })
+      .onConflictDoNothing();
+
+    return c.redirect("/access-pending");
   }
 
   await db.delete(sessions).where(and(eq(sessions.userId, flowUser.id), lte(sessions.expiresAt, now)));

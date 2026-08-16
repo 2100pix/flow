@@ -9,6 +9,8 @@ import { MembersPage } from "@/app/pages/members-page";
 import { NotFoundPage } from "@/app/pages/not-found-page";
 import { ProjectDetailPage } from "@/app/pages/project-detail-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
+import { AccessPendingPage } from "@/app/pages/access-pending-page";
+
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
 const ProjectBoardPage = lazy(() =>
@@ -27,6 +29,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/access-pending",
+    element: <AccessPendingPage />,
   },
   {
     element: <ProtectedLayout />,

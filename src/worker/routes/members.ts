@@ -2,9 +2,9 @@ import { and, asc, count, eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { updateWorkspaceMemberRoleSchema, type MemberDto } from "../../shared/contracts/members";
+import { updateWorkspaceMemberRoleSchema, type MemberAccessRequestDto, type MemberDto } from "../../shared/contracts/members";
 import { createDb } from "../db";
-import { users, workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
+import { users, workspaceAccessRequests, workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { permissionKeySchema } from "../../shared/permissions";
 
@@ -76,6 +76,143 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
 
   return c.json({
     data,
+  });
+});
+
+membersRoutes.get("/access-requests", requireAuth, requirePermission("members.manage"), async (c) => {
+  const auth = c.var.auth;
+  const db = createDb(c.env.flow_db);
+
+  const rows = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+      requestedAt: workspaceAccessRequests.requestedAt,
+    })
+    .from(workspaceAccessRequests)
+    .innerJoin(users, eq(workspaceAccessRequests.userId, users.id))
+    .where(eq(workspaceAccessRequests.workspaceId, auth.workspace.id))
+    .orderBy(asc(workspaceAccessRequests.requestedAt));
+
+  const data: MemberAccessRequestDto[] = rows.map((request) => ({
+    id: request.id,
+    displayName: request.displayName,
+    avatarUrl: request.avatarUrl,
+    requestedAt: request.requestedAt.toISOString(),
+  }));
+
+  return c.json({
+    data,
+  });
+});
+
+membersRoutes.post("/access-requests/:userId/approve", requireAuth, requirePermission("members.manage"), async (c) => {
+  const auth = c.var.auth;
+  const userId = c.req.param("userId");
+  const db = createDb(c.env.flow_db);
+
+  const [request] = await db
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(workspaceAccessRequests)
+    .innerJoin(users, eq(workspaceAccessRequests.userId, users.id))
+    .where(and(eq(workspaceAccessRequests.workspaceId, auth.workspace.id), eq(workspaceAccessRequests.userId, userId)))
+    .limit(1);
+
+  if (!request) {
+    return c.json(
+      {
+        error: {
+          code: "ACCESS_REQUEST_NOT_FOUND",
+          message: "Access request not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [existingMember] = await db
+    .select({
+      userId: workspaceMembers.userId,
+    })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
+  if (existingMember) {
+    return c.json(
+      {
+        error: {
+          code: "MEMBER_ALREADY_EXISTS",
+          message: "User is already a workspace member",
+        },
+      },
+      409,
+    );
+  }
+
+  const now = new Date();
+
+  await db.batch([
+    db.insert(workspaceMembers).values({
+      workspaceId: auth.workspace.id,
+      userId,
+      role: "member",
+      customRoleId: null,
+      createdAt: now,
+    }),
+
+    db.delete(workspaceAccessRequests).where(and(eq(workspaceAccessRequests.workspaceId, auth.workspace.id), eq(workspaceAccessRequests.userId, userId))),
+  ]);
+
+  const data: MemberDto = {
+    id: request.userId,
+    displayName: request.displayName,
+    avatarUrl: request.avatarUrl,
+    role: "member",
+    customRole: null,
+  };
+
+  return c.json({
+    data,
+  });
+});
+
+membersRoutes.delete("/access-requests/:userId", requireAuth, requirePermission("members.manage"), async (c) => {
+  const auth = c.var.auth;
+  const userId = c.req.param("userId");
+  const db = createDb(c.env.flow_db);
+
+  const [request] = await db
+    .select({
+      userId: workspaceAccessRequests.userId,
+    })
+    .from(workspaceAccessRequests)
+    .where(and(eq(workspaceAccessRequests.workspaceId, auth.workspace.id), eq(workspaceAccessRequests.userId, userId)))
+    .limit(1);
+
+  if (!request) {
+    return c.json(
+      {
+        error: {
+          code: "ACCESS_REQUEST_NOT_FOUND",
+          message: "Access request not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(workspaceAccessRequests).where(and(eq(workspaceAccessRequests.workspaceId, auth.workspace.id), eq(workspaceAccessRequests.userId, userId)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
   });
 });
 
