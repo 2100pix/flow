@@ -84,8 +84,7 @@ export function HomePage() {
       <div className="mx-auto max-w-6xl space-y-8">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Home</h1>
-
-          <p className="mt-1 text-sm text-muted-foreground">Overview of current studio work.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Overview of current workspace activity.</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

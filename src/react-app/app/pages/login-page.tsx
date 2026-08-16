@@ -22,8 +22,7 @@ export function LoginPage() {
 
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-
-            <p className="text-sm text-muted-foreground">Internal workspace for INVS Studio.</p>
+            <p className="text-sm text-muted-foreground">Sign in to your workspace.</p>
           </div>
         </div>
 

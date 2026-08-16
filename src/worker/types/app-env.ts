@@ -3,4 +3,5 @@ export type AppBindings = Env & {
   DISCORD_CLIENT_SECRET: string;
   DISCORD_REDIRECT_URI: string;
   FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID: string;
+  FLOW_WORKSPACE_ID: string;
 };
