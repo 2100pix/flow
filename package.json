@@ -1,6 +1,6 @@
 {
   "name": "flow",
-  "description": "Internal project management for creative studios",
+  "description": "Project management for teams",
   "cloudflare": {
     "label": "Vite React Template",
     "products": [

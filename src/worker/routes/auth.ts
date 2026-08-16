@@ -6,7 +6,6 @@ import { createDb } from "../db";
 import { sessions, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { createSessionToken, getSessionExpiresAt, hashSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../lib/session";
-import { INVS_WORKSPACE_ID } from "../lib/workspace";
 import type { AppBindings } from "../types/app-env";
 
 const OAUTH_STATE_COOKIE = "flow_oauth_state";
@@ -152,12 +151,10 @@ authRoutes.get("/discord/callback", async (c) => {
   }
 
   const discordUser = (await userResponse.json()) as DiscordUser;
-
   const db = createDb(c.env.flow_db);
+  const workspaceId = c.env.FLOW_WORKSPACE_ID;
   const now = new Date();
-
   const displayName = discordUser.global_name ?? discordUser.username;
-
   const avatarUrl = getDiscordAvatarUrl(discordUser);
 
   await db
@@ -206,20 +203,20 @@ authRoutes.get("/discord/callback", async (c) => {
       role: workspaceMembers.role,
     })
     .from(workspaceMembers)
-    .where(and(eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID), eq(workspaceMembers.userId, flowUser.id)))
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, flowUser.id)))
     .limit(1);
   const [existingWorkspaceMember] = await db
     .select({
       userId: workspaceMembers.userId,
     })
     .from(workspaceMembers)
-    .where(eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID))
+    .where(eq(workspaceMembers.workspaceId, workspaceId))
     .limit(1);
   if (!membership && !existingWorkspaceMember && discordUser.id === c.env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID) {
     await db
       .insert(workspaceMembers)
       .values({
-        workspaceId: INVS_WORKSPACE_ID,
+        workspaceId: workspaceId,
         userId: flowUser.id,
         role: "owner",
         createdAt: now,

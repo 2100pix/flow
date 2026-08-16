@@ -7,7 +7,6 @@ import { createDb } from "../db";
 
 import { sessions, users, workspaceMembers, workspaceRolePermissions, workspaceRoles, workspaces } from "../db/schema";
 import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
-import { INVS_WORKSPACE_ID } from "../lib/workspace";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -58,6 +57,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const sessionId = await hashSessionToken(sessionToken);
 
   const db = createDb(c.env.flow_db);
+  const workspaceId = c.env.FLOW_WORKSPACE_ID;
 
   const [result] = await db
     .select({
@@ -75,7 +75,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
-    .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, INVS_WORKSPACE_ID)))
+    .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, workspaceId)))
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
     .limit(1);
@@ -108,7 +108,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       })
       .from(workspaceRoles)
       .leftJoin(workspaceRolePermissions, eq(workspaceRolePermissions.roleId, workspaceRoles.id))
-      .where(and(eq(workspaceRoles.id, result.customRoleId), eq(workspaceRoles.workspaceId, INVS_WORKSPACE_ID)));
+      .where(and(eq(workspaceRoles.id, result.customRoleId), eq(workspaceRoles.workspaceId, workspaceId)));
 
     if (roleRows.length === 0) {
       return invalidateSession(c, db, sessionId, "SESSION_INVALID", "Session is no longer valid");
@@ -147,7 +147,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     },
 
     workspace: {
-      id: INVS_WORKSPACE_ID,
+      id: workspaceId,
 
       name: result.workspaceName,
 
