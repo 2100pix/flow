@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-import type { AddProjectMemberInput, MembersResponse, ProjectMemberResponse, ProjectMembersResponse, RemoveProjectMemberResponse } from "../types";
+import type { AddProjectMemberInput, MemberAccessRequestsResponse, MemberResponse, MembersResponse, ProjectMemberResponse, ProjectMembersResponse, RejectMemberAccessRequestResponse, RemoveProjectMemberResponse } from "../types";
 
 export async function getMembers() {
   const response = await apiFetch<MembersResponse>("/api/members");
@@ -47,7 +47,7 @@ export async function approveMemberAccessRequest(userId: string) {
 }
 
 export async function rejectMemberAccessRequest(userId: string) {
-  await apiFetch(`/api/members/access-requests/${userId}`, {
+  return apiFetch<RejectMemberAccessRequestResponse>(`/api/members/access-requests/${userId}`, {
     method: "DELETE",
   });
 }
