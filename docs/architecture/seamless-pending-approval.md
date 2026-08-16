@@ -258,7 +258,7 @@ The pending session may remain until it expires.
 
 Because no membership exists, that pending session cannot be exchanged for a normal Flow session.
 
-The status endpoint derives the rejected state from:
+The manual continuation endpoint derives rejection from:
 
 - no workspace membership
 - no access request
