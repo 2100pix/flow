@@ -109,6 +109,34 @@ export const workspaceAccessRequests = sqliteTable(
   ],
 );
 
+export const workspaceAccessRequestSessions = sqliteTable(
+  "workspace_access_request_sessions",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    expiresAt: integer("expires_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [uniqueIndex("workspace_access_request_sessions_workspace_user_unique").on(table.workspaceId, table.userId), index("workspace_access_request_sessions_expires_at_idx").on(table.expiresAt)],
+);
+
 export const teams = sqliteTable(
   "teams",
   {

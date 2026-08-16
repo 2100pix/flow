@@ -33,3 +33,5 @@ export type LogoutResponse = {
     success: true;
   };
 };
+
+export type { PendingAccessCompleteResponse, PendingAccessStatus, PendingAccessStatusResponse } from "../../../shared/contracts/auth";
