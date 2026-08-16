@@ -277,8 +277,11 @@ authRoutes.post("/logout", async (c) => {
     await db.delete(sessions).where(eq(sessions.id, sessionId));
   }
 
+  const secure = new URL(c.req.url).protocol === "https:";
+
   deleteCookie(c, SESSION_COOKIE, {
     path: "/",
+    secure,
   });
 
   return c.json({
