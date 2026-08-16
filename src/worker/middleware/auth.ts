@@ -19,6 +19,27 @@ type AuthEnv = {
   };
 };
 
+async function invalidateSession(c: Parameters<ReturnType<typeof createMiddleware<AuthEnv>>>[0], db: ReturnType<typeof createDb>, sessionId: string, code: "SESSION_EXPIRED" | "SESSION_INVALID", message: string) {
+  await db.delete(sessions).where(eq(sessions.id, sessionId));
+
+  const secure = new URL(c.req.url).protocol === "https:";
+
+  deleteCookie(c, SESSION_COOKIE, {
+    path: "/",
+    secure,
+  });
+
+  return c.json(
+    {
+      error: {
+        code,
+        message,
+      },
+    },
+    401,
+  );
+}
+
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const sessionToken = getCookie(c, SESSION_COOKIE);
 
@@ -60,38 +81,13 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     .limit(1);
 
   if (!result) {
-    await db.delete(sessions).where(eq(sessions.id, sessionId));
-
-    const secure = new URL(c.req.url).protocol === "https:";
-
-    deleteCookie(c, SESSION_COOKIE, {
-      path: "/",
-      secure,
-    });
-
-    return c.json(
-      {
-        error: {
-          code: "SESSION_EXPIRED",
-          message: "Session expired",
-        },
-      },
-      401,
-    );
+    return invalidateSession(c, db, sessionId, "SESSION_EXPIRED", "Session expired");
   }
 
   const builtInRole = builtInRoleDefinitions.find((role) => role.key === result.role);
 
   if (!builtInRole) {
-    return c.json(
-      {
-        error: {
-          code: "INVALID_ROLE",
-          message: "Workspace role is invalid",
-        },
-      },
-      403,
-    );
+    return invalidateSession(c, db, sessionId, "SESSION_INVALID", "Session is no longer valid");
   }
 
   let permissions: PermissionKey[] = [...builtInRole.permissions];
@@ -115,15 +111,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       .where(and(eq(workspaceRoles.id, result.customRoleId), eq(workspaceRoles.workspaceId, INVS_WORKSPACE_ID)));
 
     if (roleRows.length === 0) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_CUSTOM_ROLE",
-            message: "Custom role is invalid",
-          },
-        },
-        403,
-      );
+      return invalidateSession(c, db, sessionId, "SESSION_INVALID", "Session is no longer valid");
     }
 
     customRole = {
