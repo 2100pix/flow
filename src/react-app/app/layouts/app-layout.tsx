@@ -5,6 +5,8 @@ import { Link, NavLink, Outlet } from "react-router";
 import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/features/auth/permissions";
+import { WorkspaceMenu } from "@/app/components/workspace-menu";
+
 import type { AuthContext } from "@/features/auth/types";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import type { ProjectDto } from "@/features/projects/types";
@@ -152,30 +154,16 @@ function NavigationGroup({ label, items }: { label: string; items: NavigationIte
 }
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
-  /*
-   * Permission checks MUST live
-   * inside AppLayout because auth
-   * only exists here.
-   */
   const canViewHome = hasPermission(auth, "dashboard.view");
-
   const canViewClients = hasPermission(auth, "clients.view");
-
   const canCreateClients = hasPermission(auth, "clients.create");
-
   const canViewProjects = hasPermission(auth, "projects.view");
-
   const canCreateProjects = hasPermission(auth, "projects.create");
-
   const canViewMembers = hasPermission(auth, "members.view");
-
   const canViewSettings = hasPermission(auth, "settings.view");
 
-  /*
-   * Do not call /api/projects
-   * if this user cannot view
-   * projects.
-   */
+  const workspaceInitial = auth.workspace.name.trim().charAt(0).toUpperCase() || "?";
+
   const { data: projects = [] } = useProjects(canViewProjects);
 
   const [sidebarHidden, setSidebarHidden] = useState(() => {
@@ -212,11 +200,11 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
             <SidebarSimpleIcon />
           </Button>
           {/* Replace this temporary Flow mark with the final logo asset when branding is ready. */}
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-label="Flow">
-            F
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-hidden="true">
+            {workspaceInitial}
           </div>
 
-          <p className="truncate text-sm font-semibold tracking-tight">{auth.workspace.name}</p>
+          <WorkspaceMenu workspaceName={auth.workspace.name} canViewSettings={canViewSettings} />
         </div>
 
         <AccountMenu auth={auth} />
