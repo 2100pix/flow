@@ -685,4 +685,29 @@ DATABASE
 Clients
 Members
 
-dengan workspace configuration dipindahkan ke workspace menu di header.
+Project parent:
+
+- disclosure only
+- clicking row toggles expansion
+- does not navigate
+
+Project children:
+
+- Overview = navigation
+- Task List = navigation
+
+Expansion:
+
+- independent per project
+- multiple projects may stay expanded
+- navigating to another project does not collapse previous project
+- user manually collapses by clicking project row again
+
+Desktop sidebar:
+
+- resizable
+- default 240px
+- min settled width 208px
+- max 360px
+- <=184px on resize release collapses sidebar
+- saved width restored when reopened
