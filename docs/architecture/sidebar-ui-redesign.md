@@ -269,10 +269,14 @@ Contoh:
 
 Interaction:
 
-- click project name → navigate ke Project Overview
-- click chevron → expand/collapse project subtree
+- click project row → expand/collapse project subtree
+- project row tidak melakukan navigation
+- folder icon, project name, empty row area, dan chevron berada dalam satu interaction surface
+- Overview dan Task List adalah navigation targets
 
-Jangan membuat seluruh row hanya berfungsi sebagai toggle karena nama project juga merupakan navigation target.
+Expanded state setiap project independen.
+
+Membuka Project B tidak menutup Project A.
 
 ---
 
@@ -360,18 +364,9 @@ Setiap project dapat:
 - expanded
 - collapsed
 
-Default behavior:
+Expansion bersifat independen per project.
 
-- active/current project → expanded
-- project lain → collapsed
-
-Jika user sedang berada pada:
-
-Project A → Task List
-
-maka:
-
-Project A harus otomatis expanded.
+Multiple project dapat expanded secara bersamaan.
 
 Contoh:
 
@@ -380,14 +375,26 @@ SPACE
 Project A v
 │
 ├─ Overview
-└─ Task List ← active
+└─ Task List
 
-Project B >
+Project B v
+│
+├─ Overview
+└─ Task List
+
 Project C >
 
-User tetap dapat collapse active project secara manual.
+Behavior:
 
-Navigasi berikutnya ke child project boleh membuka parent kembali.
+- click Project A → toggle Project A saja
+- click Project B → toggle Project B saja
+- membuka satu project tidak menutup project lain
+- navigation ke Overview atau Task List tidak mengubah expanded state project lain
+- user menutup project hanya dengan menekan project row kembali
+
+Pada initial page load langsung ke route project, current project dapat mulai dalam keadaan expanded agar active child terlihat.
+
+Setelah application berjalan, project expansion dikontrol oleh user dan tidak disinkronkan otomatis oleh perubahan route.
 
 ---
 
@@ -548,6 +555,14 @@ Sidebar:
 - persistent ketika open
 - dapat full collapse
 - main area expands ketika sidebar hidden
+- resizable secara horizontal
+- default width 240px
+- minimum settled width 208px
+- maximum width 360px
+- resize release pada width <=184px meng-collapse sidebar
+- width terakhir yang valid disimpan client-side
+- ketika sidebar dibuka kembali, width terakhir dipulihkan
+- hide/show menggunakan width transition agar main content melebar secara kontinu
 
 ## Smaller Screen / Mobile
 
@@ -611,9 +626,14 @@ Jangan implementasikan pada sidebar redesign milestone ini:
 
 - [ ] Setiap project memiliki project/folder icon
 - [ ] Setiap project dapat collapse/expand
-- [ ] Project name dapat membuka Overview
-- [ ] Chevron project mengontrol expand/collapse
-- [ ] Active project otomatis expanded
+- [ ] Seluruh project row mengontrol expand/collapse
+- [ ] Project row tidak melakukan navigation
+- [ ] Project name dan chevron menggunakan satu hover/interaction surface
+- [ ] Multiple project dapat tetap expanded
+- [ ] Membuka project lain tidak menutup project yang sudah expanded
+- [ ] Overview adalah navigation target
+- [ ] Task List adalah navigation target
+- [ ] Direct load ke project route dapat membuka current project pada initial render
 
 ## Project Tree
 
@@ -650,9 +670,9 @@ Phase 2 — Workspace Header 4. Workspace logo placeholder 5. Workspace dropdown
 
 Phase 3 — Navigation Restructure 7. Move Home 8. Create Space section 9. Create Database section 10. Move Clients 11. Move Members
 
-Phase 4 — Project Tree 12. Project collapsible parent 13. Overview child 14. Task List child 15. Tree connector 16. Route-based active state 17. Auto-expand active project
+Phase 4 — Project Tree 12. Project collapsible parent 13. Overview child 14. Task List child 15. Tree connector 16. Route-based active state 17. Independent multi-project expansion
 
-Phase 5 — Polish 18. spacing 19. hover states 20. active states 21. chevron transitions 22. responsive verification
+Phase 5 — Polish 18. spacing 19. hover states 20. active states 21. chevron transitions 22. responsive verification 23. project subtree animation 24. desktop sidebar resize 25. resize-to-collapse behavior 26. sidebar width persistence
 
 ---
 
