@@ -96,6 +96,48 @@ function SectionHeader({ label, expanded, onToggle, action }: { label: string; e
   );
 }
 
+function SpaceNavigation({ projects, canViewProjects, canCreateProjects, expanded, onToggle }: { projects: ProjectDto[]; canViewProjects: boolean; canCreateProjects: boolean; expanded: boolean; onToggle: () => void }) {
+  if (!canViewProjects) {
+    return null;
+  }
+
+  const visibleProjects = projects.slice(0, 6);
+
+  return (
+    <div>
+      <SectionHeader label="Space" expanded={expanded} onToggle={onToggle} action={canCreateProjects ? <QuickCreateButton to="/projects?create=project" label="Create project" /> : undefined} />
+
+      {expanded && (
+        <div className="space-y-1">
+          <NavigationLink item={projectsNavigationItem} />
+
+          {visibleProjects.length > 0 && (
+            <div className="space-y-0.5 pb-1 pl-6">
+              {visibleProjects.map((project) => (
+                <NavLink
+                  key={project.id}
+                  to={`/projects/${project.id}`}
+                  className={({ isActive }) =>
+                    cn("block truncate rounded-md px-2 py-1.5 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
+                  }
+                >
+                  {project.name}
+                </NavLink>
+              ))}
+
+              {projects.length > 6 && (
+                <Link to="/projects" className="block rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground">
+                  See all projects
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle }: { canViewClients: boolean; canViewMembers: boolean; expanded: boolean; onToggle: () => void }) {
   const items: NavigationItem[] = [];
 
@@ -122,23 +164,6 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
           ))}
         </div>
       )}
-    </div>
-  );
-}
-function NavigationGroup({ label, items }: { label: string; items: NavigationItem[] }) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <div>
-      <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">{label}</p>
-
-      <div className="space-y-1">
-        {items.map((item) => (
-          <NavigationLink key={item.href} item={item} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -187,8 +212,6 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           </div>
 
           <WorkspaceMenu workspaceName={auth.workspace.name} canViewSettings={canViewSettings} />
-
-          <p className="truncate text-sm font-semibold tracking-tight">{auth.workspace.name}</p>
         </div>
 
         <AccountMenu auth={auth} />
