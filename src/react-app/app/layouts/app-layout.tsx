@@ -184,8 +184,6 @@ function SpaceNavigation({
   onToggle: () => void;
   activeProjectId: string | null;
   expandedProjectIds: Set<string>;
-  collapsedActiveProject: CollapsedActiveProject | null;
-  locationKey: string;
   onToggleProject: (projectId: string) => void;
 }) {
   if (!canViewProjects) {
@@ -279,7 +277,13 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       return SIDEBAR_DEFAULT_WIDTH;
     }
 
-    const storedWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    const storedValue = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+
+    if (storedValue === null) {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+
+    const storedWidth = Number(storedValue);
 
     if (!Number.isFinite(storedWidth)) {
       return SIDEBAR_DEFAULT_WIDTH;
@@ -388,24 +392,6 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const [spaceExpanded, setSpaceExpanded] = useState(true);
   const [databaseExpanded, setDatabaseExpanded] = useState(true);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => (activeProjectId ? new Set([activeProjectId]) : new Set()));
-
-  useEffect(() => {
-    if (!activeProjectId) {
-      return;
-    }
-
-    setExpandedProjectIds((current) => {
-      if (current.has(activeProjectId)) {
-        return current;
-      }
-
-      const next = new Set(current);
-
-      next.add(activeProjectId);
-
-      return next;
-    });
-  }, [activeProjectId]);
 
   useEffect(() => {
     if (!mobileSidebarOpen) {
