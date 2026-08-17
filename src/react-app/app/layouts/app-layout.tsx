@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
@@ -13,6 +13,12 @@ import type { ProjectDto } from "@/features/projects/types";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_HIDDEN_KEY = "flow:sidebar-hidden";
+const SIDEBAR_WIDTH_KEY = "flow:sidebar-width";
+
+const SIDEBAR_DEFAULT_WIDTH = 240;
+const SIDEBAR_MIN_WIDTH = 208;
+const SIDEBAR_MAX_WIDTH = 360;
+const SIDEBAR_COLLAPSE_THRESHOLD = 184;
 
 type NavigationItem = {
   label: string;
@@ -36,10 +42,6 @@ const membersNavigationItem: NavigationItem = {
   label: "Members",
   href: "/members",
   icon: UsersIcon,
-};
-type CollapsedActiveProject = {
-  projectId: string;
-  locationKey: string;
 };
 
 function getActiveProjectId(pathname: string) {
@@ -100,32 +102,36 @@ function SectionHeader({ label, expanded, onToggle, action }: { label: string; e
   );
 }
 
+function CollapsibleRegion({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div aria-hidden={!open} inert={!open} className={cn("grid transition-[grid-template-rows,opacity] duration-200 ease-out", open ? "grid-rows-[1fr] opacity-100" : "pointer-events-none grid-rows-[0fr] opacity-0")}>
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 function ProjectNavigation({ project, expanded, active, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; onToggle: () => void }) {
   return (
     <div className="space-y-0.5">
-      <div className="flex h-8 items-center gap-1">
-        <Link
-          to={`/projects/${project.id}`}
-          className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-sm transition-colors", "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", active && "text-sidebar-foreground")}
-        >
-          <FolderIcon size={15} weight="regular" className="shrink-0" />
+      <button
+        type="button"
+        aria-expanded={expanded}
+        className={cn(
+          "group flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors duration-150",
+          "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          active && "bg-sidebar-accent/60 text-sidebar-accent-foreground",
+        )}
+        onClick={onToggle}
+      >
+        <FolderIcon size={15} weight="regular" className="shrink-0" />
 
-          <span className="truncate">{project.name}</span>
-        </Link>
+        <span className="min-w-0 flex-1 truncate">{project.name}</span>
 
-        <button
-          type="button"
-          aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
-          aria-expanded={expanded}
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          onClick={onToggle}
-        >
-          <CaretDownIcon size={12} className={cn("transition-transform duration-150", !expanded && "-rotate-90")} />
-        </button>
-      </div>
+        <CaretDownIcon size={12} className={cn("shrink-0 text-sidebar-foreground/40 transition-[transform,color] duration-200", "group-hover:text-sidebar-accent-foreground", !expanded && "-rotate-90")} />
+      </button>
 
-      {expanded && (
-        <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/70 pl-3">
+      <CollapsibleRegion open={expanded}>
+        <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/70 pb-1 pl-3">
           <NavLink
             to={`/projects/${project.id}`}
             end
@@ -156,10 +162,11 @@ function ProjectNavigation({ project, expanded, active, onToggle }: { project: P
             Task List
           </NavLink>
         </div>
-      )}
+      </CollapsibleRegion>
     </div>
   );
 }
+
 function SpaceNavigation({
   projects,
   canViewProjects,
@@ -168,8 +175,6 @@ function SpaceNavigation({
   onToggle,
   activeProjectId,
   expandedProjectIds,
-  collapsedActiveProject,
-  locationKey,
   onToggleProject,
 }: {
   projects: ProjectDto[];
@@ -191,14 +196,12 @@ function SpaceNavigation({
     <div>
       <SectionHeader label="Space" expanded={expanded} onToggle={onToggle} action={canCreateProjects ? <QuickCreateButton to="/projects?create=project" label="Create project" /> : undefined} />
 
-      {expanded && (
+      <CollapsibleRegion open={expanded}>
         <div className="space-y-0.5">
           {projects.map((project) => {
             const active = activeProjectId === project.id;
 
-            const activeManuallyCollapsed = active && collapsedActiveProject?.projectId === project.id && collapsedActiveProject.locationKey === locationKey;
-
-            const projectExpanded = expandedProjectIds.has(project.id) || (active && !activeManuallyCollapsed);
+            const projectExpanded = expandedProjectIds.has(project.id);
 
             return (
               <ProjectNavigation
@@ -213,7 +216,7 @@ function SpaceNavigation({
             );
           })}
         </div>
-      )}
+      </CollapsibleRegion>
     </div>
   );
 }
@@ -237,13 +240,13 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
     <div>
       <SectionHeader label="Database" expanded={expanded} onToggle={onToggle} />
 
-      {expanded && (
+      <CollapsibleRegion open={expanded}>
         <div className="space-y-1">
           {items.map((item) => (
             <NavigationLink key={item.href} item={item} />
           ))}
         </div>
-      )}
+      </CollapsibleRegion>
     </div>
   );
 }
@@ -271,11 +274,138 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
     return window.localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "true";
   });
 
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+
+    const storedWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+
+    if (!Number.isFinite(storedWidth)) {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, storedWidth));
+  });
+
+  const [sidebarResizing, setSidebarResizing] = useState(false);
+
+  const sidebarWidthRef = useRef(sidebarWidth);
+  const sidebarResizeStartWidthRef = useRef(sidebarWidth);
+
+  function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (sidebarHidden) {
+      return;
+    }
+
+    sidebarResizeStartWidthRef.current = sidebarWidth;
+    sidebarWidthRef.current = sidebarWidth;
+
+    setSidebarResizing(true);
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function resizeSidebar(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!sidebarResizing) {
+      return;
+    }
+
+    const nextWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(0, event.clientX));
+
+    sidebarWidthRef.current = nextWidth;
+
+    setSidebarWidth(nextWidth);
+  }
+
+  function finishSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!sidebarResizing) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setSidebarResizing(false);
+
+    const currentWidth = sidebarWidthRef.current;
+
+    if (currentWidth <= SIDEBAR_COLLAPSE_THRESHOLD) {
+      const restoreWidth = sidebarResizeStartWidthRef.current;
+
+      sidebarWidthRef.current = restoreWidth;
+
+      setSidebarWidth(restoreWidth);
+      setSidebarHidden(true);
+
+      window.localStorage.setItem(SIDEBAR_HIDDEN_KEY, "true");
+
+      return;
+    }
+
+    const normalizedWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, currentWidth));
+
+    sidebarWidthRef.current = normalizedWidth;
+
+    setSidebarWidth(normalizedWidth);
+
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(normalizedWidth));
+  }
+
+  function cancelSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setSidebarResizing(false);
+
+    const restoreWidth = sidebarResizeStartWidthRef.current;
+
+    sidebarWidthRef.current = restoreWidth;
+
+    setSidebarWidth(restoreWidth);
+  }
+
+  useEffect(() => {
+    if (!sidebarResizing) {
+      return;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [sidebarResizing]);
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [spaceExpanded, setSpaceExpanded] = useState(true);
   const [databaseExpanded, setDatabaseExpanded] = useState(true);
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set());
-  const [collapsedActiveProject, setCollapsedActiveProject] = useState<CollapsedActiveProject | null>(null);
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => (activeProjectId ? new Set([activeProjectId]) : new Set()));
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      return;
+    }
+
+    setExpandedProjectIds((current) => {
+      if (current.has(activeProjectId)) {
+        return current;
+      }
+
+      const next = new Set(current);
+
+      next.add(activeProjectId);
+
+      return next;
+    });
+  }, [activeProjectId]);
 
   useEffect(() => {
     if (!mobileSidebarOpen) {
@@ -308,47 +438,14 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   }
 
   function toggleProject(projectId: string) {
-    const active = activeProjectId === projectId;
-
-    const manuallyExpanded = expandedProjectIds.has(projectId);
-
-    const activeManuallyCollapsed = active && collapsedActiveProject?.projectId === projectId && collapsedActiveProject.locationKey === location.key;
-
-    const currentlyExpanded = manuallyExpanded || (active && !activeManuallyCollapsed);
-
-    if (currentlyExpanded) {
-      setExpandedProjectIds((current) => {
-        if (!current.has(projectId)) {
-          return current;
-        }
-
-        const next = new Set(current);
-
-        next.delete(projectId);
-
-        return next;
-      });
-
-      if (active) {
-        setCollapsedActiveProject({
-          projectId,
-          locationKey: location.key,
-        });
-      }
-
-      return;
-    }
-
-    if (active) {
-      setCollapsedActiveProject(null);
-
-      return;
-    }
-
     setExpandedProjectIds((current) => {
       const next = new Set(current);
 
-      next.add(projectId);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
 
       return next;
     });
@@ -384,8 +481,6 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           }}
           activeProjectId={activeProjectId}
           expandedProjectIds={expandedProjectIds}
-          collapsedActiveProject={collapsedActiveProject}
-          locationKey={location.key}
           onToggleProject={toggleProject}
         />
 
@@ -435,7 +530,40 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       </header>
 
       <div className="flex min-h-[calc(100vh-3rem)]">
-        {!sidebarHidden && <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">{renderSidebarNavigation()}</aside>}
+        <aside
+          aria-label="Primary navigation"
+          style={{
+            width: sidebarHidden ? 0 : sidebarWidth,
+          }}
+          className={cn(
+            "relative sticky top-12 hidden h-[calc(100vh-3rem)] min-w-0 shrink-0 overflow-hidden bg-sidebar text-sidebar-foreground md:flex",
+            sidebarHidden ? "border-r-0" : "border-r border-sidebar-border",
+            sidebarResizing ? "transition-none" : "transition-[width] duration-200 ease-out",
+          )}
+        >
+          <div inert={sidebarHidden} aria-hidden={sidebarHidden} className={cn("flex min-w-0 flex-1 flex-col transition-opacity duration-150", sidebarHidden ? "pointer-events-none opacity-0" : "opacity-100")}>
+            {renderSidebarNavigation()}
+          </div>
+
+          {!sidebarHidden && (
+            <div
+              role="separator"
+              aria-label="Resize sidebar"
+              aria-orientation="vertical"
+              className={cn(
+                "absolute inset-y-0 right-0 z-20 w-1 translate-x-1/2 cursor-col-resize touch-none",
+                "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2",
+                "after:bg-transparent after:transition-colors",
+                "hover:after:bg-sidebar-border",
+                sidebarResizing && "after:bg-sidebar-border",
+              )}
+              onPointerDown={startSidebarResize}
+              onPointerMove={resizeSidebar}
+              onPointerUp={finishSidebarResize}
+              onPointerCancel={cancelSidebarResize}
+            />
+          )}
+        </aside>
         {mobileSidebarOpen && (
           <div className="fixed inset-x-0 bottom-0 top-12 z-30 md:hidden">
             <button
