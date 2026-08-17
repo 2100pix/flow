@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
@@ -271,10 +271,33 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
     return window.localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "true";
   });
 
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [spaceExpanded, setSpaceExpanded] = useState(true);
   const [databaseExpanded, setDatabaseExpanded] = useState(true);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set());
   const [collapsedActiveProject, setCollapsedActiveProject] = useState<CollapsedActiveProject | null>(null);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileSidebarOpen(false);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileSidebarOpen]);
 
   function toggleSidebar() {
     const nextValue = !sidebarHidden;
@@ -330,59 +353,106 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       return next;
     });
   }
+
+  function renderSidebarNavigation(onNavigate?: () => void) {
+    return (
+      <nav
+        className="flex-1 space-y-4 overflow-y-auto px-2 py-3"
+        onClick={(event) => {
+          if (!onNavigate) {
+            return;
+          }
+
+          if (event.target instanceof Element && event.target.closest("a")) {
+            onNavigate();
+          }
+        }}
+      >
+        {canViewHome && (
+          <div className="space-y-1">
+            <NavigationLink item={homeNavigationItem} />
+          </div>
+        )}
+
+        <SpaceNavigation
+          projects={projects}
+          canViewProjects={canViewProjects}
+          canCreateProjects={canCreateProjects}
+          expanded={spaceExpanded}
+          onToggle={() => {
+            setSpaceExpanded((current) => !current);
+          }}
+          activeProjectId={activeProjectId}
+          expandedProjectIds={expandedProjectIds}
+          collapsedActiveProject={collapsedActiveProject}
+          locationKey={location.key}
+          onToggleProject={toggleProject}
+        />
+
+        <DatabaseNavigation
+          canViewClients={canViewClients}
+          canViewMembers={canViewMembers}
+          expanded={databaseExpanded}
+          onToggle={() => {
+            setDatabaseExpanded((current) => !current);
+          }}
+        />
+      </nav>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-border bg-background px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={sidebarHidden ? "Open sidebar" : "Hide sidebar"} title={sidebarHidden ? "Open sidebar" : "Hide sidebar"} onClick={toggleSidebar}>
+          <Button type="button" variant="ghost" size="icon-sm" className="hidden md:inline-flex" aria-label={sidebarHidden ? "Open sidebar" : "Hide sidebar"} title={sidebarHidden ? "Open sidebar" : "Hide sidebar"} onClick={toggleSidebar}>
             <SidebarSimpleIcon />
           </Button>
-          {/* Replace this temporary Flow mark with the final logo asset when branding is ready. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
+            aria-label={mobileSidebarOpen ? "Close navigation" : "Open navigation"}
+            title={mobileSidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-controls="mobile-sidebar"
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => {
+              setMobileSidebarOpen((current) => !current);
+            }}
+          >
+            <SidebarSimpleIcon />
+          </Button>
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-hidden="true">
             {workspaceInitial}
           </div>
-
-          <WorkspaceMenu workspaceName={auth.workspace.name} canViewSettings={canViewSettings} />
+          <div className="min-w-0 max-w-[42vw] sm:max-w-none">
+            <WorkspaceMenu workspaceName={auth.workspace.name} canViewSettings={canViewSettings} />
+          </div>
         </div>
 
         <AccountMenu auth={auth} />
       </header>
 
       <div className="flex min-h-[calc(100vh-3rem)]">
-        {!sidebarHidden && (
-          <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-            <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
-              {canViewHome && (
-                <div className="space-y-1">
-                  <NavigationLink item={homeNavigationItem} />
-                </div>
-              )}
+        {!sidebarHidden && <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">{renderSidebarNavigation()}</aside>}
+        {mobileSidebarOpen && (
+          <div className="fixed inset-x-0 bottom-0 top-12 z-30 md:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              className="absolute inset-0 bg-black/30"
+              onClick={() => {
+                setMobileSidebarOpen(false);
+              }}
+            />
 
-              <SpaceNavigation
-                projects={projects}
-                canViewProjects={canViewProjects}
-                canCreateProjects={canCreateProjects}
-                expanded={spaceExpanded}
-                onToggle={() => {
-                  setSpaceExpanded((current) => !current);
-                }}
-                activeProjectId={activeProjectId}
-                expandedProjectIds={expandedProjectIds}
-                collapsedActiveProject={collapsedActiveProject}
-                locationKey={location.key}
-                onToggleProject={toggleProject}
-              />
-
-              <DatabaseNavigation
-                canViewClients={canViewClients}
-                canViewMembers={canViewMembers}
-                expanded={databaseExpanded}
-                onToggle={() => {
-                  setDatabaseExpanded((current) => !current);
-                }}
-              />
-            </nav>
-          </aside>
+            <aside id="mobile-sidebar" aria-label="Primary navigation" className="relative z-10 flex h-full w-60 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
+              {renderSidebarNavigation(() => {
+                setMobileSidebarOpen(false);
+              })}
+            </aside>
+          </div>
         )}
         <main className="min-w-0 flex-1">
           <Outlet />
