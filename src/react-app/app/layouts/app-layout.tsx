@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
-import { Link, NavLink, Outlet } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
@@ -32,17 +32,21 @@ const clientsNavigationItem: NavigationItem = {
   icon: BuildingsIcon,
 };
 
-const projectsNavigationItem: NavigationItem = {
-  label: "Projects",
-  href: "/projects",
-  icon: FolderIcon,
-};
-
 const membersNavigationItem: NavigationItem = {
   label: "Members",
   href: "/members",
   icon: UsersIcon,
 };
+type CollapsedActiveProject = {
+  projectId: string;
+  locationKey: string;
+};
+
+function getActiveProjectId(pathname: string) {
+  const match = /^\/projects\/([^/]+)(?:\/|$)/.exec(pathname);
+
+  return match?.[1] ?? null;
+}
 
 function NavigationLink({ item }: { item: NavigationItem }) {
   const Icon = item.icon;
@@ -96,42 +100,118 @@ function SectionHeader({ label, expanded, onToggle, action }: { label: string; e
   );
 }
 
-function SpaceNavigation({ projects, canViewProjects, canCreateProjects, expanded, onToggle }: { projects: ProjectDto[]; canViewProjects: boolean; canCreateProjects: boolean; expanded: boolean; onToggle: () => void }) {
+function ProjectNavigation({ project, expanded, active, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; onToggle: () => void }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="flex h-8 items-center gap-1">
+        <Link
+          to={`/projects/${project.id}`}
+          className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-sm transition-colors", "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", active && "text-sidebar-foreground")}
+        >
+          <FolderIcon size={15} weight="regular" className="shrink-0" />
+
+          <span className="truncate">{project.name}</span>
+        </Link>
+
+        <button
+          type="button"
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
+          aria-expanded={expanded}
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          onClick={onToggle}
+        >
+          <CaretDownIcon size={12} className={cn("transition-transform duration-150", !expanded && "-rotate-90")} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/70 pl-3">
+          <NavLink
+            to={`/projects/${project.id}`}
+            end
+            className={({ isActive }) =>
+              cn(
+                "relative flex h-7 items-center rounded-md px-2 text-xs transition-colors",
+                "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "before:absolute before:-left-3 before:top-1/2 before:h-px before:w-3 before:bg-sidebar-border before:content-['']",
+                isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
+              )
+            }
+          >
+            Overview
+          </NavLink>
+
+          <NavLink
+            to={`/projects/${project.id}/board`}
+            end
+            className={({ isActive }) =>
+              cn(
+                "relative flex h-7 items-center rounded-md px-2 text-xs transition-colors",
+                "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "before:absolute before:-left-3 before:top-1/2 before:h-px before:w-3 before:bg-sidebar-border before:content-['']",
+                isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
+              )
+            }
+          >
+            Task List
+          </NavLink>
+        </div>
+      )}
+    </div>
+  );
+}
+function SpaceNavigation({
+  projects,
+  canViewProjects,
+  canCreateProjects,
+  expanded,
+  onToggle,
+  activeProjectId,
+  expandedProjectIds,
+  collapsedActiveProject,
+  locationKey,
+  onToggleProject,
+}: {
+  projects: ProjectDto[];
+  canViewProjects: boolean;
+  canCreateProjects: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  activeProjectId: string | null;
+  expandedProjectIds: Set<string>;
+  collapsedActiveProject: CollapsedActiveProject | null;
+  locationKey: string;
+  onToggleProject: (projectId: string) => void;
+}) {
   if (!canViewProjects) {
     return null;
   }
-
-  const visibleProjects = projects.slice(0, 6);
 
   return (
     <div>
       <SectionHeader label="Space" expanded={expanded} onToggle={onToggle} action={canCreateProjects ? <QuickCreateButton to="/projects?create=project" label="Create project" /> : undefined} />
 
       {expanded && (
-        <div className="space-y-1">
-          <NavigationLink item={projectsNavigationItem} />
+        <div className="space-y-0.5">
+          {projects.map((project) => {
+            const active = activeProjectId === project.id;
 
-          {visibleProjects.length > 0 && (
-            <div className="space-y-0.5 pb-1 pl-6">
-              {visibleProjects.map((project) => (
-                <NavLink
-                  key={project.id}
-                  to={`/projects/${project.id}`}
-                  className={({ isActive }) =>
-                    cn("block truncate rounded-md px-2 py-1.5 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
-                  }
-                >
-                  {project.name}
-                </NavLink>
-              ))}
+            const activeManuallyCollapsed = active && collapsedActiveProject?.projectId === project.id && collapsedActiveProject.locationKey === locationKey;
 
-              {projects.length > 6 && (
-                <Link to="/projects" className="block rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/40 transition-colors hover:text-sidebar-foreground">
-                  See all projects
-                </Link>
-              )}
-            </div>
-          )}
+            const projectExpanded = expandedProjectIds.has(project.id) || (active && !activeManuallyCollapsed);
+
+            return (
+              <ProjectNavigation
+                key={project.id}
+                project={project}
+                expanded={projectExpanded}
+                active={active}
+                onToggle={() => {
+                  onToggleProject(project.id);
+                }}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -169,6 +249,9 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
 }
 
 export function AppLayout({ auth }: { auth: AuthContext }) {
+  const location = useLocation();
+
+  const activeProjectId = getActiveProjectId(location.pathname);
   const canViewHome = hasPermission(auth, "dashboard.view");
   const canViewClients = hasPermission(auth, "clients.view");
   const canViewProjects = hasPermission(auth, "projects.view");
@@ -190,6 +273,8 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
   const [spaceExpanded, setSpaceExpanded] = useState(true);
   const [databaseExpanded, setDatabaseExpanded] = useState(true);
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set());
+  const [collapsedActiveProject, setCollapsedActiveProject] = useState<CollapsedActiveProject | null>(null);
 
   function toggleSidebar() {
     const nextValue = !sidebarHidden;
@@ -199,6 +284,52 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
     window.localStorage.setItem(SIDEBAR_HIDDEN_KEY, String(nextValue));
   }
 
+  function toggleProject(projectId: string) {
+    const active = activeProjectId === projectId;
+
+    const manuallyExpanded = expandedProjectIds.has(projectId);
+
+    const activeManuallyCollapsed = active && collapsedActiveProject?.projectId === projectId && collapsedActiveProject.locationKey === location.key;
+
+    const currentlyExpanded = manuallyExpanded || (active && !activeManuallyCollapsed);
+
+    if (currentlyExpanded) {
+      setExpandedProjectIds((current) => {
+        if (!current.has(projectId)) {
+          return current;
+        }
+
+        const next = new Set(current);
+
+        next.delete(projectId);
+
+        return next;
+      });
+
+      if (active) {
+        setCollapsedActiveProject({
+          projectId,
+          locationKey: location.key,
+        });
+      }
+
+      return;
+    }
+
+    if (active) {
+      setCollapsedActiveProject(null);
+
+      return;
+    }
+
+    setExpandedProjectIds((current) => {
+      const next = new Set(current);
+
+      next.add(projectId);
+
+      return next;
+    });
+  }
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-border bg-background px-3">
@@ -235,6 +366,11 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
                 onToggle={() => {
                   setSpaceExpanded((current) => !current);
                 }}
+                activeProjectId={activeProjectId}
+                expandedProjectIds={expandedProjectIds}
+                collapsedActiveProject={collapsedActiveProject}
+                locationKey={location.key}
+                onToggleProject={toggleProject}
               />
 
               <DatabaseNavigation
