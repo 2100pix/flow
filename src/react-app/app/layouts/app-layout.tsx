@@ -10,7 +10,7 @@ import { useProjects } from "@/features/projects/hooks/use-projects";
 import type { ProjectDto } from "@/features/projects/types";
 import { cn } from "@/lib/utils";
 
-const SIDEBAR_COLLAPSED_KEY = "flow:sidebar-collapsed";
+const SIDEBAR_HIDDEN_KEY = "flow:sidebar-hidden";
 
 type NavigationItem = {
   label: string;
@@ -48,26 +48,19 @@ const settingsNavigationItem: NavigationItem = {
   icon: GearSixIcon,
 };
 
-function NavigationLink({ item, collapsed }: { item: NavigationItem; collapsed: boolean }) {
+function NavigationLink({ item }: { item: NavigationItem }) {
   const Icon = item.icon;
 
   return (
     <NavLink
       to={item.href}
       end={item.href === "/"}
-      title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
-        cn(
-          "flex h-8 items-center rounded-md text-sm transition-colors",
-          "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-          collapsed ? "justify-center px-0" : "gap-2 px-2.5",
-          isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
-        )
+        cn("flex h-8 items-center gap-2 rounded-md px-2.5 text-sm transition-colors", "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
       }
     >
       <Icon size={16} weight="regular" className="shrink-0" />
-
-      <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
+      <span>{item.label}</span>
     </NavLink>
   );
 }
@@ -80,33 +73,9 @@ function QuickCreateButton({ to, label }: { to: string; label: string }) {
   );
 }
 
-function SpaceNavigation({
-  collapsed,
-  projects,
-  canViewClients,
-  canCreateClients,
-  canViewProjects,
-  canCreateProjects,
-}: {
-  collapsed: boolean;
-  projects: ProjectDto[];
-  canViewClients: boolean;
-  canCreateClients: boolean;
-  canViewProjects: boolean;
-  canCreateProjects: boolean;
-}) {
+function SpaceNavigation({ projects, canViewClients, canCreateClients, canViewProjects, canCreateProjects }: { projects: ProjectDto[]; canViewClients: boolean; canCreateClients: boolean; canViewProjects: boolean; canCreateProjects: boolean }) {
   if (!canViewClients && !canViewProjects) {
     return null;
-  }
-
-  if (collapsed) {
-    return (
-      <div className="space-y-1">
-        {canViewClients && <NavigationLink item={clientsNavigationItem} collapsed />}
-
-        {canViewProjects && <NavigationLink item={projectsNavigationItem} collapsed />}
-      </div>
-    );
   }
 
   const visibleProjects = projects.slice(0, 6);
@@ -119,7 +88,7 @@ function SpaceNavigation({
         {canViewClients && (
           <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
-              <NavigationLink item={clientsNavigationItem} collapsed={false} />
+              <NavigationLink item={clientsNavigationItem} />
             </div>
 
             {canCreateClients && <QuickCreateButton to="/clients?create=client" label="Create client" />}
@@ -130,7 +99,7 @@ function SpaceNavigation({
           <>
             <div className="flex items-center gap-1">
               <div className="min-w-0 flex-1">
-                <NavigationLink item={projectsNavigationItem} collapsed={false} />
+                <NavigationLink item={projectsNavigationItem} />
               </div>
 
               {canCreateProjects && <QuickCreateButton to="/projects?create=project" label="Create project" />}
@@ -164,18 +133,18 @@ function SpaceNavigation({
   );
 }
 
-function NavigationGroup({ label, items, collapsed }: { label: string; items: NavigationItem[]; collapsed: boolean }) {
+function NavigationGroup({ label, items }: { label: string; items: NavigationItem[] }) {
   if (items.length === 0) {
     return null;
   }
 
   return (
     <div>
-      {!collapsed && <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">{label}</p>}
+      <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">{label}</p>
 
       <div className="space-y-1">
         {items.map((item) => (
-          <NavigationLink key={item.href} item={item} collapsed={collapsed} />
+          <NavigationLink key={item.href} item={item} />
         ))}
       </div>
     </div>
@@ -209,12 +178,12 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
    */
   const { data: projects = [] } = useProjects(canViewProjects);
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
     if (typeof window === "undefined") {
       return false;
     }
 
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+    return window.localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "true";
   });
 
   const manageNavigation: NavigationItem[] = [];
@@ -228,17 +197,20 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   }
 
   function toggleSidebar() {
-    const nextValue = !sidebarCollapsed;
+    const nextValue = !sidebarHidden;
 
-    setSidebarCollapsed(nextValue);
+    setSidebarHidden(nextValue);
 
-    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(nextValue));
+    window.localStorage.setItem(SIDEBAR_HIDDEN_KEY, String(nextValue));
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-border bg-background px-3">
         <div className="flex min-w-0 items-center gap-2">
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={sidebarHidden ? "Open sidebar" : "Hide sidebar"} title={sidebarHidden ? "Open sidebar" : "Hide sidebar"} onClick={toggleSidebar}>
+            <SidebarSimpleIcon />
+          </Button>
           {/* Replace this temporary Flow mark with the final logo asset when branding is ready. */}
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-label="Flow">
             F
@@ -251,26 +223,21 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       </header>
 
       <div className="flex min-h-[calc(100vh-3rem)]">
-        <aside className={cn("flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground", "transition-[width] duration-200", sidebarCollapsed ? "w-16" : "w-60")}>
-          <div className={cn("flex h-11 shrink-0 items-center px-2", sidebarCollapsed ? "justify-center" : "justify-end")}>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={toggleSidebar}>
-              <SidebarSimpleIcon />
-            </Button>
-          </div>
+        {!sidebarHidden && (
+          <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
+              {canViewHome && (
+                <div className="space-y-1">
+                  <NavigationLink item={homeNavigationItem} />
+                </div>
+              )}
 
-          <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
-            {canViewHome && (
-              <div className="space-y-1">
-                <NavigationLink item={homeNavigationItem} collapsed={sidebarCollapsed} />
-              </div>
-            )}
+              <SpaceNavigation projects={projects} canViewClients={canViewClients} canCreateClients={canCreateClients} canViewProjects={canViewProjects} canCreateProjects={canCreateProjects} />
 
-            <SpaceNavigation collapsed={sidebarCollapsed} projects={projects} canViewClients={canViewClients} canCreateClients={canCreateClients} canViewProjects={canViewProjects} canCreateProjects={canCreateProjects} />
-
-            <NavigationGroup label="Manage" items={manageNavigation} collapsed={sidebarCollapsed} />
-          </nav>
-        </aside>
-
+              <NavigationGroup label="Manage" items={manageNavigation} />
+            </nav>
+          </aside>
+        )}
         <main className="min-w-0 flex-1">
           <Outlet />
         </main>
