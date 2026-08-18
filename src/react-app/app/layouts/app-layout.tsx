@@ -178,6 +178,8 @@ function SpaceNavigation({
   projects,
   canViewProjects,
   canCreateProjects,
+  canEditProjects,
+  canArchiveProjects,
   expanded,
   onToggle,
   activeProjectId,
@@ -187,6 +189,8 @@ function SpaceNavigation({
   projects: ProjectDto[];
   canViewProjects: boolean;
   canCreateProjects: boolean;
+  canEditProjects: boolean;
+  canArchiveProjects: boolean;
   expanded: boolean;
   onToggle: () => void;
   activeProjectId: string | null;
@@ -214,6 +218,8 @@ function SpaceNavigation({
                 project={project}
                 expanded={projectExpanded}
                 active={active}
+                canEdit={canEditProjects}
+                canArchive={canArchiveProjects}
                 onToggle={() => {
                   onToggleProject(project.id);
                 }}
@@ -508,7 +514,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="md:hidden"
+            className={cn("md:hidden transition-colors duration-200", mobileSidebarOpen && "bg-accent text-accent-foreground")}
             aria-label={mobileSidebarOpen ? "Close navigation" : "Open navigation"}
             title={mobileSidebarOpen ? "Close navigation" : "Open navigation"}
             aria-controls="mobile-sidebar"
@@ -517,7 +523,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
               setMobileSidebarOpen((current) => !current);
             }}
           >
-            <SidebarSimpleIcon />
+            <SidebarSimpleIcon className={cn("transition-transform duration-200 ease-out", mobileSidebarOpen && "rotate-180")} />
           </Button>
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold" aria-hidden="true">
             {workspaceInitial}
@@ -566,17 +572,26 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           )}
         </aside>
         {mobileSidebarOpen && (
-          <div className="fixed inset-x-0 bottom-0 top-12 z-30 md:hidden">
+          <div aria-hidden={!mobileSidebarOpen} className={cn("fixed inset-x-0 bottom-0 top-12 z-30 md:hidden", !mobileSidebarOpen && "pointer-events-none")}>
             <button
               type="button"
               aria-label="Close navigation"
-              className="absolute inset-0 bg-black/30"
+              className={cn("absolute inset-0 bg-black/30 transition-opacity duration-200 ease-out", mobileSidebarOpen ? "opacity-100" : "opacity-0")}
               onClick={() => {
                 setMobileSidebarOpen(false);
               }}
             />
 
-            <aside id="mobile-sidebar" aria-label="Primary navigation" className="relative z-10 flex h-full w-60 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
+            <aside
+              id="mobile-sidebar"
+              aria-label="Primary navigation"
+              inert={!mobileSidebarOpen}
+              className={cn(
+                "relative z-10 flex h-full w-[80vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl",
+                "transition-transform duration-200 ease-out",
+                mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+              )}
+            >
               {renderSidebarNavigation(() => {
                 setMobileSidebarOpen(false);
               })}
