@@ -6,6 +6,7 @@ import { AccountMenu } from "@/app/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/features/auth/permissions";
 import { WorkspaceMenu } from "@/app/components/workspace-menu";
+import { ProjectActionsMenu } from "@/app/components/project-actions-menu";
 
 import type { AuthContext } from "@/features/auth/types";
 import { useProjects } from "@/features/projects/hooks/use-projects";
@@ -115,25 +116,34 @@ function CollapsibleRegion({ open, children }: { open: boolean; children: ReactN
   );
 }
 
-function ProjectNavigation({ project, expanded, active, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; onToggle: () => void }) {
+function ProjectNavigation({ project, expanded, active, canEdit, canArchive, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; canEdit: boolean; canArchive: boolean; onToggle: () => void }) {
   return (
     <div className="space-y-0.5">
-      <button
-        type="button"
-        aria-expanded={expanded}
+      <div
         className={cn(
-          "group flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors duration-150",
+          "group flex h-8 w-full min-w-0 items-center rounded-md transition-colors duration-150",
           "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
           active && "bg-sidebar-accent/60 text-sidebar-accent-foreground",
         )}
-        onClick={onToggle}
       >
-        <FolderIcon size={15} weight="regular" className="shrink-0" />
+        <button type="button" aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-2.5 text-left text-sm" onClick={onToggle}>
+          <FolderIcon size={15} weight="regular" className="shrink-0" />
 
-        <span className="min-w-0 flex-1 truncate">{project.name}</span>
+          <span className="min-w-0 flex-1 truncate">{project.name}</span>
+        </button>
 
-        <CaretDownIcon size={12} className={cn("shrink-0 text-sidebar-foreground/40 transition-[transform,color] duration-200", "group-hover:text-sidebar-accent-foreground", !expanded && "-rotate-90")} />
-      </button>
+        <ProjectActionsMenu project={project} canEdit={canEdit} canArchive={canArchive} />
+
+        <button
+          type="button"
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
+          aria-expanded={expanded}
+          className="flex size-7 shrink-0 items-center justify-center text-sidebar-foreground/40 transition-colors hover:text-sidebar-accent-foreground"
+          onClick={onToggle}
+        >
+          <CaretDownIcon size={12} className={cn("transition-transform duration-200", !expanded && "-rotate-90")} />
+        </button>
+      </div>
 
       <CollapsibleRegion open={expanded}>
         <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/60 pb-1 pl-2.5">
@@ -256,6 +266,9 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const canCreateProjects = hasPermission(auth, "projects.create");
   const canViewMembers = hasPermission(auth, "members.view");
   const canViewSettings = hasPermission(auth, "settings.view");
+  const canEditProjects = hasPermission(auth, "projects.edit");
+
+  const canArchiveProjects = hasPermission(auth, "projects.archive");
 
   const workspaceInitial = auth.workspace.name.trim().charAt(0).toUpperCase() || "?";
 
@@ -468,6 +481,8 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           activeProjectId={activeProjectId}
           expandedProjectIds={expandedProjectIds}
           onToggleProject={toggleProject}
+          canEditProjects={canEditProjects}
+          canArchiveProjects={canArchiveProjects}
         />
 
         <DatabaseNavigation

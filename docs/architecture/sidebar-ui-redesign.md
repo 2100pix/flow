@@ -756,3 +756,55 @@ Sidebar resize:
 - 185–207px raw drag keeps visual sidebar at 208px
 - <=184px raw drag on release collapses sidebar
 - reopening restores width from before collapse
+
+Project actions:
+
+[Folder] Project Name [...] [Chevron]
+
+Three-dot menu:
+
+- Rename Project
+- Project Settings
+- Delete Project
+
+Permissions:
+
+- Rename Project requires projects.edit
+- Project Settings follows normal project visibility/access
+- Delete Project requires projects.archive
+
+Delete Project:
+
+- UI terminology is Delete Project
+- current backend behavior remains archive/soft-delete
+- no hard-delete implementation in this milestone
+
+Project routes:
+
+- Overview → /projects/:id
+- Task List → /projects/:id/board
+- Project Settings → /projects/:id/settings
+
+Overview:
+
+- intentionally empty during this milestone
+
+Project Settings:
+
+- receives the previous Project Overview/settings editor content
+- project metadata
+- visibility
+- dates
+- Discord channel
+- task workflow
+- project team
+- delete/archive controls
+
+Mobile:
+
+- drawer width 80vw
+- drawer remains mounted
+- open/close uses transform transition
+- backdrop uses opacity transition
+- duration 200ms ease-out
+- header toggle visually reflects open state
