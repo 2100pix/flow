@@ -6,7 +6,7 @@ import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../..
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
 import { canCreateProjectWithVisibility, canManageProjectMembers, canManageProjectVisibility } from "../../shared/project-privacy";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowDto, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
-import { deriveProjectCode, resolveProjectCode } from "../../shared/project-code";
+import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
 import { clients, projectMembers, projectTaskStatuses, projects, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
@@ -1009,7 +1009,6 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
     );
   }
 
-  await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
   const now = new Date();
 
   await db.batch([
