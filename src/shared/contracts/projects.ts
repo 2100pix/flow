@@ -4,6 +4,9 @@ import { projectVisibilitySchema, type ProjectVisibility } from "../project-priv
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const projectEngagementTypeSchema = z.enum(["project", "retainer"]);
+export const PROJECT_DESCRIPTION_MAX_LENGTH = 160;
+
+export const projectDescriptionSchema = z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH);
 
 export const projectCodeOverrideSchema = z
   .string()
@@ -16,14 +19,10 @@ export const projectCodeOverrideSchema = z
 export const createProjectSchema = z.object({
   clientId: z.string().trim().min(1),
   name: z.string().trim().min(1).max(160),
-
   projectCodeOverride: projectCodeOverrideSchema.optional(),
-
   engagementType: projectEngagementTypeSchema.optional(),
-
   visibility: projectVisibilitySchema.optional(),
-
-  description: z.string().trim().max(5000).optional(),
+  description: projectDescriptionSchema.optional(),
 });
 
 export const discordChannelUrlSchema = z.url().refine(
@@ -44,7 +43,7 @@ export const updateProjectSchema = z
     projectCodeOverride: projectCodeOverrideSchema.nullable().optional(),
     engagementType: projectEngagementTypeSchema.optional(),
     leadUserId: z.string().trim().min(1).nullable().optional(),
-    description: z.string().trim().max(5000).nullable().optional(),
+    description: projectDescriptionSchema.nullable().optional(),
     visibility: projectVisibilitySchema.optional(),
     status: projectStatusSchema.optional(),
     startDate: z.iso.date().nullable().optional(),

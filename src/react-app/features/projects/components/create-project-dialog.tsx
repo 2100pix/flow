@@ -4,6 +4,7 @@ import { XIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/types";
 
 type CreateProjectDialogProps = {
   open: boolean;
@@ -103,7 +104,7 @@ export function CreateProjectDialog({ open, onClose, canCreatePrivate, canViewCl
               <textarea
                 id="create-project-description"
                 value={description}
-                maxLength={5000}
+                maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
                 rows={4}
                 placeholder="Short project description"
                 onChange={(event) => {
