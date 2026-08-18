@@ -103,7 +103,7 @@ function OverviewSkeleton() {
   );
 }
 
-function ProjectIdentityEditor({ projectId, name, description, canEdit }: { projectId: string; name: string; description: string | null; canEdit: boolean }) {
+function ProjectIdentityEditor({ projectId, name, description, projectCode, statusLabel, canEdit }: { projectId: string; name: string; description: string | null; projectCode: string; statusLabel: string; canEdit: boolean }) {
   const updateProject = useUpdateProject();
 
   const [editingName, setEditingName] = useState(false);
@@ -166,44 +166,54 @@ function ProjectIdentityEditor({ projectId, name, description, canEdit }: { proj
 
   return (
     <div className="min-w-0">
-      {editingName && canEdit ? (
-        <input
-          autoFocus
-          value={nextName}
-          maxLength={160}
-          disabled={updateProject.isPending}
-          aria-label="Project name"
-          onChange={(event) => {
-            setNextName(event.target.value);
-          }}
-          onBlur={saveName}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              event.currentTarget.blur();
-            }
+      <div className="flex flex-wrap items-center gap-3">
+        {editingName && canEdit ? (
+          <input
+            autoFocus
+            value={nextName}
+            maxLength={160}
+            disabled={updateProject.isPending}
+            aria-label="Project name"
+            onChange={(event) => {
+              setNextName(event.target.value);
+            }}
+            onBlur={saveName}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
 
-            if (event.key === "Escape") {
+              if (event.key === "Escape") {
+                setNextName(name);
+                setEditingName(false);
+              }
+            }}
+            className="min-w-0 max-w-2xl border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
+          />
+        ) : canEdit ? (
+          <button
+            type="button"
+            onClick={() => {
               setNextName(name);
-              setEditingName(false);
-            }
-          }}
-          className="min-w-0 w-full max-w-2xl border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
-        />
-      ) : canEdit ? (
-        <button
-          type="button"
-          onClick={() => {
-            setNextName(name);
-            setEditingName(true);
-          }}
-          className="min-w-0 break-words text-left text-2xl font-semibold tracking-tight outline-none md:text-3xl"
-        >
-          {name}
-        </button>
-      ) : (
-        <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{name}</h1>
-      )}
+              setEditingName(true);
+            }}
+            className="min-w-0 cursor-text break-words rounded-sm text-left text-2xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-3xl"
+          >
+            {name}
+          </button>
+        ) : (
+          <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{name}</h1>
+        )}
+
+        <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
+          {projectCode}
+        </Badge>
+
+        <Badge variant="outline" className="lg:hidden" aria-label={`Project status: ${statusLabel}`}>
+          {statusLabel}
+        </Badge>
+      </div>
 
       {editingDescription && canEdit ? (
         <textarea
@@ -238,7 +248,7 @@ function ProjectIdentityEditor({ projectId, name, description, canEdit }: { proj
             setNextDescription(description ?? "");
             setEditingDescription(true);
           }}
-          className="mt-4 block max-w-2xl break-words text-left text-sm leading-6 text-muted-foreground outline-none"
+          className="mt-4 block cursor-text rounded-sm text-left text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {description || <span className="text-muted-foreground/60">Add a description</span>}
         </button>
@@ -303,17 +313,15 @@ export function ProjectOverviewPage() {
 
         <section className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-start gap-3">
-              <ProjectIdentityEditor key={`${project.id}:${project.updatedAt}`} projectId={project.id} name={project.name} description={project.description} canEdit={canEdit} />
-
-              <Badge variant="outline" className="mt-1 font-mono text-[11px] tracking-wide text-muted-foreground">
-                {project.projectCode}
-              </Badge>
-
-              <Badge variant="outline" className="mt-1 lg:hidden" aria-label={`Project status: ${statusLabels[project.status]}`}>
-                {statusLabels[project.status]}
-              </Badge>
-            </div>
+            <ProjectIdentityEditor
+              key={`${project.id}:${project.updatedAt}`}
+              projectId={project.id}
+              name={project.name}
+              description={project.description}
+              projectCode={project.projectCode}
+              statusLabel={statusLabels[project.status]}
+              canEdit={canEdit}
+            />
           </div>
           <div className="lg:relative">
             <div className="hidden lg:absolute lg:right-0 lg:top-0 lg:block">
