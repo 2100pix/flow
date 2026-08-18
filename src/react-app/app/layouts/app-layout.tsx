@@ -571,33 +571,31 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
             />
           )}
         </aside>
-        {mobileSidebarOpen && (
-          <div aria-hidden={!mobileSidebarOpen} className={cn("fixed inset-x-0 bottom-0 top-12 z-30 md:hidden", !mobileSidebarOpen && "pointer-events-none")}>
-            <button
-              type="button"
-              aria-label="Close navigation"
-              className={cn("absolute inset-0 bg-black/30 transition-opacity duration-200 ease-out", mobileSidebarOpen ? "opacity-100" : "opacity-0")}
-              onClick={() => {
-                setMobileSidebarOpen(false);
-              }}
-            />
+        <div aria-hidden={!mobileSidebarOpen} className={cn("fixed inset-x-0 bottom-0 top-12 z-30 md:hidden", !mobileSidebarOpen && "pointer-events-none")}>
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className={cn("absolute inset-0 bg-black/30 transition-opacity duration-200 ease-out", mobileSidebarOpen ? "opacity-100" : "opacity-0")}
+            onClick={() => {
+              setMobileSidebarOpen(false);
+            }}
+          />
 
-            <aside
-              id="mobile-sidebar"
-              aria-label="Primary navigation"
-              inert={!mobileSidebarOpen}
-              className={cn(
-                "relative z-10 flex h-full w-[80vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl",
-                "transition-transform duration-200 ease-out",
-                mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
-              )}
-            >
-              {renderSidebarNavigation(() => {
-                setMobileSidebarOpen(false);
-              })}
-            </aside>
-          </div>
-        )}
+          <aside
+            id="mobile-sidebar"
+            aria-label="Primary navigation"
+            inert={!mobileSidebarOpen}
+            className={cn(
+              "relative z-10 flex h-full w-[80vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl",
+              "transition-transform duration-200 ease-out",
+              mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            )}
+          >
+            {renderSidebarNavigation(() => {
+              setMobileSidebarOpen(false);
+            })}
+          </aside>
+        </div>
         <main className="min-w-0 flex-1">
           <Outlet />
         </main>
