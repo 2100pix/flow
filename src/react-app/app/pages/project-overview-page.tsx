@@ -169,10 +169,6 @@ export function ProjectOverviewPage() {
             </div>
 
             <div className="space-y-8 lg:pt-12">
-              <Badge variant="outline">{statusLabels[project.status]}</Badge>
-            </div>
-
-            <div className="space-y-8 pt-12">
               <div>
                 <p className="text-xs text-muted-foreground">Lead Project</p>
 
