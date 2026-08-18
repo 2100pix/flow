@@ -216,7 +216,7 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
           "opacity-100",
           "md:pointer-events-none md:opacity-0",
           "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
-          "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+          "md:focus-visible:pointer-events-auto md:focus-visible:opacity-100",
         )}
         onClick={(event) => {
           event.stopPropagation();
