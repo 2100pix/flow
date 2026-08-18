@@ -87,7 +87,7 @@ function QuickCreateButton({ to, label }: { to: string; label: string }) {
         "opacity-100",
         "md:pointer-events-none md:opacity-0",
         "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
-        "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+        "md:focus-visible:pointer-events-auto md:focus-visible:opacity-100",
       )}
     >
       <PlusIcon size={14} />
@@ -159,7 +159,7 @@ function ProjectNavigation({ project, expanded, active, canEdit, canArchive, onT
             "opacity-100",
             "md:pointer-events-none md:opacity-0",
             "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
-            "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+            "md:focus-visible:pointer-events-auto md:focus-visible:opacity-100",
           )}
           onClick={onToggle}
         >
