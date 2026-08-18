@@ -4,7 +4,7 @@ import { XIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
-import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/types";
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
 
 type CreateProjectDialogProps = {
   open: boolean;

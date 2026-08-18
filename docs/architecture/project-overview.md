@@ -155,6 +155,26 @@ Mobile:
 
 Mobile tidak mempertahankan desktop two-column rail.
 
+## Project Description
+
+Project Description adalah short project summary.
+
+Maximum length:
+
+`160 characters`
+
+Limit berlaku konsisten pada:
+
+- Project creation
+- Overview inline editing
+- Project Settings
+- project create/update API
+
+Description bukan long-form project brief.
+
+Long-form project context berada pada Key Resources /
+Project Brief architecture.
+
 ---
 
 # 4. Project Code

@@ -15,7 +15,9 @@ import { useProjectMembers } from "@/features/members/hooks/use-project-members"
 import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
 import { TaskWorkflowSettings } from "@/features/tasks/components/task-workflow-settings";
 
-import { PROJECT_DESCRIPTION_MAX_LENGTH, type ProjectStatus, type ProjectDto } from "@/features/projects/types";
+import { type ProjectStatus, type ProjectDto } from "@/features/projects/types";
+
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
 
 type ProjectEditorProps = {
   project: ProjectDto;
