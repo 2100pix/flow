@@ -15,7 +15,7 @@ import { useProjectMembers } from "@/features/members/hooks/use-project-members"
 import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
 import { TaskWorkflowSettings } from "@/features/tasks/components/task-workflow-settings";
 
-import type { ProjectDto, ProjectStatus } from "@/features/projects/types";
+import { PROJECT_DESCRIPTION_MAX_LENGTH, type ProjectStatus, type ProjectDto } from "@/features/projects/types";
 
 type ProjectEditorProps = {
   project: ProjectDto;
@@ -142,7 +142,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
             <textarea
               id="project-description"
               value={description}
-              maxLength={5000}
+              maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
               disabled={!canEdit}
               rows={5}
               onChange={(event) => {

@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import { useProject } from "@/features/projects/hooks/use-project";
 
-import type { ProjectStatus } from "@/features/projects/types";
+import { PROJECT_DESCRIPTION_MAX_LENGTH, type ProjectStatus } from "@/features/projects/types";
 
 const statusLabels: Record<ProjectStatus, string> = {
   planning: "Planning",
@@ -219,8 +219,8 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
         <textarea
           autoFocus
           value={nextDescription}
-          maxLength={5000}
-          rows={3}
+          maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+          rows={2}
           disabled={updateProject.isPending}
           aria-label="Project description"
           placeholder="Add a description"
@@ -324,7 +324,7 @@ export function ProjectOverviewPage() {
             />
           </div>
           <div className="lg:relative">
-            <div className="hidden lg:absolute lg:right-0 lg:top-0 lg:block">
+            <div className="hidden lg:absolute lg:left-0 lg:top-0 lg:block">
               <Badge variant="outline" aria-label={`Project status: ${statusLabels[project.status]}`}>
                 {statusLabels[project.status]}
               </Badge>
