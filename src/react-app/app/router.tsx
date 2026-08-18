@@ -11,6 +11,7 @@ import { ProjectDetailPage } from "@/app/pages/project-detail-page";
 import { ProjectsPage } from "@/app/pages/projects-page";
 import { AccessPendingPage } from "@/app/pages/access-pending-page";
 import { MyProjectsPage } from "@/app/pages/my-projects-page";
+import { ProjectOverviewPage } from "@/app/pages/project-overview-page";
 
 import { ProtectedLayout } from "@/features/auth/components/protected-layout";
 
@@ -73,6 +74,10 @@ export const router = createBrowserRouter([
       },
       {
         path: "/projects/:projectId",
+        element: <ProjectOverviewPage />,
+      },
+      {
+        path: "/projects/:projectId/settings",
         element: <ProjectDetailPage />,
       },
       {

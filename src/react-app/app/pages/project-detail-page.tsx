@@ -243,9 +243,9 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
 
       {canArchive ? (
         <div className="rounded-lg border border-destructive/20 p-5">
-          <p className="text-sm font-medium">Archive project</p>
+          <p className="text-sm font-medium">Delete project</p>
 
-          <p className="mt-1 text-sm text-muted-foreground">Archived projects are removed from active project views.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Deleted projects are removed from active project views. The current delete behavior archives project data instead of permanently removing it.</p>
 
           {archiveProject.isError ? <p className="mt-3 text-sm text-destructive">{archiveProject.error.message}</p> : null}
 
@@ -254,8 +254,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
             variant="destructive"
             disabled={archiveProject.isPending}
             onClick={() => {
-              const confirmed = window.confirm(`Archive ${project.name}?`);
-
+              const confirmed = window.confirm(`Delete ${project.name}? This removes the project from active project views.`);
               if (!confirmed) {
                 return;
               }
@@ -269,7 +268,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
               });
             }}
           >
-            {archiveProject.isPending ? "Archiving…" : "Archive project"}
+            {archiveProject.isPending ? "Deleting…" : "Delete project"}
           </Button>
         </div>
       ) : null}
@@ -410,16 +409,16 @@ export function ProjectDetailPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <Link to="/projects" className="text-sm text-muted-foreground hover:text-foreground">
-              Projects
-            </Link>
-
+            <Link to={`/projects/${projectId}`}>Overview</Link>
             <div className="mt-3 flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight">{project?.name ?? "Project"}</h1>
-
+              <h1 className="text-xl font-semibold tracking-tight">Project Settings</h1>
               {project?.visibility === "private" ? <span className="rounded-full border border-border px-2 py-1 text-[10px] font-medium">Private</span> : null}
             </div>
-            {project ? <p className="mt-1 text-sm text-muted-foreground">{project.client.name}</p> : null}
+            {project ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {project.name} · {project.client.name}
+              </p>
+            ) : null}
           </div>
 
           {project ? (
