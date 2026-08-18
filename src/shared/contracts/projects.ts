@@ -3,10 +3,26 @@ import * as z from "zod";
 import { projectVisibilitySchema, type ProjectVisibility } from "../project-privacy";
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
+export const projectEngagementTypeSchema = z.enum(["project", "retainer"]);
+
+export const projectCodeOverrideSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(8)
+  .regex(/^[A-Za-z0-9]+$/)
+  .transform((value) => value.toUpperCase());
+
 export const createProjectSchema = z.object({
   clientId: z.string().trim().min(1),
   name: z.string().trim().min(1).max(160),
+
+  projectCodeOverride: projectCodeOverrideSchema.optional(),
+
+  engagementType: projectEngagementTypeSchema.optional(),
+
   visibility: projectVisibilitySchema.optional(),
+
   description: z.string().trim().max(5000).optional(),
 });
 
@@ -25,6 +41,9 @@ export const updateProjectSchema = z
   .object({
     clientId: z.string().trim().min(1).optional(),
     name: z.string().trim().min(1).max(160).optional(),
+    projectCodeOverride: projectCodeOverrideSchema.nullable().optional(),
+    engagementType: projectEngagementTypeSchema.optional(),
+    leadUserId: z.string().trim().min(1).nullable().optional(),
     description: z.string().trim().max(5000).nullable().optional(),
     visibility: projectVisibilitySchema.optional(),
     status: projectStatusSchema.optional(),
@@ -36,27 +55,28 @@ export const updateProjectSchema = z
     message: "At least one field is required",
   });
 
+export type ProjectEngagementType = z.infer<typeof projectEngagementTypeSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
-
 export type ArchiveProjectResponse = {
   data: {
     success: true;
   };
 };
+
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
-
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
-
 export type ProjectDto = {
   id: string;
-
   client: {
     id: string;
     name: string;
   };
-
   name: string;
+  projectCode: string;
+  projectCodeOverride: string | null;
   description: string | null;
+  engagementType: ProjectEngagementType;
+  leadUserId: string | null;
   visibility: ProjectVisibility;
   status: ProjectStatus;
   startDate: string | null;

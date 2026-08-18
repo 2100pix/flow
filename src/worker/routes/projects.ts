@@ -6,6 +6,7 @@ import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../..
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
 import { canCreateProjectWithVisibility, canManageProjectMembers, canManageProjectVisibility } from "../../shared/project-privacy";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowDto, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
+import { deriveProjectCode, resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
 import { clients, projectMembers, projectTaskStatuses, projects, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
@@ -53,9 +54,11 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
 
       clientId: clients.id,
       clientName: clients.name,
-
+      leadUserId: projects.leadUserId,
       name: projects.name,
+      projectCodeOverride: projects.projectCodeOverride,
       description: projects.description,
+      engagementType: projects.engagementType,
       visibility: projects.visibility,
       status: projects.status,
       startDate: projects.startDate,
@@ -80,7 +83,11 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
     },
 
     name: project.name,
+    projectCode: resolveProjectCode(project.name, project.projectCodeOverride),
+    projectCodeOverride: project.projectCodeOverride,
     description: project.description,
+    engagementType: project.engagementType,
+    leadUserId: project.leadUserId,
     visibility: project.visibility,
     status: project.status,
     startDate: project.startDate,
@@ -154,22 +161,25 @@ projectsRoutes.post(
     const id = createId("prj");
 
     const now = new Date();
-
+    const engagementType = input.engagementType ?? "project";
     const projectInsert = db.insert(projects).values({
       id,
       workspaceId: auth.workspace.id,
       clientId: client.id,
+      leadUserId: null,
       name: input.name,
+      projectCodeOverride: input.projectCodeOverride ?? null,
       description: input.description ?? null,
+      engagementType,
       visibility,
       status: "planning",
       startDate: null,
       dueDate: null,
       discordChannelUrl: null,
-
       createdAt: now,
       updatedAt: now,
     });
+
     const workflowInsert = db.insert(projectTaskStatuses).values(
       defaultTaskWorkflowStatuses.map((status) => ({
         projectId: id,
@@ -195,6 +205,8 @@ projectsRoutes.post(
       await db.batch([projectInsert, workflowInsert]);
     }
 
+    const projectCodeOverride = input.projectCodeOverride ?? null;
+
     const data: ProjectDto = {
       id,
 
@@ -202,9 +214,12 @@ projectsRoutes.post(
         id: client.id,
         name: client.name,
       },
-
       name: input.name,
+      projectCode: resolveProjectCode(input.name, projectCodeOverride),
+      projectCodeOverride,
       description: input.description ?? null,
+      engagementType,
+      leadUserId: null,
       visibility,
       status: "planning",
       startDate: null,
@@ -281,6 +296,7 @@ projectsRoutes.get("/:id/task-workflow", requireAuth, requirePermission("tasks.v
     data,
   });
 });
+
 projectsRoutes.patch("/:id/task-workflow", requireAuth, requirePermission("tasks.edit"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
@@ -437,7 +453,10 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
       startDate: projects.startDate,
       dueDate: projects.dueDate,
       discordChannelUrl: projects.discordChannelUrl,
+      leadUserId: projects.leadUserId,
+      projectCodeOverride: projects.projectCodeOverride,
 
+      engagementType: projects.engagementType,
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
     })
@@ -467,7 +486,11 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     },
 
     name: project.name,
+    projectCode: resolveProjectCode(project.name, project.projectCodeOverride),
+    projectCodeOverride: project.projectCodeOverride,
     description: project.description,
+    engagementType: project.engagementType,
+    leadUserId: project.leadUserId,
     visibility: project.visibility,
     status: project.status,
     startDate: project.startDate,
@@ -486,11 +509,8 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
 
 projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), async (c) => {
   const auth = c.var.auth;
-
   const projectId = c.req.param("id");
-
   const db = createDb(c.env.flow_db);
-
   const access = await findAccessibleProject(db, auth, projectId);
 
   if (!access) {
@@ -530,6 +550,9 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       clientName: clients.name,
 
       name: projects.name,
+      leadUserId: projects.leadUserId,
+      projectCodeOverride: projects.projectCodeOverride,
+      engagementType: projects.engagementType,
       description: projects.description,
       visibility: projects.visibility,
       status: projects.status,
@@ -616,26 +639,59 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
   }
 
   const now = new Date();
-
   const name = input.name ?? project.name;
-
   const description = input.description !== undefined ? input.description : project.description;
-
   const status = input.status ?? project.status;
-
   const discordChannelUrl = input.discordChannelUrl !== undefined ? input.discordChannelUrl : project.discordChannelUrl;
+  const projectCodeOverride = input.projectCodeOverride !== undefined ? input.projectCodeOverride : project.projectCodeOverride;
+  const engagementType = input.engagementType ?? project.engagementType;
+  const leadUserId = input.leadUserId !== undefined ? input.leadUserId : project.leadUserId;
+
+  if (input.leadUserId !== undefined && input.leadUserId !== null) {
+    const [leadMember] = await db
+      .select({
+        userId: projectMembers.userId,
+      })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, input.leadUserId)))
+      .limit(1);
+
+    if (!leadMember) {
+      return c.json(
+        {
+          error: {
+            code: "PROJECT_LEAD_NOT_MEMBER",
+            message: "Project lead must be a current project member",
+          },
+        },
+        409,
+      );
+    }
+  }
 
   await db
     .update(projects)
     .set({
       clientId: selectedClient.id,
+
+      leadUserId,
+
       name,
+
+      projectCodeOverride,
+
       description,
+
+      engagementType,
+
       visibility,
       status,
+
       startDate,
       dueDate,
+
       discordChannelUrl,
+
       updatedAt: now,
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
@@ -644,7 +700,13 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
     id: project.id,
 
     client: selectedClient,
+    projectCode: resolveProjectCode(name, projectCodeOverride),
 
+    projectCodeOverride,
+
+    engagementType,
+
+    leadUserId,
     name,
     description,
     visibility,
@@ -948,7 +1010,19 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
   }
 
   await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  const now = new Date();
 
+  await db.batch([
+    db
+      .update(projects)
+      .set({
+        leadUserId: null,
+        updatedAt: now,
+      })
+      .where(and(eq(projects.id, projectId), eq(projects.leadUserId, userId))),
+
+    db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
+  ]);
   return c.json({
     data: {
       success: true as const,
