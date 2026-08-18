@@ -2,7 +2,18 @@
 
 ## Goal
 
-Project Overview adalah read-oriented landing page untuk satu project.
+Project Overview adalah read-first landing page untuk satu project.
+
+Overview mendukung limited inline editing untuk project identity:
+
+- Project Name
+- Description
+
+Overview bukan full configuration surface.
+
+Metadata dan configuration lain tetap dikelola melalui:
+
+`/projects/:projectId/settings`
 
 Route canonical:
 
@@ -14,7 +25,7 @@ Overview harus memungkinkan user memahami secara cepat:
 2. status dan context project
 3. siapa yang menjalankan project
 4. di mana komunikasi project berlangsung
-5. timeline dan engagement project
+5. Project Details dan engagement project
 6. resources penting yang terkait dengan project
 
 Overview bukan configuration surface.
@@ -49,7 +60,7 @@ Collaboration:
 
 Project Context:
 
-- Timeline
+- Project Details
 - Client
 - Engagement
 
@@ -68,8 +79,12 @@ Tidak termasuk:
 - time tracking
 - realtime presence
 - project analytics
-- editing forms
 - key-resource persistence
+
+Inline Identity Editing:
+
+- Project Name
+- Description
 
 ---
 
@@ -90,7 +105,7 @@ Lead avatar + name
                                   Channel Chat
                                   Open Discord
 
-Timeline
+Project Details
 
 Start date Due date
 Date Date / Ongoing / Not set
@@ -124,7 +139,7 @@ Desktop:
 - identity menjadi primary column
 - collaboration menjadi narrow right rail
 - Status berada di kanan atas
-- Timeline dan project context berada di bawah hero
+- Project Details dan project context berada di bawah hero
 
 Mobile:
 
@@ -134,7 +149,7 @@ Mobile:
 - Lead Project
 - Members
 - Channel Chat
-- Timeline
+- Project Details
 - Client / Engagement
 - Key Resources
 
@@ -213,7 +228,7 @@ mewajibkan Client.
 
 ---
 
-# 6. Timeline
+# 6. Project Details
 
 Current project dates tetap:
 
@@ -238,12 +253,12 @@ Due date null + engagement `project`:
 
 `dueDate = null` tidak otomatis berarti Ongoing.
 
-Timeline display:
+Project Details display:
 
 Start date Due date
 Jul 7, 2026 Ongoing
 
-Timeline harus menggunakan local compact grid.
+Project Details harus menggunakan local compact grid.
 Start dan Due tidak dipisahkan menggunakan full page width.
 
 ---
@@ -420,22 +435,49 @@ project access yang sama.
 
 # 14. Mutation Ownership
 
-Overview adalah read-only.
+Project Overview menggunakan read-first interaction model.
 
-Mutation dilakukan melalui Project Settings.
+Limited inline mutation pada Overview:
 
-Project metadata mutation memerlukan:
+- Project Name
+- Description
+
+Keduanya membutuhkan:
 
 `projects.edit`
 
-Lead assignment:
+User tanpa `projects.edit` melihat value sebagai read-only.
 
-- caller harus dapat edit project
-- selected Lead harus existing project member
-- setting Lead tidak mengubah project membership
+Project Settings tetap menjadi configuration surface untuk:
 
-Member management tetap menggunakan existing
-project-member authorization rules.
+- Client
+- Project Code override
+- Engagement
+- Lead Project
+- Status
+- Visibility
+- Start date
+- Due date
+- Channel Chat
+- Members
+- Task workflow
+
+Inline Overview editing tidak menggantikan Project Settings.
+
+Name mutation menggunakan existing project update endpoint.
+
+Description mutation menggunakan existing project update endpoint.
+
+Empty description untuk user yang dapat edit menampilkan:
+
+`Add a description`
+
+Key Resources belum memiliki persistence model dan tetap non-interactive
+pada milestone ini.
+
+Empty Key Resources menampilkan:
+
+`Add a brief, links, more`
 
 ---
 
@@ -545,9 +587,13 @@ Project unavailable:
 
 - existing project error/not-found semantics
 
-Description null:
+Description null + projects.edit:
 
-- jangan menampilkan fake description
+- `Add a description`
+
+Description null + read-only:
+
+- tidak perlu menampilkan fake description
 
 Lead null:
 
@@ -575,7 +621,10 @@ Retainer due date null:
 
 Key Resources empty:
 
-- `No key resources yet`
+- `Add a brief, links, more`
+
+Placeholder tersebut presentation-only sampai resource persistence
+diimplementasikan.
 
 ---
 

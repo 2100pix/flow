@@ -1,3 +1,9 @@
+import { useState } from "react";
+
+import { useMe } from "@/features/auth/hooks/use-me";
+import { hasPermission } from "@/features/auth/permissions";
+import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useParams } from "react-router";
 
@@ -97,12 +103,161 @@ function OverviewSkeleton() {
   );
 }
 
+function ProjectIdentityEditor({ projectId, name, description, canEdit }: { projectId: string; name: string; description: string | null; canEdit: boolean }) {
+  const updateProject = useUpdateProject();
+
+  const [editingName, setEditingName] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+
+  const [nextName, setNextName] = useState(name);
+  const [nextDescription, setNextDescription] = useState(description ?? "");
+
+  function saveName() {
+    const value = nextName.trim();
+
+    if (!value) {
+      setNextName(name);
+      setEditingName(false);
+      return;
+    }
+
+    if (value === name) {
+      setEditingName(false);
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId,
+        input: {
+          name: value,
+        },
+      },
+      {
+        onSuccess: () => {
+          setEditingName(false);
+        },
+      },
+    );
+  }
+
+  function saveDescription() {
+    const value = nextDescription.trim();
+
+    if (value === (description ?? "")) {
+      setEditingDescription(false);
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId,
+        input: {
+          description: value || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setEditingDescription(false);
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="min-w-0">
+      {editingName && canEdit ? (
+        <input
+          autoFocus
+          value={nextName}
+          maxLength={160}
+          disabled={updateProject.isPending}
+          aria-label="Project name"
+          onChange={(event) => {
+            setNextName(event.target.value);
+          }}
+          onBlur={saveName}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+
+            if (event.key === "Escape") {
+              setNextName(name);
+              setEditingName(false);
+            }
+          }}
+          className="min-w-0 w-full max-w-2xl border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
+        />
+      ) : canEdit ? (
+        <button
+          type="button"
+          onClick={() => {
+            setNextName(name);
+            setEditingName(true);
+          }}
+          className="min-w-0 break-words text-left text-2xl font-semibold tracking-tight outline-none md:text-3xl"
+        >
+          {name}
+        </button>
+      ) : (
+        <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{name}</h1>
+      )}
+
+      {editingDescription && canEdit ? (
+        <textarea
+          autoFocus
+          value={nextDescription}
+          maxLength={5000}
+          rows={3}
+          disabled={updateProject.isPending}
+          aria-label="Project description"
+          placeholder="Add a description"
+          onChange={(event) => {
+            setNextDescription(event.target.value);
+          }}
+          onBlur={saveDescription}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setNextDescription(description ?? "");
+              setEditingDescription(false);
+            }
+
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
+          className="mt-4 w-full max-w-2xl resize-none border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground/60"
+        />
+      ) : canEdit ? (
+        <button
+          type="button"
+          onClick={() => {
+            setNextDescription(description ?? "");
+            setEditingDescription(true);
+          }}
+          className="mt-4 block max-w-2xl break-words text-left text-sm leading-6 text-muted-foreground outline-none"
+        >
+          {description || <span className="text-muted-foreground/60">Add a description</span>}
+        </button>
+      ) : description ? (
+        <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{description}</p>
+      ) : null}
+
+      {updateProject.isError ? <p className="mt-2 text-xs text-destructive">{updateProject.error.message}</p> : null}
+    </div>
+  );
+}
+
 export function ProjectOverviewPage() {
   const { projectId } = useParams();
-
+  const { data: auth } = useMe();
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
-
   const { data: projectMembers = [], isPending: membersPending, isError: membersError } = useProjectMembers(projectId ?? "", Boolean(projectId));
+
+  const canEdit = hasPermission(auth, "projects.edit");
 
   if (!projectId) {
     return null;
@@ -148,18 +303,17 @@ export function ProjectOverviewPage() {
 
         <section className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{project.name}</h1>
+            <div className="flex flex-wrap items-start gap-3">
+              <ProjectIdentityEditor key={`${project.id}:${project.updatedAt}`} projectId={project.id} name={project.name} description={project.description} canEdit={canEdit} />
 
-              <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
+              <Badge variant="outline" className="mt-1 font-mono text-[11px] tracking-wide text-muted-foreground">
                 {project.projectCode}
               </Badge>
-              <Badge variant="outline" className="lg:hidden" aria-label={`Project status: ${statusLabels[project.status]}`}>
+
+              <Badge variant="outline" className="mt-1 lg:hidden" aria-label={`Project status: ${statusLabels[project.status]}`}>
                 {statusLabels[project.status]}
               </Badge>
             </div>
-
-            {project.description ? <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{project.description}</p> : null}
           </div>
           <div className="lg:relative">
             <div className="hidden lg:absolute lg:right-0 lg:top-0 lg:block">
@@ -238,8 +392,7 @@ export function ProjectOverviewPage() {
         </section>
 
         <section className="mt-20">
-          <h2 className="text-sm font-medium">Timeline</h2>
-
+          <h2 className="text-base font-medium tracking-tight">Project Details</h2>
           <div className="mt-5 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Start date</p>
@@ -267,9 +420,8 @@ export function ProjectOverviewPage() {
         </section>
 
         <section className="mt-20 pb-12">
-          <h2 className="text-sm font-medium">Key resources</h2>
-
-          <p className="mt-3 text-sm text-muted-foreground">No key resources yet</p>
+          <h2 className="text-base font-medium tracking-tight">Key resources</h2>
+          <p className="mt-3 text-sm text-muted-foreground/60">Add a brief, links, more</p>{" "}
         </section>
       </div>
     </div>
