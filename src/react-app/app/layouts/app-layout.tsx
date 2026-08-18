@@ -75,7 +75,21 @@ function NavigationLink({ item }: { item: NavigationItem }) {
 
 function QuickCreateButton({ to, label }: { to: string; label: string }) {
   return (
-    <Link to={to} aria-label={label} title={label} className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+    <Link
+      to={to}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md",
+        "text-sidebar-foreground/50",
+        "transition-[opacity,color,background-color] duration-150",
+        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        "opacity-100",
+        "md:pointer-events-none md:opacity-0",
+        "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
+        "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+      )}
+    >
       <PlusIcon size={14} />
     </Link>
   );
@@ -83,7 +97,8 @@ function QuickCreateButton({ to, label }: { to: string; label: string }) {
 
 function SectionHeader({ label, expanded, onToggle, action }: { label: string; expanded: boolean; onToggle: () => void; action?: ReactNode }) {
   return (
-    <div className="mb-1 flex h-7 items-center">
+    <div className="group mb-1 flex h-7 items-center">
+      {" "}
       <button
         type="button"
         aria-expanded={expanded}
@@ -92,9 +107,7 @@ function SectionHeader({ label, expanded, onToggle, action }: { label: string; e
       >
         {label}
       </button>
-
       {action}
-
       <button
         type="button"
         aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
@@ -138,7 +151,16 @@ function ProjectNavigation({ project, expanded, active, canEdit, canArchive, onT
           type="button"
           aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
           aria-expanded={expanded}
-          className="flex size-7 shrink-0 items-center justify-center text-sidebar-foreground/40 transition-colors hover:text-sidebar-accent-foreground"
+          className={cn(
+            "flex size-7 shrink-0 items-center justify-center",
+            "text-sidebar-foreground/40",
+            "transition-[opacity,color] duration-150",
+            "hover:text-sidebar-accent-foreground",
+            "opacity-100",
+            "md:pointer-events-none md:opacity-0",
+            "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
+            "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+          )}
           onClick={onToggle}
         >
           <CaretDownIcon size={12} className={cn("transition-transform duration-200", !expanded && "-rotate-90")} />
@@ -575,6 +597,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           <button
             type="button"
             aria-label="Close navigation"
+            tabIndex={mobileSidebarOpen ? 0 : -1}
             className={cn("absolute inset-0 bg-black/30 transition-opacity duration-200 ease-out", mobileSidebarOpen ? "opacity-100" : "opacity-0")}
             onClick={() => {
               setMobileSidebarOpen(false);
