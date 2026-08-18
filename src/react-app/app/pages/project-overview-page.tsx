@@ -146,21 +146,29 @@ export function ProjectOverviewPage() {
           </BreadcrumbList>
         </Breadcrumb>
 
-        <section className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
+        <section className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl">{project.name}</h1>
+              <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{project.name}</h1>
 
               <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
                 {project.projectCode}
               </Badge>
+              <Badge variant="outline" className="lg:hidden" aria-label={`Project status: ${statusLabels[project.status]}`}>
+                {statusLabels[project.status]}
+              </Badge>
             </div>
 
-            {project.description ? <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">{project.description}</p> : null}
+            {project.description ? <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{project.description}</p> : null}
           </div>
+          <div className="lg:relative">
+            <div className="hidden lg:absolute lg:right-0 lg:top-0 lg:block">
+              <Badge variant="outline" aria-label={`Project status: ${statusLabels[project.status]}`}>
+                {statusLabels[project.status]}
+              </Badge>
+            </div>
 
-          <div className="relative">
-            <div className="absolute right-0 top-0">
+            <div className="space-y-8 lg:pt-12">
               <Badge variant="outline">{statusLabels[project.status]}</Badge>
             </div>
 
@@ -171,16 +179,19 @@ export function ProjectOverviewPage() {
                 <div className="mt-2">
                   {membersPending ? (
                     <Skeleton className="h-8 w-32" />
+                  ) : membersError ? (
+                    <p className="text-sm text-muted-foreground">Unable to load lead</p>
                   ) : lead ? (
                     <div className="flex items-center gap-2.5">
-                      <Avatar className="size-7">
-                        {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt={lead.user.displayName} /> : null}
+                      <Avatar size="sm" role="img" aria-label={lead.user.displayName} title={lead.user.displayName}>
+                        {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
 
                         <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
                       </Avatar>
-
                       <span className="text-sm font-medium">{lead.user.displayName}</span>
                     </div>
+                  ) : project.leadUserId ? (
+                    <p className="text-sm text-muted-foreground">Unavailable</p>
                   ) : (
                     <p className="text-sm text-muted-foreground">Unassigned</p>
                   )}
@@ -200,14 +211,13 @@ export function ProjectOverviewPage() {
                   ) : (
                     <AvatarGroup>
                       {visibleMembers.map((member) => (
-                        <Avatar key={member.user.id} className="size-7" title={member.user.displayName}>
+                        <Avatar key={member.user.id} size="sm" role="img" aria-label={member.user.displayName} title={member.user.displayName}>
                           {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={member.user.displayName} /> : null}
-
                           <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
                         </Avatar>
                       ))}
 
-                      {remainingMembers > 0 ? <AvatarGroupCount>+{remainingMembers}</AvatarGroupCount> : null}
+                      {remainingMembers > 0 ? <AvatarGroupCount className="size-6 text-xs">+{remainingMembers}</AvatarGroupCount> : null}
                     </AvatarGroup>
                   )}
                 </div>
@@ -234,13 +244,12 @@ export function ProjectOverviewPage() {
         <section className="mt-20">
           <h2 className="text-sm font-medium">Timeline</h2>
 
-          <div className="mt-5 grid max-w-md grid-cols-2 gap-x-10">
+          <div className="mt-5 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Start date</p>
 
               <p className="mt-2 text-sm">{formatProjectDate(project.startDate)}</p>
             </div>
-
             <div>
               <p className="text-xs text-muted-foreground">Due date</p>
 
@@ -248,13 +257,11 @@ export function ProjectOverviewPage() {
             </div>
           </div>
 
-          <div className="mt-10 grid max-w-md grid-cols-2 gap-x-10">
+          <div className="mt-10 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Client Name</p>
-
-              <p className="mt-2 text-sm">{project.client.name}</p>
+              <p className="mt-2 break-words text-sm">{project.client.name}</p>{" "}
             </div>
-
             <div>
               <p className="text-xs text-muted-foreground">Engagement</p>
 
