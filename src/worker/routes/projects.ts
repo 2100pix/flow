@@ -884,6 +884,7 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edi
     })
     .from(workspaceMembers)
     .innerJoin(users, eq(workspaceMembers.userId, users.id))
+    .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
     .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), eq(workspaceMembers.userId, input.userId)))
     .limit(1);
 
