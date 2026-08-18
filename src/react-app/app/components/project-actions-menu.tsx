@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DotsThreeIcon, GearSixIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
@@ -208,7 +209,15 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
         aria-label={`Actions for ${project.name}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:text-sidebar-accent-foreground"
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-md",
+          "text-sidebar-foreground/40 transition-[opacity,color] duration-150",
+          "hover:text-sidebar-accent-foreground",
+          "opacity-100",
+          "md:pointer-events-none md:opacity-0",
+          "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
+          "md:group-focus-within:pointer-events-auto md:group-focus-within:opacity-100",
+        )}
         onClick={(event) => {
           event.stopPropagation();
           toggleMenu();
