@@ -15,7 +15,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import { useProject } from "@/features/projects/hooks/use-project";
 
-import { PROJECT_DESCRIPTION_MAX_LENGTH, type ProjectStatus } from "@/features/projects/types";
+import { type ProjectStatus } from "@/features/projects/types";
+
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
 
 const statusLabels: Record<ProjectStatus, string> = {
   planning: "Planning",

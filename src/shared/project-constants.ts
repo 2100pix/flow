@@ -1,0 +1,1 @@
+export const PROJECT_DESCRIPTION_MAX_LENGTH = 160;

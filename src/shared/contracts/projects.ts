@@ -1,10 +1,10 @@
 import * as z from "zod";
 
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "../project-constants";
 import { projectVisibilitySchema, type ProjectVisibility } from "../project-privacy";
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const projectEngagementTypeSchema = z.enum(["project", "retainer"]);
-export const PROJECT_DESCRIPTION_MAX_LENGTH = 160;
 
 export const projectDescriptionSchema = z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH);
 
