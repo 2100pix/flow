@@ -293,7 +293,6 @@ export const projects = sqliteTable(
   "projects",
   {
     id: text("id").primaryKey(),
-
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, {
@@ -306,10 +305,18 @@ export const projects = sqliteTable(
         onDelete: "restrict",
       }),
 
+    leadUserId: text("lead_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
     name: text("name").notNull(),
-
+    projectCodeOverride: text("project_code_override"),
     description: text("description"),
-
+    engagementType: text("engagement_type", {
+      enum: ["project", "retainer"],
+    })
+      .default("project")
+      .notNull(),
     visibility: text("visibility", {
       enum: ["workspace", "private"],
     })
@@ -321,9 +328,7 @@ export const projects = sqliteTable(
     }).notNull(),
 
     startDate: text("start_date"),
-
     dueDate: text("due_date"),
-
     discordChannelUrl: text("discord_channel_url"),
 
     createdAt: integer("created_at", {
@@ -340,11 +345,11 @@ export const projects = sqliteTable(
   },
   (table) => [
     index("projects_workspace_id_idx").on(table.workspaceId),
-
     index("projects_client_id_idx").on(table.clientId),
+    index("projects_lead_user_id_idx").on(table.leadUserId),
 
+    check("projects_engagement_type_check", sql`${table.engagementType} in ('project', 'retainer')`),
     check("projects_visibility_check", sql`${table.visibility} in ('workspace', 'private')`),
-
     check("projects_status_check", sql`${table.status} in ('planning', 'active', 'on_hold', 'completed')`),
   ],
 );
