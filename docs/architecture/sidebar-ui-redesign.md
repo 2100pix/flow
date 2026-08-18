@@ -692,16 +692,17 @@ Settings
 menjadi workspace-oriented hierarchical navigation:
 
 Home
+My Projects
 
-SPACE
-Project A
-│
-├─ Overview
-└─ Task List
+SPACE [+] [v]
 
-Project B
+[Folder] Project A [v]
+│ [Overview Icon] Overview
+│ [Task Icon] Task List
 
-DATABASE
+[Folder] Project B [>]
+
+DATABASE [v]
 Clients
 Members
 
@@ -731,3 +732,27 @@ Desktop sidebar:
 - max 360px
 - <=184px on resize release collapses sidebar
 - saved width restored when reopened
+
+My Projects:
+
+- top-level navigation item
+- directly below Home
+- route /my-projects
+- current milestone uses placeholder page only
+- future project-assignment/filtering semantics deferred
+- visible with projects.view for now
+
+Project tree:
+
+- vertical connector only
+- no horizontal branch connectors
+- Overview has icon
+- Task List has icon
+
+Sidebar resize:
+
+- visible width never renders below 208px while dragging
+- pointer may continue left beyond 208px
+- 185–207px raw drag keeps visual sidebar at 208px
+- <=184px raw drag on release collapses sidebar
+- reopening restores width from before collapse

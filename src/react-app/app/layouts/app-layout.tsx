@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, PlusIcon, SidebarSimpleIcon, UsersIcon } from "@phosphor-icons/react";
+import { BriefcaseIcon, BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, ListChecksIcon, PlusIcon, SidebarSimpleIcon, SquaresFourIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
@@ -30,6 +30,11 @@ const homeNavigationItem: NavigationItem = {
   label: "Home",
   href: "/",
   icon: HouseIcon,
+};
+const myProjectsNavigationItem: NavigationItem = {
+  label: "My Projects",
+  href: "/my-projects",
+  icon: BriefcaseIcon,
 };
 
 const clientsNavigationItem: NavigationItem = {
@@ -131,35 +136,27 @@ function ProjectNavigation({ project, expanded, active, onToggle }: { project: P
       </button>
 
       <CollapsibleRegion open={expanded}>
-        <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/70 pb-1 pl-3">
+        <div className="ml-[18px] space-y-0.5 border-l border-sidebar-border/60 pb-1 pl-2.5">
           <NavLink
             to={`/projects/${project.id}`}
             end
             className={({ isActive }) =>
-              cn(
-                "relative flex h-7 items-center rounded-md px-2 text-xs transition-colors",
-                "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "before:absolute before:-left-3 before:top-1/2 before:h-px before:w-3 before:bg-sidebar-border before:content-['']",
-                isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
-              )
+              cn("flex h-7 items-center gap-2 rounded-md px-2 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
             }
           >
-            Overview
+            <SquaresFourIcon size={14} weight="regular" className="shrink-0" />
+            <span>Overview</span>
           </NavLink>
-
           <NavLink
             to={`/projects/${project.id}/board`}
             end
             className={({ isActive }) =>
-              cn(
-                "relative flex h-7 items-center rounded-md px-2 text-xs transition-colors",
-                "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "before:absolute before:-left-3 before:top-1/2 before:h-px before:w-3 before:bg-sidebar-border before:content-['']",
-                isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
-              )
+              cn("flex h-7 items-center gap-2 rounded-md px-2 text-xs transition-colors", "text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground")
             }
           >
-            Task List
+            <ListChecksIcon size={14} weight="regular" className="shrink-0" />
+
+            <span>Task List</span>
           </NavLink>
         </div>
       </CollapsibleRegion>
@@ -296,6 +293,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
   const sidebarWidthRef = useRef(sidebarWidth);
   const sidebarResizeStartWidthRef = useRef(sidebarWidth);
+  const sidebarResizeRawWidthRef = useRef(sidebarWidth);
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
     if (sidebarHidden) {
@@ -304,6 +302,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
     sidebarResizeStartWidthRef.current = sidebarWidth;
     sidebarWidthRef.current = sidebarWidth;
+    sidebarResizeRawWidthRef.current = sidebarWidth;
 
     setSidebarResizing(true);
 
@@ -315,11 +314,14 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       return;
     }
 
-    const nextWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(0, event.clientX));
+    const rawWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(0, event.clientX));
 
-    sidebarWidthRef.current = nextWidth;
+    const visualWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, rawWidth));
 
-    setSidebarWidth(nextWidth);
+    sidebarResizeRawWidthRef.current = rawWidth;
+    sidebarWidthRef.current = visualWidth;
+
+    setSidebarWidth(visualWidth);
   }
 
   function finishSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -333,12 +335,12 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
     setSidebarResizing(false);
 
-    const currentWidth = sidebarWidthRef.current;
+    const rawWidth = sidebarResizeRawWidthRef.current;
 
-    if (currentWidth <= SIDEBAR_COLLAPSE_THRESHOLD) {
+    if (rawWidth <= SIDEBAR_COLLAPSE_THRESHOLD) {
       const restoreWidth = sidebarResizeStartWidthRef.current;
-
       sidebarWidthRef.current = restoreWidth;
+      sidebarResizeRawWidthRef.current = restoreWidth;
 
       setSidebarWidth(restoreWidth);
       setSidebarHidden(true);
@@ -348,12 +350,10 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
       return;
     }
 
-    const normalizedWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, currentWidth));
+    const normalizedWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, sidebarWidthRef.current));
 
     sidebarWidthRef.current = normalizedWidth;
-
     setSidebarWidth(normalizedWidth);
-
     window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(normalizedWidth));
   }
 
@@ -451,11 +451,11 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           }
         }}
       >
-        {canViewHome && (
-          <div className="space-y-1">
-            <NavigationLink item={homeNavigationItem} />
-          </div>
-        )}
+        <div className="space-y-1">
+          {canViewHome && <NavigationLink item={homeNavigationItem} />}
+
+          {canViewProjects && <NavigationLink item={myProjectsNavigationItem} />}
+        </div>
 
         <SpaceNavigation
           projects={projects}
