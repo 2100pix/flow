@@ -42,12 +42,12 @@ export const updateProjectSchema = z
     name: z.string().trim().min(1).max(160).optional(),
     projectCodeOverride: projectCodeOverrideSchema.nullable().optional(),
     engagementType: projectEngagementTypeSchema.optional(),
-    leadUserId: z.string().trim().min(1).nullable().optional(),
     description: projectDescriptionSchema.nullable().optional(),
     visibility: projectVisibilitySchema.optional(),
     status: projectStatusSchema.optional(),
     startDate: z.iso.date().nullable().optional(),
     dueDate: z.iso.date().nullable().optional(),
+    dueDateMode: projectDueDateModeSchema.optional(),
     discordChannelUrl: discordChannelUrlSchema.nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
@@ -81,6 +81,7 @@ export type ProjectDto = {
   status: ProjectStatus;
   startDate: string | null;
   dueDate: string | null;
+  dueDateMode: ProjectDueDateMode;
   discordChannelUrl: string | null;
   createdAt: string;
   updatedAt: string;

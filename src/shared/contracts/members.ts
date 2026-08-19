@@ -64,6 +64,8 @@ export type MembersResponse = {
 export type ProjectMemberDto = {
   user: MemberDto;
   addedAt: string;
+  isLead: boolean;
+  leadPosition: number | null;
 };
 
 export type ProjectMembersResponse = {
