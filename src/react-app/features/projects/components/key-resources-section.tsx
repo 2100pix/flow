@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { useCreateProjectResource, useDeleteProjectResource, useProjectResources, useUpdateProjectResource } from "../hooks/use-project-resources";
 
@@ -290,31 +291,37 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
         </div>
 
         {canEdit ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Add key resource" />}>
-              <PlusIcon aria-hidden="true" />
-            </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger render={<div className="inline-flex" />}>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Add key resource" />}>
+                  <PlusIcon aria-hidden="true" />
+                </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => {
-                  openCreate("document_brief");
-                }}
-              >
-                <FileTextIcon aria-hidden="true" />
-                Document Brief
-              </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      openCreate("document_brief");
+                    }}
+                  >
+                    <FileTextIcon aria-hidden="true" />
+                    Document Brief
+                  </DropdownMenuItem>
 
-              <DropdownMenuItem
-                onClick={() => {
-                  openCreate("link");
-                }}
-              >
-                <LinkIcon aria-hidden="true" />
-                Link
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      openCreate("link");
+                    }}
+                  >
+                    <LinkIcon aria-hidden="true" />
+                    Link
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TooltipTrigger>
+
+            <TooltipContent side="top">Add resource</TooltipContent>
+          </Tooltip>
         ) : null}
       </div>
       {isPending ? (
@@ -334,7 +341,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
       ) : (
         <div className="mt-5 space-y-2">
           {resources.map((resource) => (
-            <div key={resource.id} className="flex min-w-0 items-start gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40">
+            <div key={resource.id} className="group/resource flex min-w-0 items-start gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40">
               <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                 {resource.type === "document_brief" ? <FileTextIcon className="size-4" aria-hidden="true" /> : <LinkIcon className="size-4" aria-hidden="true" />}
               </div>
@@ -349,44 +356,68 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
                   </p>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="pointer-events-none flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/resource:pointer-events-auto group-hover/resource:opacity-100 group-focus-within/resource:pointer-events-auto group-focus-within/resource:opacity-100">
+                {" "}
                 {resource.type === "link" && resource.url ? (
-                  <a
-                    href={resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open ${resource.title ?? "link"}`}
-                    className="inline-flex size-7 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ArrowSquareOutIcon className="size-3.5" aria-hidden="true" />
-                  </a>
-                ) : null}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <a
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${resource.title ?? "link"}`}
+                          className="inline-flex size-7 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      }
+                    >
+                      <ArrowSquareOutIcon className="size-3.5" aria-hidden="true" />
+                    </TooltipTrigger>
 
+                    <TooltipContent side="top">Open link</TooltipContent>
+                  </Tooltip>
+                ) : null}
                 {canEdit ? (
                   <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Edit ${resource.title ?? "resource"}`}
-                      onClick={() => {
-                        openEdit(resource);
-                      }}
-                    >
-                      <PencilSimpleIcon aria-hidden="true" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${resource.title ?? "resource"}`}
+                            onClick={() => {
+                              openEdit(resource);
+                            }}
+                          />
+                        }
+                      >
+                        <PencilSimpleIcon aria-hidden="true" />
+                      </TooltipTrigger>
 
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete ${resource.title ?? "resource"}`}
-                      onClick={() => {
-                        setResourceToDelete(resource);
-                      }}
-                    >
-                      <TrashIcon aria-hidden="true" />
-                    </Button>
+                      <TooltipContent side="top">Edit resource</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Delete ${resource.title ?? "resource"}`}
+                            onClick={() => {
+                              setResourceToDelete(resource);
+                            }}
+                          />
+                        }
+                      >
+                        <TrashIcon aria-hidden="true" />
+                      </TooltipTrigger>
+
+                      <TooltipContent side="top">Delete resource</TooltipContent>
+                    </Tooltip>
                   </>
                 ) : null}
               </div>
