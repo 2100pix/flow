@@ -22,6 +22,7 @@ export const permissionKeys = [
   "projects.create",
   "projects.edit",
   "projects.archive",
+  "projects.delete",
   "projects.private.create",
   "projects.private.manage",
   "projects.private.view_all",
@@ -144,6 +145,11 @@ export const permissionCatalog: Array<{
     key: "projects.archive",
     group: "Projects",
     label: "Archive projects",
+  },
+  {
+    key: "projects.delete",
+    group: "Projects",
+    label: "Delete projects permanently",
   },
   {
     key: "projects.private.create",

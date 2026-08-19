@@ -299,11 +299,9 @@ export const projects = sqliteTable(
         onDelete: "cascade",
       }),
 
-    clientId: text("client_id")
-      .notNull()
-      .references(() => clients.id, {
-        onDelete: "restrict",
-      }),
+    clientId: text("client_id").references(() => clients.id, {
+      onDelete: "restrict",
+    }),
 
     leadUserId: text("lead_user_id").references(() => users.id, {
       onDelete: "set null",
