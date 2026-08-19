@@ -13,7 +13,6 @@ export function ProjectsPage() {
   const canView = hasPermission(auth, "projects.view");
   const canCreate = hasPermission(auth, "projects.create");
   const canCreatePrivate = hasPermission(auth, "projects.private.create");
-  const canViewClients = hasPermission(auth, "clients.view");
 
   const { data: projects = [], isPending, isError } = useProjects(canView);
 
@@ -101,7 +100,7 @@ export function ProjectsPage() {
           </div>
         )}
       </div>
-      {canCreate ? <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} canViewClients={canViewClients} /> : null}
+      {canCreate ? <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} /> : null}
     </div>
   );
 }

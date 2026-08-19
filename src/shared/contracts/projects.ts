@@ -2,6 +2,8 @@ import * as z from "zod";
 
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from "../project-constants";
 import { projectVisibilitySchema, type ProjectVisibility } from "../project-privacy";
+import { projectLeadUserIdsSchema } from "./project-leads";
+
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const projectEngagementTypeSchema = z.enum(["project", "retainer"]);
@@ -17,12 +19,10 @@ export const projectCodeOverrideSchema = z
   .transform((value) => value.toUpperCase());
 
 export const createProjectSchema = z.object({
-  clientId: z.string().trim().min(1),
   name: z.string().trim().min(1).max(160),
-  projectCodeOverride: projectCodeOverrideSchema.optional(),
-  engagementType: projectEngagementTypeSchema.optional(),
-  visibility: projectVisibilitySchema.optional(),
   description: projectDescriptionSchema.optional(),
+  visibility: projectVisibilitySchema.optional(),
+  leadUserIds: projectLeadUserIdsSchema.optional(),
 });
 
 export const discordChannelUrlSchema = z.url().refine(
