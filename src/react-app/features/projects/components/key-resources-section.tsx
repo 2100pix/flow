@@ -281,7 +281,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
   }
 
   return (
-    <section className="mt-20 pb-12">
+    <section className="mt-16 pb-12">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-medium tracking-tight">Key Resources</h2>
@@ -291,7 +291,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
 
         {canEdit ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon-sm" aria-label="Add key resource" />}>
+            <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Add key resource" />}>
               <PlusIcon aria-hidden="true" />
             </DropdownMenuTrigger>
 
@@ -317,31 +317,27 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
           </DropdownMenu>
         ) : null}
       </div>
-
       {isPending ? (
         <ResourceSkeleton />
       ) : isError ? (
-        <div className="mt-5 rounded-xl border border-destructive/30 p-5">
+        <div className="mt-5 rounded-xl bg-destructive/5 p-5">
           <p className="text-sm text-destructive">Unable to load key resources.</p>
         </div>
       ) : resources.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed p-7">
+        <div className="mt-5 rounded-xl bg-muted/30 p-7">
           <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
             <FileTextIcon className="size-5 text-muted-foreground" aria-hidden="true" />
           </div>
-
           <p className="mt-4 text-sm font-medium">No key resources yet</p>
-
           <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">Add a project brief or important external links so the team has a clear starting point.</p>
         </div>
       ) : (
         <div className="mt-5 space-y-2">
           {resources.map((resource) => (
-            <div key={resource.id} className="flex min-w-0 items-start gap-3 rounded-xl border p-4">
+            <div key={resource.id} className="flex min-w-0 items-start gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40">
               <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                 {resource.type === "document_brief" ? <FileTextIcon className="size-4" aria-hidden="true" /> : <LinkIcon className="size-4" aria-hidden="true" />}
               </div>
-
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{resource.title ?? (resource.type === "document_brief" ? "Project Brief" : "Link")}</p>
 
@@ -353,7 +349,6 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
                   </p>
                 )}
               </div>
-
               <div className="flex shrink-0 items-center gap-1">
                 {resource.type === "link" && resource.url ? (
                   <a
@@ -399,7 +394,6 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
           ))}
         </div>
       )}
-
       <Dialog
         open={editor !== null}
         onOpenChange={(open) => {
@@ -489,7 +483,6 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
           </form>
         </DialogContent>
       </Dialog>
-
       <Dialog
         open={resourceToDelete !== null}
         onOpenChange={(open) => {

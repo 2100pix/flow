@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowSquareOutIcon, CalendarBlankIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useParams } from "react-router";
 
@@ -114,8 +114,8 @@ function OverviewSkeleton() {
       <div className="mx-auto max-w-6xl">
         <Skeleton className="h-4 w-32" />
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div>
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
+          <div className="min-w-0 max-w-2xl">
             <div className="flex items-center gap-3">
               <Skeleton className="h-8 w-64" />
               <Skeleton className="h-6 w-12 rounded-md" />
@@ -123,6 +123,20 @@ function OverviewSkeleton() {
 
             <Skeleton className="mt-4 h-4 w-full max-w-xl" />
             <Skeleton className="mt-2 h-4 w-2/3 max-w-md" />
+
+            <div className="mt-12">
+              <Skeleton className="h-5 w-28" />
+
+              <div className="mt-5 grid gap-8 sm:grid-cols-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+
+              <div className="mt-8 grid gap-8 sm:grid-cols-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-7">
@@ -132,23 +146,10 @@ function OverviewSkeleton() {
           </div>
         </div>
 
-        <div className="mt-20">
-          <Skeleton className="h-5 w-24" />
-
-          <div className="mt-5 grid max-w-md grid-cols-2 gap-8">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-
-          <div className="mt-10 grid max-w-md grid-cols-2 gap-8">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        </div>
-
-        <div className="mt-20">
+        <div className="mt-16 max-w-2xl">
           <Skeleton className="h-5 w-28" />
-          <Skeleton className="mt-4 h-4 w-44" />
+          <Skeleton className="mt-4 h-4 w-64" />
+          <Skeleton className="mt-5 h-14 w-full rounded-xl" />
         </div>
       </div>
     </div>
@@ -184,8 +185,7 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
     }
 
     textarea.style.height = "auto";
-
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 72)}px`;
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }, [editingDescription, nextDescription]);
 
   function saveName() {
@@ -266,34 +266,40 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-3">
         {editingName && canEdit ? (
-          <input
-            autoFocus
-            value={nextName}
-            maxLength={160}
-            disabled={updateProject.isPending}
-            aria-label="Project name"
-            onChange={(event) => {
-              setNextName(event.target.value);
-            }}
-            onBlur={saveName}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
+          <span className="inline-grid min-w-0 max-w-2xl">
+            <span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-pre text-2xl font-semibold tracking-tight md:text-3xl">
+              {nextName || " "}
+            </span>
 
-                event.currentTarget.blur();
-              }
+            <input
+              autoFocus
+              value={nextName}
+              maxLength={160}
+              disabled={updateProject.isPending}
+              aria-label="Project name"
+              onChange={(event) => {
+                setNextName(event.target.value);
+              }}
+              onBlur={saveName}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
 
-              if (event.key === "Escape") {
-                event.preventDefault();
+                  event.currentTarget.blur();
+                }
 
-                skipNameBlurRef.current = true;
+                if (event.key === "Escape") {
+                  event.preventDefault();
 
-                setNextName(name);
-                setEditingName(false);
-              }
-            }}
-            className="min-w-0 max-w-2xl border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
-          />
+                  skipNameBlurRef.current = true;
+
+                  setNextName(name);
+                  setEditingName(false);
+                }
+              }}
+              className="col-start-1 row-start-1 min-w-0 w-full border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
+            />
+          </span>
         ) : canEdit ? (
           <button
             type="button"
@@ -349,7 +355,7 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
               event.currentTarget.blur();
             }
           }}
-          className="mt-4 min-h-6 w-full max-w-2xl resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground/50"
+          className="mt-4 min-h-6 w-full max-w-2xl resize-none overflow-hidden border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground/50"
         />
       ) : canEdit ? (
         <button
@@ -568,44 +574,48 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
   const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
 
   return (
-    <select
-      aria-label="Project client"
-      value={project.client.id}
-      disabled={isPending || updateProject.isPending}
-      onChange={(event) => {
-        const clientId = event.target.value;
+    <div className="group/client relative -ml-2 mt-1 inline-flex max-w-full items-center">
+      <select
+        aria-label="Project client"
+        value={project.client.id}
+        disabled={isPending || updateProject.isPending}
+        onChange={(event) => {
+          const clientId = event.target.value;
 
-        if (clientId === project.client.id) {
-          return;
-        }
+          if (clientId === project.client.id) {
+            return;
+          }
 
-        updateProject.mutate(
-          {
-            projectId: project.id,
-            input: {
-              clientId,
+          updateProject.mutate(
+            {
+              projectId: project.id,
+              input: {
+                clientId,
+              },
             },
-          },
-          {
-            onSuccess: () => {
-              toast.success("Client updated.");
-            },
+            {
+              onSuccess: () => {
+                toast.success("Client updated.");
+              },
 
-            onError: (error) => {
-              toast.error(getErrorMessage(error, "Failed to update client."));
+              onError: (error) => {
+                toast.error(getErrorMessage(error, "Failed to update client."));
+              },
             },
-          },
-        );
-      }}
-      className="-ml-2 mt-1 h-8 max-w-full cursor-pointer rounded-lg border border-transparent bg-transparent px-2 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
-    >
-      {availableClients.map((client) => (
-        <option key={client.id} value={client.id}>
-          {client.name}
-          {client.status === "inactive" ? " (inactive)" : ""}
-        </option>
-      ))}
-    </select>
+          );
+        }}
+        className="h-8 max-w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-0 pl-2 pr-7 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+      >
+        {availableClients.map((client) => (
+          <option key={client.id} value={client.id}>
+            {client.name}
+            {client.status === "inactive" ? " (inactive)" : ""}
+          </option>
+        ))}
+      </select>
+
+      <CaretDownIcon aria-hidden="true" className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/client:opacity-100 group-focus-within/client:opacity-100" />
+    </div>
   );
 }
 
@@ -617,41 +627,45 @@ function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: b
   }
 
   return (
-    <select
-      aria-label="Project engagement"
-      value={project.engagementType}
-      disabled={updateProject.isPending}
-      onChange={(event) => {
-        const engagementType = event.target.value as ProjectDto["engagementType"];
+    <div className="group/engagement relative -ml-2 mt-1 inline-flex items-center">
+      <select
+        aria-label="Project engagement"
+        value={project.engagementType}
+        disabled={updateProject.isPending}
+        onChange={(event) => {
+          const engagementType = event.target.value as ProjectDto["engagementType"];
 
-        if (engagementType === project.engagementType) {
-          return;
-        }
+          if (engagementType === project.engagementType) {
+            return;
+          }
 
-        updateProject.mutate(
-          {
-            projectId: project.id,
-            input: {
-              engagementType,
+          updateProject.mutate(
+            {
+              projectId: project.id,
+              input: {
+                engagementType,
+              },
             },
-          },
-          {
-            onSuccess: () => {
-              toast.success("Engagement updated.");
-            },
+            {
+              onSuccess: () => {
+                toast.success("Engagement updated.");
+              },
 
-            onError: (error) => {
-              toast.error(getErrorMessage(error, "Failed to update engagement."));
+              onError: (error) => {
+                toast.error(getErrorMessage(error, "Failed to update engagement."));
+              },
             },
-          },
-        );
-      }}
-      className="-ml-2 mt-1 h-8 cursor-pointer rounded-lg border border-transparent bg-transparent px-2 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
-    >
-      <option value="project">Project</option>
+          );
+        }}
+        className="h-8 cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-0 pl-2 pr-7 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+      >
+        <option value="project">Project</option>
 
-      <option value="retainer">Retainer</option>
-    </select>
+        <option value="retainer">Retainer</option>
+      </select>
+
+      <CaretDownIcon aria-hidden="true" className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/engagement:opacity-100 group-focus-within/engagement:opacity-100" />
+    </div>
   );
 }
 function CollaborationControls({
@@ -684,19 +698,26 @@ function CollaborationControls({
   const [memberToAdd, setMemberToAdd] = useState("");
 
   const { data: workspaceMembers = [], isPending: workspaceMembersPending, isError: workspaceMembersError } = useMembers(membersDialogOpen && canManageMembers && canViewWorkspaceMembers);
+  const orderedMembers = [...projectMembers].sort((first, second) => {
+    const addedAtOrder = first.addedAt.localeCompare(second.addedAt);
 
+    if (addedAtOrder !== 0) {
+      return addedAtOrder;
+    }
+
+    return first.user.id.localeCompare(second.user.id);
+  });
   const leads = projectMembers.filter((member) => member.isLead).sort((first, second) => (first.leadPosition ?? 99) - (second.leadPosition ?? 99));
 
   const leadIds = leads.map((member) => member.user.id);
 
-  const leadCandidates = projectMembers.filter((member) => !member.isLead);
+  const leadCandidates = orderedMembers.filter((member) => !member.isLead);
 
-  const visibleMembers = projectMembers.slice(0, 5);
+  const visibleMembers = orderedMembers.slice(0, 5);
 
-  const remainingMembers = Math.max(projectMembers.length - visibleMembers.length, 0);
+  const remainingMembers = Math.max(orderedMembers.length - visibleMembers.length, 0);
 
-  const assignedIds = new Set(projectMembers.map((member) => member.user.id));
-
+  const assignedIds = new Set(orderedMembers.map((member) => member.user.id));
   const availableWorkspaceMembers = workspaceMembers.filter((member) => !assignedIds.has(member.id));
 
   const collaborationPending = updateLeads.isPending || addMember.isPending || removeMember.isPending;
@@ -804,13 +825,24 @@ function CollaborationControls({
       </div>
 
       <div className="space-y-8 lg:pt-12">
-        <div>
+        <div className="group/leads">
           <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">Project Leads</p>
 
             {canEdit && !membersPending && !membersError && leads.length < PROJECT_LEAD_MAX_COUNT && leadCandidates.length > 0 ? (
               <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
-                <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-xs" aria-label="Add project lead" disabled={updateLeads.isPending} />}>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Add project lead"
+                      disabled={updateLeads.isPending}
+                      className="pointer-events-none opacity-0 transition-opacity group-hover/leads:pointer-events-auto group-hover/leads:opacity-100 group-focus-within/leads:pointer-events-auto group-focus-within/leads:opacity-100"
+                    />
+                  }
+                >
                   <PlusIcon aria-hidden="true" />
                 </PopoverTrigger>
 
@@ -853,20 +885,18 @@ function CollaborationControls({
             ) : (
               <div className="space-y-2">
                 {leads.map((lead) => (
-                  <div key={lead.user.id} className="flex min-w-0 items-center gap-2">
+                  <div key={lead.user.id} className="group/lead flex min-w-0 items-center gap-2">
                     <Avatar size="sm" role="img" aria-label={lead.user.displayName} title={lead.user.displayName}>
                       {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
-
                       <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
                     </Avatar>
-
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">{lead.user.displayName}</span>
-
                     {canEdit && leads.length > 1 ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
+                        className="pointer-events-none opacity-0 transition-opacity group-hover/lead:pointer-events-auto group-hover/lead:opacity-100 group-focus-within/lead:pointer-events-auto group-focus-within/lead:opacity-100"
                         aria-label={`Remove ${lead.user.displayName} as project lead`}
                         disabled={updateLeads.isPending}
                         onClick={() => {
@@ -897,8 +927,8 @@ function CollaborationControls({
                 onClick={() => {
                   setMembersDialogOpen(true);
                 }}
-                className="rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="View project members"
+                className="group/members inline-flex cursor-pointer items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={canManageMembers && canViewWorkspaceMembers ? "View and add project members" : "View project members"}
               >
                 {projectMembers.length > 0 ? (
                   <AvatarGroup>
@@ -915,6 +945,12 @@ function CollaborationControls({
                 ) : (
                   <span className="text-sm text-muted-foreground">No members</span>
                 )}
+                {canManageMembers && canViewWorkspaceMembers ? (
+                  <span className="pointer-events-none inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground opacity-0 transition-opacity group-hover/members:opacity-100 group-focus-visible/members:opacity-100">
+                    <PlusIcon className="size-3.5" aria-hidden="true" />
+                    Add Member
+                  </span>
+                ) : null}
               </button>
             )}
           </div>
@@ -949,7 +985,7 @@ function CollaborationControls({
               <p className="py-6 text-center text-sm text-muted-foreground">No project members.</p>
             ) : (
               <div className="divide-y">
-                {projectMembers.map((member) => {
+                {orderedMembers.map((member) => {
                   const soleLead = member.isLead && leads.length === 1;
 
                   return (
@@ -1083,9 +1119,8 @@ export function ProjectOverviewPage() {
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-
         <section className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
-          <div className="min-w-0">
+          <div className="min-w-0 max-w-2xl">
             <ProjectIdentityEditor
               key={`${project.id}:${project.updatedAt}`}
               projectId={project.id}
@@ -1095,44 +1130,46 @@ export function ProjectOverviewPage() {
               statusLabel={statusLabels[project.status]}
               canEdit={canEdit}
             />
+
+            <section className="mt-12">
+              <h2 className="text-base font-medium tracking-tight">Project Details</h2>
+
+              <div className="mt-5 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Start Date</p>
+
+                  <StartDateField projectId={project.id} value={project.startDate} canEdit={canEdit} />
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Due Date</p>
+
+                  <DueDateField projectId={project.id} dueDate={project.dueDate} dueDateMode={project.dueDateMode} canEdit={canEdit} />
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Client Name</p>
+
+                  <ClientField project={project} canEdit={canEdit} canViewClients={canViewClients} />
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Engagement</p>
+
+                  <EngagementField project={project} canEdit={canEdit} />
+                </div>
+              </div>
+            </section>
           </div>
 
           <CollaborationControls project={project} projectMembers={projectMembers} membersPending={membersPending} membersError={membersError} canEdit={canEdit} canManageMembers={canManageMembers} canViewWorkspaceMembers={canViewWorkspaceMembers} />
         </section>
 
-        <section className="mt-20">
-          <h2 className="text-base font-medium tracking-tight">Project Details</h2>
-
-          <div className="mt-5 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Start Date</p>
-
-              <StartDateField projectId={project.id} value={project.startDate} canEdit={canEdit} />
-            </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground">Due Date</p>
-
-              <DueDateField projectId={project.id} dueDate={project.dueDate} dueDateMode={project.dueDateMode} canEdit={canEdit} />
-            </div>
-          </div>
-
-          <div className="mt-10 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Client Name</p>
-
-              <ClientField project={project} canEdit={canEdit} canViewClients={canViewClients} />
-            </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground">Engagement</p>
-
-              <EngagementField project={project} canEdit={canEdit} />
-            </div>
-          </div>
-        </section>
-
-        <KeyResourcesSection projectId={project.id} canEdit={canEdit} />
+        <div className="max-w-2xl">
+          <KeyResourcesSection projectId={project.id} canEdit={canEdit} />
+        </div>
       </div>
     </div>
   );
