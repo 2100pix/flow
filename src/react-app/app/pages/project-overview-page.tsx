@@ -10,7 +10,8 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbS
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -611,24 +612,20 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-56 ring-0">
-          {availableClients.map((client) => {
-            const selected = client.id === project.client.id;
-
-            return (
-              <DropdownMenuItem
-                key={client.id}
-                disabled={updateProject.isPending}
-                onClick={() => {
-                  selectClient(client.id);
-                }}
-                className={selected ? "bg-foreground/5" : undefined}
-              >
+          <DropdownMenuRadioGroup
+            value={project.client.id}
+            onValueChange={(value) => {
+              selectClient(String(value));
+            }}
+          >
+            {availableClients.map((client) => (
+              <DropdownMenuRadioItem key={client.id} value={client.id} disabled={updateProject.isPending}>
                 <span className="min-w-0 flex-1 truncate">{client.name}</span>
 
-                {client.status === "inactive" ? <span className="shrink-0 text-xs text-muted-foreground">Inactive</span> : null}
-              </DropdownMenuItem>
-            );
-          })}
+                {client.status === "inactive" ? <span className="mr-5 shrink-0 text-xs text-muted-foreground">Inactive</span> : null}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -679,23 +676,20 @@ function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: b
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-40 ring-0">
-          <DropdownMenuItem
-            onClick={() => {
-              selectEngagement("project");
+          <DropdownMenuRadioGroup
+            value={project.engagementType}
+            onValueChange={(value) => {
+              selectEngagement(value as ProjectDto["engagementType"]);
             }}
-            className={project.engagementType === "project" ? "bg-foreground/5" : undefined}
           >
-            Project
-          </DropdownMenuItem>
+            <DropdownMenuRadioItem value="project" disabled={updateProject.isPending}>
+              Project
+            </DropdownMenuRadioItem>
 
-          <DropdownMenuItem
-            onClick={() => {
-              selectEngagement("retainer");
-            }}
-            className={project.engagementType === "retainer" ? "bg-foreground/5" : undefined}
-          >
-            Retainer
-          </DropdownMenuItem>
+            <DropdownMenuRadioItem value="retainer" disabled={updateProject.isPending}>
+              Retainer
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -859,7 +853,8 @@ function CollaborationControls({
       </div>
 
       <div className="space-y-8 lg:pt-12">
-        <div className="group/leads">
+        <div className="project-leads-control group/leads">
+          {" "}
           <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">Project Leads</p>
 
@@ -867,18 +862,7 @@ function CollaborationControls({
               <Tooltip>
                 <TooltipTrigger render={<div className="inline-flex" />}>
                   <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
-                    <PopoverTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Add project lead"
-                          disabled={updateLeads.isPending}
-                          className="pointer-events-none opacity-0 transition-opacity group-hover/leads:pointer-events-auto group-hover/leads:opacity-100 group-focus-within/leads:pointer-events-auto group-focus-within/leads:opacity-100 aria-expanded:pointer-events-auto aria-expanded:opacity-100"
-                        />
-                      }
-                    >
+                    <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-xs" aria-label="Add project lead" disabled={updateLeads.isPending} className="project-lead-add-control transition-opacity" />}>
                       <PlusIcon aria-hidden="true" />
                     </PopoverTrigger>
 
@@ -914,7 +898,6 @@ function CollaborationControls({
               </Tooltip>
             ) : null}
           </div>
-
           <div className="mt-2">
             {membersPending ? (
               <Skeleton className="h-8 w-32" />

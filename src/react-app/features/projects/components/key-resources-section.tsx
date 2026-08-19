@@ -320,7 +320,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
               </DropdownMenu>
             </TooltipTrigger>
 
-            <TooltipContent side="top">Add resource</TooltipContent>
+            <TooltipContent side="top">Add resources</TooltipContent>
           </Tooltip>
         ) : null}
       </div>
@@ -341,7 +341,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
       ) : (
         <div className="mt-5 space-y-2">
           {resources.map((resource) => (
-            <div key={resource.id} className="group/resource flex min-w-0 items-start gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40">
+            <div key={resource.id} className="project-resource-row group/resource flex min-w-0 items-start gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40">
               <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                 {resource.type === "document_brief" ? <FileTextIcon className="size-4" aria-hidden="true" /> : <LinkIcon className="size-4" aria-hidden="true" />}
               </div>
@@ -356,7 +356,7 @@ export function KeyResourcesSection({ projectId, canEdit }: { projectId: string;
                   </p>
                 )}
               </div>
-              <div className="pointer-events-none flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/resource:pointer-events-auto group-hover/resource:opacity-100 group-focus-within/resource:pointer-events-auto group-focus-within/resource:opacity-100">
+              <div className="project-resource-actions flex shrink-0 items-center gap-1 transition-opacity">
                 {" "}
                 {resource.type === "link" && resource.url ? (
                   <Tooltip>
