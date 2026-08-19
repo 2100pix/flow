@@ -10,6 +10,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbS
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -573,48 +574,63 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
 
   const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
 
+  function selectClient(clientId: string) {
+    if (clientId === project.client.id || updateProject.isPending) {
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId: project.id,
+        input: {
+          clientId,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Client updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update client."));
+        },
+      },
+    );
+  }
+
   return (
-    <div className="group/client relative -ml-2 mt-1 inline-flex max-w-full items-center">
-      <select
-        aria-label="Project client"
-        value={project.client.id}
-        disabled={isPending || updateProject.isPending}
-        onChange={(event) => {
-          const clientId = event.target.value;
+    <div className="group/client -ml-2 mt-1 inline-flex max-w-full">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={isPending || updateProject.isPending}
+          render={<Button type="button" variant="ghost" className="h-8 max-w-full justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project client" />}
+        >
+          <span className="min-w-0 truncate">{project.client.name}</span>
 
-          if (clientId === project.client.id) {
-            return;
-          }
+          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/client:opacity-100 group-focus-within/client:opacity-100" />
+        </DropdownMenuTrigger>
 
-          updateProject.mutate(
-            {
-              projectId: project.id,
-              input: {
-                clientId,
-              },
-            },
-            {
-              onSuccess: () => {
-                toast.success("Client updated.");
-              },
+        <DropdownMenuContent align="start" className="w-56 ring-0">
+          {availableClients.map((client) => {
+            const selected = client.id === project.client.id;
 
-              onError: (error) => {
-                toast.error(getErrorMessage(error, "Failed to update client."));
-              },
-            },
-          );
-        }}
-        className="h-8 max-w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-0 pl-2 pr-7 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
-      >
-        {availableClients.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.name}
-            {client.status === "inactive" ? " (inactive)" : ""}
-          </option>
-        ))}
-      </select>
+            return (
+              <DropdownMenuItem
+                key={client.id}
+                disabled={updateProject.isPending}
+                onClick={() => {
+                  selectClient(client.id);
+                }}
+                className={selected ? "bg-foreground/5" : undefined}
+              >
+                <span className="min-w-0 flex-1 truncate">{client.name}</span>
 
-      <CaretDownIcon aria-hidden="true" className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/client:opacity-100 group-focus-within/client:opacity-100" />
+                {client.status === "inactive" ? <span className="shrink-0 text-xs text-muted-foreground">Inactive</span> : null}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -626,48 +642,66 @@ function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: b
     return <p className="mt-2 text-sm">{engagementLabels[project.engagementType]}</p>;
   }
 
+  function selectEngagement(engagementType: ProjectDto["engagementType"]) {
+    if (engagementType === project.engagementType || updateProject.isPending) {
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId: project.id,
+        input: {
+          engagementType,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Engagement updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update engagement."));
+        },
+      },
+    );
+  }
+
   return (
-    <div className="group/engagement relative -ml-2 mt-1 inline-flex items-center">
-      <select
-        aria-label="Project engagement"
-        value={project.engagementType}
-        disabled={updateProject.isPending}
-        onChange={(event) => {
-          const engagementType = event.target.value as ProjectDto["engagementType"];
+    <div className="group/engagement -ml-2 mt-1 inline-flex">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={updateProject.isPending}
+          render={<Button type="button" variant="ghost" className="h-8 justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project engagement" />}
+        >
+          {engagementLabels[project.engagementType]}
 
-          if (engagementType === project.engagementType) {
-            return;
-          }
+          <CaretDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/engagement:opacity-100 group-focus-within/engagement:opacity-100" />
+        </DropdownMenuTrigger>
 
-          updateProject.mutate(
-            {
-              projectId: project.id,
-              input: {
-                engagementType,
-              },
-            },
-            {
-              onSuccess: () => {
-                toast.success("Engagement updated.");
-              },
+        <DropdownMenuContent align="start" className="w-40 ring-0">
+          <DropdownMenuItem
+            onClick={() => {
+              selectEngagement("project");
+            }}
+            className={project.engagementType === "project" ? "bg-foreground/5" : undefined}
+          >
+            Project
+          </DropdownMenuItem>
 
-              onError: (error) => {
-                toast.error(getErrorMessage(error, "Failed to update engagement."));
-              },
-            },
-          );
-        }}
-        className="h-8 cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-0 pl-2 pr-7 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
-      >
-        <option value="project">Project</option>
-
-        <option value="retainer">Retainer</option>
-      </select>
-
-      <CaretDownIcon aria-hidden="true" className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/engagement:opacity-100 group-focus-within/engagement:opacity-100" />
+          <DropdownMenuItem
+            onClick={() => {
+              selectEngagement("retainer");
+            }}
+            className={project.engagementType === "retainer" ? "bg-foreground/5" : undefined}
+          >
+            Retainer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
+
 function CollaborationControls({
   project,
   projectMembers,
@@ -980,7 +1014,7 @@ function CollaborationControls({
             <DialogDescription>Manage the people assigned to this project.</DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-80 overflow-y-auto">
+          <div className="min-w-0">
             {projectMembers.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No project members.</p>
             ) : (
