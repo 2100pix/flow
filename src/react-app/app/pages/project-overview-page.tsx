@@ -302,7 +302,7 @@ export function ProjectOverviewPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <span className="text-muted-foreground">{project.name}</span>
+              <span className="text-muted-foreground">Project</span>
             </BreadcrumbItem>
 
             <BreadcrumbSeparator />
