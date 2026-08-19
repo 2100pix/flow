@@ -451,7 +451,7 @@ export function ProjectBoardPage() {
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold tracking-tight">{project.name}</h1>
 
-              <p className="mt-1 truncate text-sm text-muted-foreground">{project.client.name}</p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">{project.client?.name ?? "Not set"}</p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

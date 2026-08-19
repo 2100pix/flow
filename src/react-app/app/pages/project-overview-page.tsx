@@ -560,24 +560,26 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
 
   const { data: clients = [], isPending, isError } = useClients(canEdit && canViewClients);
 
+  const currentClientId = project.client?.id ?? null;
+
   if (!canEdit || !canViewClients) {
-    return <p className="mt-2 break-words text-sm">{project.client.name}</p>;
+    return <p className="mt-2 break-words text-sm">{project.client?.name ?? "Not set"}</p>;
   }
 
   if (isError) {
     return (
       <div className="mt-2">
-        <p className="text-sm">{project.client.name}</p>
+        <p className="text-sm">{project.client?.name ?? "Not set"}</p>
 
         <p className="mt-1 text-xs text-destructive">Unable to load clients.</p>
       </div>
     );
   }
 
-  const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
+  const availableClients = clients.filter((client) => client.status === "active" || client.id === currentClientId);
 
-  function selectClient(clientId: string) {
-    if (clientId === project.client.id || updateProject.isPending) {
+  function selectClient(clientId: string | null) {
+    if (clientId === currentClientId || updateProject.isPending) {
       return;
     }
 
@@ -600,6 +602,8 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
     );
   }
 
+  const noClientValue = "__flow_no_client__";
+
   return (
     <div className="-ml-2 mt-1 inline-flex max-w-full">
       <DropdownMenu>
@@ -607,17 +611,22 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
           disabled={isPending || updateProject.isPending}
           render={<Button type="button" variant="ghost" className="h-8 max-w-full justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project client" />}
         >
-          <span className="min-w-0 truncate">{project.client.name}</span>
-          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />{" "}
+          <span className="min-w-0 truncate">{project.client?.name ?? "Not set"}</span>
+
+          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-56 ring-0">
           <DropdownMenuRadioGroup
-            value={project.client.id}
+            value={currentClientId ?? noClientValue}
             onValueChange={(value) => {
-              selectClient(String(value));
+              selectClient(value === noClientValue ? null : String(value));
             }}
           >
+            <DropdownMenuRadioItem value={noClientValue} disabled={updateProject.isPending}>
+              Not set
+            </DropdownMenuRadioItem>
+
             {availableClients.map((client) => (
               <DropdownMenuRadioItem key={client.id} value={client.id} disabled={updateProject.isPending}>
                 <span className="min-w-0 flex-1 truncate">{client.name}</span>

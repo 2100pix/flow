@@ -19,7 +19,7 @@ export type DashboardProjectDto = {
   client: {
     id: string;
     name: string;
-  };
+  } | null;
 
   status: ProjectStatus;
   dueDate: string | null;

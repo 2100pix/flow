@@ -31,7 +31,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
   const navigate = useNavigate();
   const canChangeClient = canEdit && canViewClients;
   const { data: clients = [] } = useClients(canChangeClient);
-  const [clientId, setClientId] = useState(project.client.id);
+  const [clientId, setClientId] = useState(project.client?.id ?? "");
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
   const [status, setStatus] = useState<ProjectStatus>(project.status);
@@ -41,7 +41,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
   const [discordChannelUrl, setDiscordChannelUrl] = useState(project.discordChannelUrl ?? "");
   const updateProject = useUpdateProject();
   const archiveProject = useArchiveProject();
-  const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
+  const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client?.id);
 
   return (
     <div className="space-y-8">
@@ -78,6 +78,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
                 }}
                 className="h-8 w-full max-w-sm rounded-lg border border-input bg-background px-2.5 text-sm outline-none"
               >
+                <option value="">Select client</option>
                 {availableClients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -86,7 +87,7 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
                 ))}
               </select>
             ) : (
-              <p className="text-sm text-foreground">{project.client.name}</p>
+              <p className="text-sm text-foreground">{project.client?.name ?? "Not set"}</p>
             )}
           </div>
 
