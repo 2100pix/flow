@@ -201,4 +201,5 @@ dist
 
 ### Local migration verification ###
 .wrangler-test-*/
+.wrangler-state-*-backup/
 .tmp-*.sql
