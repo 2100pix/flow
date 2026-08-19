@@ -226,7 +226,11 @@ function ProjectEditor({ project, canEdit, canArchive, canManageVisibility, canV
                   projectId: project.id,
 
                   input: {
-                    ...(canChangeClient ? { clientId } : {}),
+                    ...(canChangeClient
+                      ? {
+                          clientId: clientId || null,
+                        }
+                      : {}),
                     name: name.trim(),
                     description: description.trim() || null,
                     status,
@@ -419,7 +423,7 @@ export function ProjectDetailPage() {
             </div>
             {project ? (
               <p className="mt-1 text-sm text-muted-foreground">
-                {project.name} · {project.client.name}
+                {project.name} · {project.client?.name ?? "No client"}
               </p>
             ) : null}
           </div>
