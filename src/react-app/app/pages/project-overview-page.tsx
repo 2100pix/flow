@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { useMe } from "@/features/auth/hooks/use-me";
 import { hasPermission } from "@/features/auth/permissions";
@@ -599,15 +600,14 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
   }
 
   return (
-    <div className="group/client -ml-2 mt-1 inline-flex max-w-full">
+    <div className="-ml-2 mt-1 inline-flex max-w-full">
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={isPending || updateProject.isPending}
           render={<Button type="button" variant="ghost" className="h-8 max-w-full justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project client" />}
         >
           <span className="min-w-0 truncate">{project.client.name}</span>
-
-          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/client:opacity-100 group-focus-within/client:opacity-100" />
+          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />{" "}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-56 ring-0">
@@ -667,15 +667,15 @@ function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: b
   }
 
   return (
-    <div className="group/engagement -ml-2 mt-1 inline-flex">
+    <div className="-ml-2 mt-1 inline-flex">
+      {" "}
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={updateProject.isPending}
           render={<Button type="button" variant="ghost" className="h-8 justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project engagement" />}
         >
           {engagementLabels[project.engagementType]}
-
-          <CaretDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/engagement:opacity-100 group-focus-within/engagement:opacity-100" />
+          <CaretDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />{" "}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-40 ring-0">
@@ -864,48 +864,54 @@ function CollaborationControls({
             <p className="text-xs text-muted-foreground">Project Leads</p>
 
             {canEdit && !membersPending && !membersError && leads.length < PROJECT_LEAD_MAX_COUNT && leadCandidates.length > 0 ? (
-              <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Add project lead"
-                      disabled={updateLeads.isPending}
-                      className="pointer-events-none opacity-0 transition-opacity group-hover/leads:pointer-events-auto group-hover/leads:opacity-100 group-focus-within/leads:pointer-events-auto group-focus-within/leads:opacity-100"
-                    />
-                  }
-                >
-                  <PlusIcon aria-hidden="true" />
-                </PopoverTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<div className="inline-flex" />}>
+                  <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Add project lead"
+                          disabled={updateLeads.isPending}
+                          className="pointer-events-none opacity-0 transition-opacity group-hover/leads:pointer-events-auto group-hover/leads:opacity-100 group-focus-within/leads:pointer-events-auto group-focus-within/leads:opacity-100 aria-expanded:pointer-events-auto aria-expanded:opacity-100"
+                        />
+                      }
+                    >
+                      <PlusIcon aria-hidden="true" />
+                    </PopoverTrigger>
 
-                <PopoverContent align="start" className="w-64 p-2">
-                  <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Add project lead</p>
+                    <PopoverContent align="start" className="w-64 p-2">
+                      <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Add project lead</p>
 
-                  <div className="space-y-1">
-                    {leadCandidates.map((member) => (
-                      <button
-                        key={member.user.id}
-                        type="button"
-                        disabled={updateLeads.isPending}
-                        onClick={() => {
-                          addLead(member.user.id);
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                      >
-                        <Avatar size="sm" aria-hidden="true">
-                          {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+                      <div className="space-y-1">
+                        {leadCandidates.map((member) => (
+                          <button
+                            key={member.user.id}
+                            type="button"
+                            disabled={updateLeads.isPending}
+                            onClick={() => {
+                              addLead(member.user.id);
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            <Avatar size="sm" aria-hidden="true">
+                              {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                          <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
-                        </Avatar>
+                              <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                            </Avatar>
 
-                        <span className="min-w-0 truncate">{member.user.displayName}</span>
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                            <span className="min-w-0 truncate">{member.user.displayName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </TooltipTrigger>
+
+                <TooltipContent side="top">Add project lead</TooltipContent>
+              </Tooltip>
             ) : null}
           </div>
 
