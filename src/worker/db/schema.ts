@@ -329,6 +329,13 @@ export const projects = sqliteTable(
 
     startDate: text("start_date"),
     dueDate: text("due_date"),
+
+    dueDateMode: text("due_date_mode", {
+      enum: ["unset", "date", "ongoing"],
+    })
+      .default("unset")
+      .notNull(),
+
     discordChannelUrl: text("discord_channel_url"),
 
     createdAt: integer("created_at", {
@@ -349,6 +356,7 @@ export const projects = sqliteTable(
     index("projects_lead_user_id_idx").on(table.leadUserId),
 
     check("projects_engagement_type_check", sql`${table.engagementType} in ('project', 'retainer')`),
+    check("projects_due_date_mode_check", sql`${table.dueDateMode} in ('unset', 'date', 'ongoing')`),
     check("projects_visibility_check", sql`${table.visibility} in ('workspace', 'private')`),
     check("projects_status_check", sql`${table.status} in ('planning', 'active', 'on_hold', 'completed')`),
   ],
@@ -379,6 +387,97 @@ export const projectMembers = sqliteTable(
     }),
 
     index("project_members_user_id_idx").on(table.userId),
+  ],
+);
+
+export const projectLeads = sqliteTable(
+  "project_leads",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    position: integer("position").notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.projectId, table.userId],
+    }),
+
+    uniqueIndex("project_leads_project_position_unique").on(table.projectId, table.position),
+
+    index("project_leads_user_id_idx").on(table.userId),
+
+    check("project_leads_position_check", sql`${table.position} >= 0 and ${table.position} <= 2`),
+  ],
+);
+
+export const projectResources = sqliteTable(
+  "project_resources",
+  {
+    id: text("id").primaryKey(),
+
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    type: text("type", {
+      enum: ["document_brief", "link"],
+    }).notNull(),
+
+    title: text("title"),
+
+    url: text("url"),
+
+    content: text("content"),
+
+    position: integer("position").notNull(),
+
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+      }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    index("project_resources_project_id_idx").on(table.projectId),
+
+    uniqueIndex("project_resources_project_position_unique").on(table.projectId, table.position),
+
+    check("project_resources_type_check", sql`${table.type} in ('document_brief', 'link')`),
+
+    check("project_resources_position_check", sql`${table.position} >= 0`),
+
+    check(
+      "project_resources_payload_check",
+      sql`(
+        (${table.type} = 'link' and ${table.url} is not null and ${table.content} is null)
+        or
+        (${table.type} = 'document_brief' and ${table.url} is null)
+      )`,
+    ),
   ],
 );
 

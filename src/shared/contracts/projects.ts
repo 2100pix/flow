@@ -5,7 +5,7 @@ import { projectVisibilitySchema, type ProjectVisibility } from "../project-priv
 export const projectStatusSchema = z.enum(["planning", "active", "on_hold", "completed"]);
 
 export const projectEngagementTypeSchema = z.enum(["project", "retainer"]);
-
+export const projectDueDateModeSchema = z.enum(["unset", "date", "ongoing"]);
 export const projectDescriptionSchema = z.string().trim().max(PROJECT_DESCRIPTION_MAX_LENGTH);
 
 export const projectCodeOverrideSchema = z
@@ -55,6 +55,7 @@ export const updateProjectSchema = z
   });
 
 export type ProjectEngagementType = z.infer<typeof projectEngagementTypeSchema>;
+export type ProjectDueDateMode = z.infer<typeof projectDueDateModeSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type ArchiveProjectResponse = {
   data: {
