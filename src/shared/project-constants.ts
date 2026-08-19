@@ -1,1 +1,3 @@
 export const PROJECT_DESCRIPTION_MAX_LENGTH = 160;
+
+export const PROJECT_LEAD_MAX_COUNT = 3;
