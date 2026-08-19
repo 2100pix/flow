@@ -365,12 +365,12 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
 
             setEditingDescription(true);
           }}
-          className="mt-4 block max-w-2xl cursor-text rounded-sm text-left text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-4 block w-full max-w-2xl cursor-text whitespace-pre-wrap [overflow-wrap:anywhere] rounded-sm text-left text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {description || <span className="text-muted-foreground/50">{DESCRIPTION_PLACEHOLDER}</span>}
         </button>
       ) : (
-        <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{description || <span className="text-muted-foreground/50">{DESCRIPTION_PLACEHOLDER}</span>}</p>
+        <p className="mt-4 w-full max-w-2xl whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-muted-foreground">{description || <span className="text-muted-foreground/50">{DESCRIPTION_PLACEHOLDER}</span>}</p>
       )}
     </div>
   );
