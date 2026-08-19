@@ -146,6 +146,32 @@ projectsRoutes.post(
   requirePermission("projects.create"),
   zValidator("json", createProjectSchema, (result, c) => {
     if (!result.success) {
+      const leadIssue = result.error.issues.find((issue) => issue.path[0] === "leadUserIds");
+
+      if (leadIssue?.code === "too_small") {
+        return c.json(
+          {
+            error: {
+              code: "PROJECT_LEAD_REQUIRED",
+              message: "At least one project lead is required",
+            },
+          },
+          409,
+        );
+      }
+
+      if (leadIssue?.code === "too_big") {
+        return c.json(
+          {
+            error: {
+              code: "PROJECT_LEAD_LIMIT_REACHED",
+              message: "A project can have at most three leads",
+            },
+          },
+          409,
+        );
+      }
+
       return c.json(
         {
           error: {
@@ -162,6 +188,7 @@ projectsRoutes.post(
     const input = c.req.valid("json");
 
     const db = createDb(c.env.flow_db);
+
     const visibility = input.visibility ?? "workspace";
 
     if (!canCreateProjectWithVisibility(auth.workspace.permissions, visibility)) {
@@ -175,49 +202,80 @@ projectsRoutes.post(
         403,
       );
     }
-    const [client] = await db
-      .select({
-        id: clients.id,
-        name: clients.name,
-      })
-      .from(clients)
-      .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
-      .limit(1);
 
-    if (!client) {
+    const leadUserIds = input.leadUserIds ?? [auth.user.id];
+
+    const leadMembershipRows = await db
+      .select({
+        userId: workspaceMembers.userId,
+      })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, auth.workspace.id), inArray(workspaceMembers.userId, leadUserIds)));
+
+    if (leadMembershipRows.length !== leadUserIds.length) {
       return c.json(
         {
           error: {
-            code: "CLIENT_NOT_AVAILABLE",
-            message: "An active client is required",
+            code: "PROJECT_LEAD_NOT_WORKSPACE_MEMBER",
+            message: "Every project lead must be a workspace member",
           },
         },
-        400,
+        409,
       );
     }
 
-    const id = createId("prj");
+    const memberUserIds = [...new Set([auth.user.id, ...leadUserIds])];
 
+    const id = createId("prj");
     const now = new Date();
-    const engagementType = input.engagementType ?? "project";
+
+    const description = input.description || null;
+
     const projectInsert = db.insert(projects).values({
       id,
       workspaceId: auth.workspace.id,
-      clientId: client.id,
-      leadUserId: auth.user.id,
+
+      clientId: null,
+
+      leadUserId: leadUserIds[0],
+
       name: input.name,
-      projectCodeOverride: input.projectCodeOverride ?? null,
-      description: input.description ?? null,
-      engagementType,
+
+      projectCodeOverride: null,
+
+      description,
+
+      engagementType: "project",
+
       visibility,
       status: "planning",
+
       startDate: null,
       dueDate: null,
       dueDateMode: "unset",
+
       discordChannelUrl: null,
+
       createdAt: now,
       updatedAt: now,
     });
+
+    const memberInsert = db.insert(projectMembers).values(
+      memberUserIds.map((userId) => ({
+        projectId: id,
+        userId,
+        createdAt: now,
+      })),
+    );
+
+    const leadInsert = db.insert(projectLeads).values(
+      leadUserIds.map((userId, position) => ({
+        projectId: id,
+        userId,
+        position,
+        createdAt: now,
+      })),
+    );
 
     const workflowInsert = db.insert(projectTaskStatuses).values(
       defaultTaskWorkflowStatuses.map((status) => ({
@@ -228,46 +286,37 @@ projectsRoutes.post(
         enabled: status.enabled,
       })),
     );
-    await db.batch([
-      projectInsert,
 
-      db.insert(projectMembers).values({
-        projectId: id,
-        userId: auth.user.id,
-        createdAt: now,
-      }),
-
-      db.insert(projectLeads).values({
-        projectId: id,
-        userId: auth.user.id,
-        position: 0,
-        createdAt: now,
-      }),
-
-      workflowInsert,
-    ]);
-    const projectCodeOverride = input.projectCodeOverride ?? null;
+    await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert]);
 
     const data: ProjectDto = {
       id,
 
-      client: {
-        id: client.id,
-        name: client.name,
-      },
+      client: null,
+
       name: input.name,
-      projectCode: resolveProjectCode(input.name, projectCodeOverride),
-      projectCodeOverride,
-      description: input.description ?? null,
-      engagementType,
-      leadUserId: auth.user.id,
+
+      projectCode: resolveProjectCode(input.name, null),
+
+      projectCodeOverride: null,
+
+      description,
+
+      engagementType: "project",
+
+      leadUserId: leadUserIds[0],
+
       visibility,
       status: "planning",
+
       startDate: null,
       dueDate: null,
       dueDateMode: "unset",
+
       discordChannelUrl: null,
+
       createdAt: now.toISOString(),
+
       updatedAt: now.toISOString(),
     };
 
@@ -279,6 +328,7 @@ projectsRoutes.post(
     );
   },
 );
+
 projectsRoutes.get("/:id/task-workflow", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
