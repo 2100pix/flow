@@ -184,7 +184,7 @@ export function HomePage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{project.name}</p>
 
-                    <p className="mt-1 truncate text-xs text-muted-foreground">{project.client.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{project.client?.name ?? "Not set"}</p>
                   </div>
 
                   <div>

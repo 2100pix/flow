@@ -218,7 +218,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             updatedAt: projects.updatedAt,
           })
           .from(projects)
-          .innerJoin(clients, eq(projects.clientId, clients.id))
+          .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
           .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed")))
           .orderBy(desc(projects.updatedAt))
           .limit(5)
@@ -272,28 +272,23 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
 
   const recentProjects: DashboardProjectDto[] = recentProjectRows.map((project) => {
     const progress = progressByProject.get(project.id);
-
     const total = progress?.total ?? 0;
-
     const done = progress?.done ?? 0;
 
     return {
       id: project.id,
-
       name: project.name,
-
-      client: {
-        id: project.clientId,
-
-        name: project.clientName,
-      },
+      client:
+        project.clientId && project.clientName
+          ? {
+              id: project.clientId,
+              name: project.clientName,
+            }
+          : null,
 
       status: project.status,
-
       dueDate: project.dueDate,
-
       progress: total > 0 ? Math.round((done / total) * 100) : 0,
-
       updatedAt: project.updatedAt.toISOString(),
     };
   });

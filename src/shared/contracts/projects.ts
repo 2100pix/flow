@@ -38,7 +38,7 @@ export const discordChannelUrlSchema = z.url().refine(
 
 export const updateProjectSchema = z
   .object({
-    clientId: z.string().trim().min(1).optional(),
+    clientId: z.string().trim().min(1).nullable().optional(),
     name: z.string().trim().min(1).max(160).optional(),
     projectCodeOverride: projectCodeOverrideSchema.nullable().optional(),
     engagementType: projectEngagementTypeSchema.optional(),
@@ -70,7 +70,7 @@ export type ProjectDto = {
   client: {
     id: string;
     name: string;
-  };
+  } | null;
   name: string;
   projectCode: string;
   projectCodeOverride: string | null;

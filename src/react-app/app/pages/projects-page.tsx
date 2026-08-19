@@ -80,7 +80,7 @@ export function ProjectsPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{project.name}</p>
 
-                    <p className="mt-1 truncate text-xs text-muted-foreground">{project.client.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{project.client?.name ?? "Not set"}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {project.visibility === "private" ? <span className="rounded-full border border-border px-2 py-1 text-[10px] font-medium text-foreground">Private</span> : null}

@@ -101,9 +101,9 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
       updatedAt: projects.updatedAt,
     })
     .from(projects)
-    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
-    .where(and(eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .orderBy(desc(projects.updatedAt));
 
   const accessibleProjects = await filterAccessibleProjects(db, auth, result);
@@ -111,10 +111,13 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
   const data: ProjectDto[] = accessibleProjects.map((project) => ({
     id: project.id,
 
-    client: {
-      id: project.clientId,
-      name: project.clientName,
-    },
+    client:
+      project.clientId && project.clientName
+        ? {
+            id: project.clientId,
+            name: project.clientName,
+          }
+        : null,
 
     name: project.name,
     projectCode: resolveProjectCode(project.name, project.projectCodeOverride),
@@ -501,9 +504,9 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
       updatedAt: projects.updatedAt,
     })
     .from(projects)
-    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
   if (!project) {
@@ -521,10 +524,13 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
   const data: ProjectDto = {
     id: project.id,
 
-    client: {
-      id: project.clientId,
-      name: project.clientName,
-    },
+    client:
+      project.clientId && project.clientName
+        ? {
+            id: project.clientId,
+            name: project.clientName,
+          }
+        : null,
 
     name: project.name,
     projectCode: resolveProjectCode(project.name, project.projectCodeOverride),
@@ -636,34 +642,41 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       403,
     );
   }
-  let selectedClient = {
-    id: project.clientId,
-    name: project.clientName,
-  };
+  let selectedClient =
+    project.clientId && project.clientName
+      ? {
+          id: project.clientId,
+          name: project.clientName,
+        }
+      : null;
 
   if (input.clientId !== undefined && input.clientId !== project.clientId) {
-    const [targetClient] = await db
-      .select({
-        id: clients.id,
-        name: clients.name,
-      })
-      .from(clients)
-      .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
-      .limit(1);
+    if (input.clientId === null) {
+      selectedClient = null;
+    } else {
+      const [targetClient] = await db
+        .select({
+          id: clients.id,
+          name: clients.name,
+        })
+        .from(clients)
+        .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
+        .limit(1);
 
-    if (!targetClient) {
-      return c.json(
-        {
-          error: {
-            code: "CLIENT_NOT_AVAILABLE",
-            message: "An active client is required",
+      if (!targetClient) {
+        return c.json(
+          {
+            error: {
+              code: "CLIENT_NOT_AVAILABLE",
+              message: "An active client is required",
+            },
           },
-        },
-        400,
-      );
-    }
+          400,
+        );
+      }
 
-    selectedClient = targetClient;
+      selectedClient = targetClient;
+    }
   }
 
   const startDate = input.startDate !== undefined ? input.startDate : project.startDate;
@@ -707,7 +720,7 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
   await db
     .update(projects)
     .set({
-      clientId: selectedClient.id,
+      clientId: selectedClient?.id ?? null,
       name,
       projectCodeOverride,
       description,
