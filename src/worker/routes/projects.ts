@@ -612,9 +612,9 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       createdAt: projects.createdAt,
     })
     .from(projects)
-    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
-    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
   if (!project) {
