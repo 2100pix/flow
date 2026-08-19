@@ -1,23 +1,25 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useMe } from "@/features/auth/hooks/use-me";
-import { hasPermission } from "@/features/auth/permissions";
-import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
-
-import { ArrowSquareOutIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, CalendarBlankIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { useParams } from "react-router";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { useMe } from "@/features/auth/hooks/use-me";
+import { hasPermission } from "@/features/auth/permissions";
+import { useClients } from "@/features/clients/hooks/use-clients";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
-import { useProject } from "@/features/projects/hooks/use-project";
-
-import { type ProjectStatus } from "@/features/projects/types";
-
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
+import { useProject } from "@/features/projects/hooks/use-project";
+import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+import { type ProjectDto, type ProjectStatus } from "@/features/projects/types";
 
 const statusLabels: Record<ProjectStatus, string> = {
   planning: "Planning",
@@ -26,27 +28,51 @@ const statusLabels: Record<ProjectStatus, string> = {
   completed: "Completed",
 };
 
-const engagementLabels = {
+const engagementLabels: Record<ProjectDto["engagementType"], string> = {
   project: "Project",
   retainer: "Retainer",
-} as const;
+};
 
-function formatProjectDate(value: string | null) {
+const DESCRIPTION_PLACEHOLDER = "What are we building, and what does success look like?";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function parseProjectDate(value: string | null): Date | undefined {
   if (!value) {
-    return "Not set";
+    return undefined;
   }
 
   const [year, month, day] = value.split("-").map(Number);
 
   if (!year || !month || !day) {
-    return value;
+    return undefined;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+  return new Date(year, month - 1, day);
+}
+
+function serializeProjectDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatProjectDate(value: string | null) {
+  const date = parseProjectDate(value);
+
+  if (!date) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
+    month: "long",
     year: "numeric",
-  }).format(new Date(year, month - 1, day));
+  }).format(date);
 }
 
 function getMemberInitials(name: string) {
@@ -83,7 +109,7 @@ function OverviewSkeleton() {
         </div>
 
         <div className="mt-20">
-          <Skeleton className="h-5 w-20" />
+          <Skeleton className="h-5 w-24" />
 
           <div className="mt-5 grid max-w-md grid-cols-2 gap-8">
             <Skeleton className="h-12 w-full" />
@@ -109,12 +135,41 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
   const updateProject = useUpdateProject();
 
   const [editingName, setEditingName] = useState(false);
+
   const [editingDescription, setEditingDescription] = useState(false);
 
   const [nextName, setNextName] = useState(name);
+
   const [nextDescription, setNextDescription] = useState(description ?? "");
 
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  const skipNameBlurRef = useRef(false);
+
+  const skipDescriptionBlurRef = useRef(false);
+
+  useEffect(() => {
+    if (!editingDescription) {
+      return;
+    }
+
+    const textarea = descriptionRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 72)}px`;
+  }, [editingDescription, nextDescription]);
+
   function saveName() {
+    if (skipNameBlurRef.current) {
+      skipNameBlurRef.current = false;
+      return;
+    }
+
     const value = nextName.trim();
 
     if (!value) {
@@ -138,12 +193,23 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
       {
         onSuccess: () => {
           setEditingName(false);
+          toast.success("Project name updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update project name."));
         },
       },
     );
   }
 
   function saveDescription() {
+    if (skipDescriptionBlurRef.current) {
+      skipDescriptionBlurRef.current = false;
+
+      return;
+    }
+
     const value = nextDescription.trim();
 
     if (value === (description ?? "")) {
@@ -161,6 +227,12 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
       {
         onSuccess: () => {
           setEditingDescription(false);
+
+          toast.success("Description updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update description."));
         },
       },
     );
@@ -183,10 +255,15 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
+
                 event.currentTarget.blur();
               }
 
               if (event.key === "Escape") {
+                event.preventDefault();
+
+                skipNameBlurRef.current = true;
+
                 setNextName(name);
                 setEditingName(false);
               }
@@ -219,57 +296,353 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
 
       {editingDescription && canEdit ? (
         <textarea
+          ref={descriptionRef}
           autoFocus
           value={nextDescription}
           maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
-          rows={2}
+          rows={1}
           disabled={updateProject.isPending}
           aria-label="Project description"
-          placeholder="Add a description"
+          placeholder={DESCRIPTION_PLACEHOLDER}
           onChange={(event) => {
             setNextDescription(event.target.value);
           }}
           onBlur={saveDescription}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
+              event.preventDefault();
+
+              skipDescriptionBlurRef.current = true;
+
               setNextDescription(description ?? "");
+
               setEditingDescription(false);
             }
 
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
+
               event.currentTarget.blur();
             }
           }}
-          className="mt-4 w-full max-w-2xl resize-none border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground/60"
+          className="mt-4 min-h-6 w-full max-w-2xl resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground/50"
         />
       ) : canEdit ? (
         <button
           type="button"
           onClick={() => {
             setNextDescription(description ?? "");
+
             setEditingDescription(true);
           }}
-          className="mt-4 block cursor-text rounded-sm text-left text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-4 block max-w-2xl cursor-text rounded-sm text-left text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {description || <span className="text-muted-foreground/60">Add a description</span>}
+          {description || <span className="text-muted-foreground/50">{DESCRIPTION_PLACEHOLDER}</span>}
         </button>
-      ) : description ? (
-        <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{description}</p>
-      ) : null}
-
-      {updateProject.isError ? <p className="mt-2 text-xs text-destructive">{updateProject.error.message}</p> : null}
+      ) : (
+        <p className="mt-4 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{description || <span className="text-muted-foreground/50">{DESCRIPTION_PLACEHOLDER}</span>}</p>
+      )}
     </div>
+  );
+}
+
+function StartDateField({ projectId, value, canEdit }: { projectId: string; value: string | null; canEdit: boolean }) {
+  const updateProject = useUpdateProject();
+
+  const [open, setOpen] = useState(false);
+
+  const selected = parseProjectDate(value);
+
+  function updateDate(nextDate: string | null) {
+    if (nextDate === value) {
+      setOpen(false);
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId,
+        input: {
+          startDate: nextDate,
+        },
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+
+          toast.success("Start date updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update start date."));
+        },
+      },
+    );
+  }
+
+  if (!canEdit) {
+    return <p className="mt-2 text-sm">{formatProjectDate(value)}</p>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button type="button" variant="ghost" disabled={updateProject.isPending} className="-ml-2 mt-1 h-8 justify-start px-2 font-normal" />}>
+        <CalendarBlankIcon aria-hidden="true" />
+
+        {formatProjectDate(value)}
+      </PopoverTrigger>
+
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+          onSelect={(date) => {
+            if (!date) {
+              return;
+            }
+
+            updateDate(serializeProjectDate(date));
+          }}
+        />
+
+        <div className="border-t p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={value === null || updateProject.isPending}
+            onClick={() => {
+              updateDate(null);
+            }}
+          >
+            Clear start date
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DueDateField({ projectId, dueDate, dueDateMode, canEdit }: { projectId: string; dueDate: string | null; dueDateMode: ProjectDto["dueDateMode"]; canEdit: boolean }) {
+  const updateProject = useUpdateProject();
+
+  const [open, setOpen] = useState(false);
+
+  const selected = dueDateMode === "date" ? parseProjectDate(dueDate) : undefined;
+
+  const label = dueDateMode === "ongoing" ? "Ongoing" : dueDateMode === "date" ? formatProjectDate(dueDate) : "Not set";
+
+  function updateDueDate(nextDueDate: string | null, nextMode: ProjectDto["dueDateMode"]) {
+    if (nextDueDate === dueDate && nextMode === dueDateMode) {
+      setOpen(false);
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        projectId,
+        input: {
+          dueDate: nextDueDate,
+          dueDateMode: nextMode,
+        },
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+
+          toast.success("Due date updated.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to update due date."));
+        },
+      },
+    );
+  }
+
+  if (!canEdit) {
+    return <p className="mt-2 text-sm">{label}</p>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button type="button" variant="ghost" disabled={updateProject.isPending} className="-ml-2 mt-1 h-8 justify-start px-2 font-normal" />}>
+        <CalendarBlankIcon aria-hidden="true" />
+
+        {label}
+      </PopoverTrigger>
+
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+          onSelect={(date) => {
+            if (!date) {
+              return;
+            }
+
+            updateDueDate(serializeProjectDate(date), "date");
+          }}
+        />
+
+        <div className="space-y-1 border-t p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={updateProject.isPending}
+            onClick={() => {
+              updateDueDate(null, "ongoing");
+            }}
+          >
+            Ongoing
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={dueDateMode === "unset" || updateProject.isPending}
+            onClick={() => {
+              updateDueDate(null, "unset");
+            }}
+          >
+            Clear due date
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto; canEdit: boolean; canViewClients: boolean }) {
+  const updateProject = useUpdateProject();
+
+  const { data: clients = [], isPending, isError } = useClients(canEdit && canViewClients);
+
+  if (!canEdit || !canViewClients) {
+    return <p className="mt-2 break-words text-sm">{project.client.name}</p>;
+  }
+
+  if (isError) {
+    return (
+      <div className="mt-2">
+        <p className="text-sm">{project.client.name}</p>
+
+        <p className="mt-1 text-xs text-destructive">Unable to load clients.</p>
+      </div>
+    );
+  }
+
+  const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client.id);
+
+  return (
+    <select
+      aria-label="Project client"
+      value={project.client.id}
+      disabled={isPending || updateProject.isPending}
+      onChange={(event) => {
+        const clientId = event.target.value;
+
+        if (clientId === project.client.id) {
+          return;
+        }
+
+        updateProject.mutate(
+          {
+            projectId: project.id,
+            input: {
+              clientId,
+            },
+          },
+          {
+            onSuccess: () => {
+              toast.success("Client updated.");
+            },
+
+            onError: (error) => {
+              toast.error(getErrorMessage(error, "Failed to update client."));
+            },
+          },
+        );
+      }}
+      className="-ml-2 mt-1 h-8 max-w-full cursor-pointer rounded-lg border border-transparent bg-transparent px-2 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+    >
+      {availableClients.map((client) => (
+        <option key={client.id} value={client.id}>
+          {client.name}
+          {client.status === "inactive" ? " (inactive)" : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: boolean }) {
+  const updateProject = useUpdateProject();
+
+  if (!canEdit) {
+    return <p className="mt-2 text-sm">{engagementLabels[project.engagementType]}</p>;
+  }
+
+  return (
+    <select
+      aria-label="Project engagement"
+      value={project.engagementType}
+      disabled={updateProject.isPending}
+      onChange={(event) => {
+        const engagementType = event.target.value as ProjectDto["engagementType"];
+
+        if (engagementType === project.engagementType) {
+          return;
+        }
+
+        updateProject.mutate(
+          {
+            projectId: project.id,
+            input: {
+              engagementType,
+            },
+          },
+          {
+            onSuccess: () => {
+              toast.success("Engagement updated.");
+            },
+
+            onError: (error) => {
+              toast.error(getErrorMessage(error, "Failed to update engagement."));
+            },
+          },
+        );
+      }}
+      className="-ml-2 mt-1 h-8 cursor-pointer rounded-lg border border-transparent bg-transparent px-2 text-sm outline-none hover:bg-muted focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+    >
+      <option value="project">Project</option>
+
+      <option value="retainer">Retainer</option>
+    </select>
   );
 }
 
 export function ProjectOverviewPage() {
   const { projectId } = useParams();
+
   const { data: auth } = useMe();
+
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
+
   const { data: projectMembers = [], isPending: membersPending, isError: membersError } = useProjectMembers(projectId ?? "", Boolean(projectId));
 
   const canEdit = hasPermission(auth, "projects.edit");
+
+  const canViewClients = hasPermission(auth, "clients.view");
 
   if (!projectId) {
     return null;
@@ -292,17 +665,18 @@ export function ProjectOverviewPage() {
   const lead = project.leadUserId ? projectMembers.find((member) => member.user.id === project.leadUserId) : undefined;
 
   const visibleMembers = projectMembers.slice(0, 4);
-  const remainingMembers = Math.max(projectMembers.length - visibleMembers.length, 0);
 
-  const dueDateLabel = project.dueDate !== null ? formatProjectDate(project.dueDate) : project.engagementType === "retainer" ? "Ongoing" : "Not set";
+  const remainingMembers = Math.max(projectMembers.length - visibleMembers.length, 0);
 
   return (
     <div className="p-6 md:p-8">
       <div className="mx-auto max-w-6xl">
         <Breadcrumb>
           <BreadcrumbList>
-            <BreadcrumbItem>
-              <span className="text-muted-foreground">Project</span>
+            <BreadcrumbItem className="min-w-0">
+              <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
+                {project.name}
+              </span>
             </BreadcrumbItem>
 
             <BreadcrumbSeparator />
@@ -325,6 +699,7 @@ export function ProjectOverviewPage() {
               canEdit={canEdit}
             />
           </div>
+
           <div className="lg:relative">
             <div className="hidden lg:absolute lg:left-0 lg:top-0 lg:block">
               <Badge variant="outline" aria-label={`Project status: ${statusLabels[project.status]}`}>
@@ -348,6 +723,7 @@ export function ProjectOverviewPage() {
 
                         <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
                       </Avatar>
+
                       <span className="text-sm font-medium">{lead.user.displayName}</span>
                     </div>
                   ) : project.leadUserId ? (
@@ -373,6 +749,7 @@ export function ProjectOverviewPage() {
                       {visibleMembers.map((member) => (
                         <Avatar key={member.user.id} size="sm" role="img" aria-label={member.user.displayName} title={member.user.displayName}>
                           {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={member.user.displayName} /> : null}
+
                           <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
                         </Avatar>
                       ))}
@@ -388,12 +765,12 @@ export function ProjectOverviewPage() {
 
                 <div className="mt-2">
                   {project.discordChannelUrl ? (
-                    <a href={project.discordChannelUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline">
+                    <a href={project.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline">
                       Open Discord
                       <ArrowSquareOutIcon size={14} aria-hidden="true" />
                     </a>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Not connected</p>
+                    <p className="text-sm text-muted-foreground">Not Connected</p>
                   )}
                 </div>
               </div>
@@ -403,35 +780,40 @@ export function ProjectOverviewPage() {
 
         <section className="mt-20">
           <h2 className="text-base font-medium tracking-tight">Project Details</h2>
+
           <div className="mt-5 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
             <div>
-              <p className="text-xs text-muted-foreground">Start date</p>
+              <p className="text-xs text-muted-foreground">Start Date</p>
 
-              <p className="mt-2 text-sm">{formatProjectDate(project.startDate)}</p>
+              <StartDateField projectId={project.id} value={project.startDate} canEdit={canEdit} />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Due date</p>
 
-              <p className="mt-2 text-sm">{dueDateLabel}</p>
+            <div>
+              <p className="text-xs text-muted-foreground">Due Date</p>
+
+              <DueDateField projectId={project.id} dueDate={project.dueDate} dueDateMode={project.dueDateMode} canEdit={canEdit} />
             </div>
           </div>
 
           <div className="mt-10 grid max-w-md gap-x-10 gap-y-6 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Client Name</p>
-              <p className="mt-2 break-words text-sm">{project.client.name}</p>{" "}
+
+              <ClientField project={project} canEdit={canEdit} canViewClients={canViewClients} />
             </div>
+
             <div>
               <p className="text-xs text-muted-foreground">Engagement</p>
 
-              <p className="mt-2 text-sm">{engagementLabels[project.engagementType]}</p>
+              <EngagementField project={project} canEdit={canEdit} />
             </div>
           </div>
         </section>
 
         <section className="mt-20 pb-12">
           <h2 className="text-base font-medium tracking-tight">Key resources</h2>
-          <p className="mt-3 text-sm text-muted-foreground/60">Add a brief, links, more</p>{" "}
+
+          <p className="mt-3 text-sm text-muted-foreground/60">Add a brief, links, more</p>
         </section>
       </div>
     </div>
