@@ -2,14 +2,20 @@ import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createProjectSchema, updateProjectSchema, type ProjectDto } from "../../shared/contracts/projects";
+import { createProjectSchema, updateProjectSchema, type ProjectDto, type ProjectDueDateMode } from "../../shared/contracts/projects";
+
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
+
+import { replaceProjectLeadsSchema } from "../../shared/contracts/project-leads";
+
+import { createProjectResourceSchema, updateProjectResourceSchema, type ProjectResourceDto } from "../../shared/contracts/project-resources";
+
 import { canCreateProjectWithVisibility, canManageProjectMembers, canManageProjectVisibility } from "../../shared/project-privacy";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowDto, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
 import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
-import { clients, projectMembers, projectTaskStatuses, projects, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
+import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
 import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -44,6 +50,32 @@ function isValidTaskWorkflow(statuses: readonly TaskWorkflowStatusDto[]) {
   }).success;
 }
 
+function resolveProjectDueState(currentDueDate: string | null, currentDueDateMode: ProjectDueDateMode, inputDueDate: string | null | undefined, inputDueDateMode: ProjectDueDateMode | undefined) {
+  const dueDateProvided = inputDueDate !== undefined;
+  const dueDateModeProvided = inputDueDateMode !== undefined;
+
+  let dueDate = dueDateProvided ? inputDueDate : currentDueDate;
+
+  const dueDateMode: ProjectDueDateMode = dueDateModeProvided ? inputDueDateMode : dueDateProvided ? (inputDueDate === null ? "unset" : "date") : currentDueDateMode;
+
+  if (dueDateMode === "date") {
+    if (dueDate === null) {
+      return null;
+    }
+  } else {
+    if (dueDateProvided && inputDueDate !== null) {
+      return null;
+    }
+
+    dueDate = null;
+  }
+
+  return {
+    dueDate,
+    dueDateMode,
+  };
+}
+
 projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (c) => {
   const auth = c.var.auth;
   const db = createDb(c.env.flow_db);
@@ -54,7 +86,7 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
 
       clientId: clients.id,
       clientName: clients.name,
-      leadUserId: projects.leadUserId,
+      leadUserId: projectLeads.userId,
       name: projects.name,
       projectCodeOverride: projects.projectCodeOverride,
       description: projects.description,
@@ -63,12 +95,14 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
       status: projects.status,
       startDate: projects.startDate,
       dueDate: projects.dueDate,
+      dueDateMode: projects.dueDateMode,
       discordChannelUrl: projects.discordChannelUrl,
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
     .where(and(eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .orderBy(desc(projects.updatedAt));
 
@@ -92,6 +126,7 @@ projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (
     status: project.status,
     startDate: project.startDate,
     dueDate: project.dueDate,
+    dueDateMode: project.dueDateMode,
     discordChannelUrl: project.discordChannelUrl,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
@@ -166,7 +201,7 @@ projectsRoutes.post(
       id,
       workspaceId: auth.workspace.id,
       clientId: client.id,
-      leadUserId: null,
+      leadUserId: auth.user.id,
       name: input.name,
       projectCodeOverride: input.projectCodeOverride ?? null,
       description: input.description ?? null,
@@ -175,6 +210,7 @@ projectsRoutes.post(
       status: "planning",
       startDate: null,
       dueDate: null,
+      dueDateMode: "unset",
       discordChannelUrl: null,
       createdAt: now,
       updatedAt: now,
@@ -189,22 +225,24 @@ projectsRoutes.post(
         enabled: status.enabled,
       })),
     );
-    if (visibility === "private") {
-      await db.batch([
-        projectInsert,
+    await db.batch([
+      projectInsert,
 
-        db.insert(projectMembers).values({
-          projectId: id,
-          userId: auth.user.id,
-          createdAt: now,
-        }),
+      db.insert(projectMembers).values({
+        projectId: id,
+        userId: auth.user.id,
+        createdAt: now,
+      }),
 
-        workflowInsert,
-      ]);
-    } else {
-      await db.batch([projectInsert, workflowInsert]);
-    }
+      db.insert(projectLeads).values({
+        projectId: id,
+        userId: auth.user.id,
+        position: 0,
+        createdAt: now,
+      }),
 
+      workflowInsert,
+    ]);
     const projectCodeOverride = input.projectCodeOverride ?? null;
 
     const data: ProjectDto = {
@@ -219,11 +257,12 @@ projectsRoutes.post(
       projectCodeOverride,
       description: input.description ?? null,
       engagementType,
-      leadUserId: null,
+      leadUserId: auth.user.id,
       visibility,
       status: "planning",
       startDate: null,
       dueDate: null,
+      dueDateMode: "unset",
       discordChannelUrl: null,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -452,8 +491,9 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
       status: projects.status,
       startDate: projects.startDate,
       dueDate: projects.dueDate,
+      dueDateMode: projects.dueDateMode,
       discordChannelUrl: projects.discordChannelUrl,
-      leadUserId: projects.leadUserId,
+      leadUserId: projectLeads.userId,
       projectCodeOverride: projects.projectCodeOverride,
 
       engagementType: projects.engagementType,
@@ -462,6 +502,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
@@ -495,6 +536,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     status: project.status,
     startDate: project.startDate,
     dueDate: project.dueDate,
+    dueDateMode: project.dueDateMode,
     discordChannelUrl: project.discordChannelUrl,
 
     createdAt: project.createdAt.toISOString(),
@@ -550,7 +592,7 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       clientName: clients.name,
 
       name: projects.name,
-      leadUserId: projects.leadUserId,
+      leadUserId: projectLeads.userId,
       projectCodeOverride: projects.projectCodeOverride,
       engagementType: projects.engagementType,
       description: projects.description,
@@ -558,12 +600,14 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       status: projects.status,
       startDate: projects.startDate,
       dueDate: projects.dueDate,
+      dueDateMode: projects.dueDateMode,
       discordChannelUrl: projects.discordChannelUrl,
 
       createdAt: projects.createdAt,
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), eq(clients.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
@@ -624,7 +668,21 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
 
   const startDate = input.startDate !== undefined ? input.startDate : project.startDate;
 
-  const dueDate = input.dueDate !== undefined ? input.dueDate : project.dueDate;
+  const dueState = resolveProjectDueState(project.dueDate, project.dueDateMode, input.dueDate, input.dueDateMode);
+
+  if (!dueState) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_PROJECT_DUE_STATE",
+          message: "Invalid project due date state",
+        },
+      },
+      400,
+    );
+  }
+
+  const { dueDate, dueDateMode } = dueState;
 
   if (startDate && dueDate && startDate > dueDate) {
     return c.json(
@@ -645,53 +703,22 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
   const discordChannelUrl = input.discordChannelUrl !== undefined ? input.discordChannelUrl : project.discordChannelUrl;
   const projectCodeOverride = input.projectCodeOverride !== undefined ? input.projectCodeOverride : project.projectCodeOverride;
   const engagementType = input.engagementType ?? project.engagementType;
-  const leadUserId = input.leadUserId !== undefined ? input.leadUserId : project.leadUserId;
-
-  if (input.leadUserId !== undefined && input.leadUserId !== null) {
-    const [leadMember] = await db
-      .select({
-        userId: projectMembers.userId,
-      })
-      .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, input.leadUserId)))
-      .limit(1);
-
-    if (!leadMember) {
-      return c.json(
-        {
-          error: {
-            code: "PROJECT_LEAD_NOT_MEMBER",
-            message: "Project lead must be a current project member",
-          },
-        },
-        409,
-      );
-    }
-  }
 
   await db
     .update(projects)
     .set({
       clientId: selectedClient.id,
-
-      leadUserId,
-
       name,
-
       projectCodeOverride,
-
       description,
-
       engagementType,
-
       visibility,
       status,
-
       startDate,
       dueDate,
+      dueDateMode,
 
       discordChannelUrl,
-
       updatedAt: now,
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
@@ -706,13 +733,14 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
 
     engagementType,
 
-    leadUserId,
+    leadUserId: project.leadUserId,
     name,
     description,
     visibility,
     status,
     startDate,
     dueDate,
+    dueDateMode,
     discordChannelUrl,
 
     createdAt: project.createdAt.toISOString(),
@@ -762,6 +790,94 @@ projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive")
   });
 });
 
+projectsRoutes.put("/:id/leads", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = replaceProjectLeadsSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid project leads",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const memberRows = await db
+    .select({
+      userId: projectMembers.userId,
+    })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), inArray(projectMembers.userId, input.userIds)));
+
+  if (memberRows.length !== input.userIds.length) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_LEAD_NOT_MEMBER",
+          message: "Every project lead must be a current project member",
+        },
+      },
+      409,
+    );
+  }
+
+  const now = new Date();
+
+  const leads = input.userIds.map((userId, position) => ({
+    projectId,
+    userId,
+    position,
+    createdAt: now,
+  }));
+
+  await db.batch([
+    db.delete(projectLeads).where(eq(projectLeads.projectId, projectId)),
+
+    db.insert(projectLeads).values(leads),
+
+    db
+      .update(projects)
+      .set({
+        leadUserId: input.userIds[0],
+        updatedAt: now,
+      })
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt))),
+  ]);
+
+  return c.json({
+    data: leads.map((lead) => ({
+      userId: lead.userId,
+      position: lead.position,
+    })),
+  });
+});
+
 /**
  * * bagian member project
  */
@@ -794,11 +910,13 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
       customRoleId: workspaceRoles.id,
       customRoleName: workspaceRoles.name,
       addedAt: projectMembers.createdAt,
+      leadPosition: projectLeads.position,
     })
     .from(projectMembers)
     .innerJoin(users, eq(projectMembers.userId, users.id))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
     .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
+    .leftJoin(projectLeads, and(eq(projectLeads.projectId, projectMembers.projectId), eq(projectLeads.userId, projectMembers.userId)))
     .where(eq(projectMembers.projectId, projectId))
     .orderBy(asc(users.displayName));
 
@@ -819,6 +937,8 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
     },
 
     addedAt: member.addedAt.toISOString(),
+    isLead: member.leadPosition !== null,
+    leadPosition: member.leadPosition,
   }));
 
   return c.json({
@@ -914,8 +1034,10 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edi
   const [membership] = await db
     .select({
       addedAt: projectMembers.createdAt,
+      leadPosition: projectLeads.position,
     })
     .from(projectMembers)
+    .leftJoin(projectLeads, and(eq(projectLeads.projectId, projectMembers.projectId), eq(projectLeads.userId, projectMembers.userId)))
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, member.id)))
     .limit(1);
 
@@ -948,6 +1070,8 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edi
     },
 
     addedAt: membership.addedAt.toISOString(),
+    isLead: membership.leadPosition !== null,
+    leadPosition: membership.leadPosition,
   };
 
   return c.json({
@@ -957,13 +1081,9 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edi
 
 projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("projects.edit"), async (c) => {
   const auth = c.var.auth;
-
   const projectId = c.req.param("id");
-
   const userId = c.req.param("userId");
-
   const db = createDb(c.env.flow_db);
-
   const access = await findAccessibleProject(db, auth, projectId);
 
   if (!access) {
@@ -1010,19 +1130,435 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
     );
   }
 
+  const currentLeads = await db
+    .select({
+      userId: projectLeads.userId,
+      position: projectLeads.position,
+    })
+    .from(projectLeads)
+    .where(eq(projectLeads.projectId, projectId))
+    .orderBy(asc(projectLeads.position));
+
+  if (currentLeads.length === 0) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_LEAD_REQUIRED",
+          message: "Assign a project lead before removing project members",
+        },
+      },
+      409,
+    );
+  }
+
+  const removedLead = currentLeads.find((lead) => lead.userId === userId);
+
+  if (removedLead && currentLeads.length === 1) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_LEAD_REQUIRED",
+          message: "A project must have at least one project lead",
+        },
+      },
+      409,
+    );
+  }
+
+  if (!removedLead) {
+    await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+
+    return c.json({
+      data: {
+        success: true as const,
+      },
+    });
+  }
+
   const now = new Date();
 
+  const remainingLeads = currentLeads
+    .filter((lead) => lead.userId !== userId)
+    .map((lead, position) => ({
+      projectId,
+      userId: lead.userId,
+      position,
+      createdAt: now,
+    }));
+
   await db.batch([
+    db.delete(projectLeads).where(eq(projectLeads.projectId, projectId)),
+
+    db.insert(projectLeads).values(remainingLeads),
+
     db
       .update(projects)
       .set({
-        leadUserId: null,
+        leadUserId: remainingLeads[0].userId,
         updatedAt: now,
       })
-      .where(and(eq(projects.id, projectId), eq(projects.leadUserId, userId))),
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt))),
 
     db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
   ]);
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+projectsRoutes.get("/:id/resources", requireAuth, requirePermission("projects.view"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await db
+    .select({
+      id: projectResources.id,
+      projectId: projectResources.projectId,
+      type: projectResources.type,
+      title: projectResources.title,
+      url: projectResources.url,
+      content: projectResources.content,
+      position: projectResources.position,
+      createdBy: projectResources.createdBy,
+      createdAt: projectResources.createdAt,
+      updatedAt: projectResources.updatedAt,
+    })
+    .from(projectResources)
+    .where(eq(projectResources.projectId, projectId))
+    .orderBy(asc(projectResources.position));
+
+  const data: ProjectResourceDto[] = result.map((resource) => ({
+    id: resource.id,
+    projectId: resource.projectId,
+    type: resource.type,
+    title: resource.title,
+    url: resource.url,
+    content: resource.content,
+    position: resource.position,
+    createdBy: resource.createdBy,
+    createdAt: resource.createdAt.toISOString(),
+    updatedAt: resource.updatedAt.toISOString(),
+  }));
+
+  return c.json({
+    data,
+  });
+});
+
+projectsRoutes.post("/:id/resources", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = createProjectResourceSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid project resource",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const [lastResource] = await db
+    .select({
+      position: projectResources.position,
+    })
+    .from(projectResources)
+    .where(eq(projectResources.projectId, projectId))
+    .orderBy(desc(projectResources.position))
+    .limit(1);
+
+  const position = (lastResource?.position ?? -1) + 1;
+  const id = createId("res");
+  const now = new Date();
+
+  const resource =
+    input.type === "document_brief"
+      ? {
+          id,
+          projectId,
+          type: "document_brief" as const,
+          title: input.title ?? "Project Brief",
+          url: null,
+          content: input.content ?? "",
+          position,
+          createdBy: auth.user.id,
+          createdAt: now,
+          updatedAt: now,
+        }
+      : {
+          id,
+          projectId,
+          type: "link" as const,
+          title: input.title ?? new URL(input.url).hostname,
+          url: input.url,
+          content: null,
+          position,
+          createdBy: auth.user.id,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+  await db.insert(projectResources).values(resource);
+
+  const data: ProjectResourceDto = {
+    id: resource.id,
+    projectId: resource.projectId,
+    type: resource.type,
+    title: resource.title,
+    url: resource.url,
+    content: resource.content,
+    position: resource.position,
+    createdBy: resource.createdBy,
+    createdAt: resource.createdAt.toISOString(),
+    updatedAt: resource.updatedAt.toISOString(),
+  };
+
+  return c.json(
+    {
+      data,
+    },
+    201,
+  );
+});
+
+projectsRoutes.patch("/:id/resources/:resourceId", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+  const resourceId = c.req.param("resourceId");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [resource] = await db
+    .select({
+      id: projectResources.id,
+      projectId: projectResources.projectId,
+      type: projectResources.type,
+      title: projectResources.title,
+      url: projectResources.url,
+      content: projectResources.content,
+      position: projectResources.position,
+      createdBy: projectResources.createdBy,
+      createdAt: projectResources.createdAt,
+      updatedAt: projectResources.updatedAt,
+    })
+    .from(projectResources)
+    .where(and(eq(projectResources.id, resourceId), eq(projectResources.projectId, projectId)))
+    .limit(1);
+
+  if (!resource) {
+    return c.json(
+      {
+        error: {
+          code: "RESOURCE_NOT_FOUND",
+          message: "Project resource not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = updateProjectResourceSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid project resource",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+  const now = new Date();
+
+  let title: string;
+  let url: string | null;
+  let content: string | null;
+
+  if (resource.type === "document_brief") {
+    if (input.url !== undefined && input.url !== null) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Document brief cannot contain an external URL",
+          },
+        },
+        400,
+      );
+    }
+
+    title = input.title === undefined ? (resource.title ?? "Project Brief") : (input.title ?? "Project Brief");
+
+    url = null;
+
+    content = input.content === undefined ? (resource.content ?? "") : (input.content ?? "");
+  } else {
+    if (input.content !== undefined && input.content !== null) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Link resource cannot contain document content",
+          },
+        },
+        400,
+      );
+    }
+
+    url = input.url === undefined ? resource.url : input.url;
+
+    if (!url) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Link resource requires a URL",
+          },
+        },
+        400,
+      );
+    }
+
+    title = input.title === undefined ? (resource.title ?? new URL(url).hostname) : (input.title ?? new URL(url).hostname);
+
+    content = null;
+  }
+
+  await db
+    .update(projectResources)
+    .set({
+      title,
+      url,
+      content,
+      updatedAt: now,
+    })
+    .where(and(eq(projectResources.id, resourceId), eq(projectResources.projectId, projectId)));
+
+  const data: ProjectResourceDto = {
+    id: resource.id,
+    projectId: resource.projectId,
+    type: resource.type,
+    title,
+    url,
+    content,
+    position: resource.position,
+    createdBy: resource.createdBy,
+    createdAt: resource.createdAt.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
+
+projectsRoutes.delete("/:id/resources/:resourceId", requireAuth, requirePermission("projects.edit"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+  const resourceId = c.req.param("resourceId");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [resource] = await db
+    .select({
+      id: projectResources.id,
+    })
+    .from(projectResources)
+    .where(and(eq(projectResources.id, resourceId), eq(projectResources.projectId, projectId)))
+    .limit(1);
+
+  if (!resource) {
+    return c.json(
+      {
+        error: {
+          code: "RESOURCE_NOT_FOUND",
+          message: "Project resource not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(projectResources).where(and(eq(projectResources.id, resourceId), eq(projectResources.projectId, projectId)));
+
   return c.json({
     data: {
       success: true as const,
