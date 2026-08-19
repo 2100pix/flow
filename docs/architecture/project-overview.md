@@ -118,7 +118,8 @@ Desktop semantics:
 - Status berada di bagian paling atas Collaboration rail.
 - Status, Project Leads, Members, dan Channel Chat menggunakan
   horizontal origin yang sama.
-- Project Details berada di bawah Hero.
+- Project Details berada di primary left column, tepat di bawah Description,
+  sehingga posisinya mengikuti tinggi Description secara natural.
 - Key Resources berada setelah Project Details.
 - Whitespace bersifat intentional.
 - Tidak ada separator jika hierarchy sudah cukup jelas dengan spacing.
@@ -293,8 +294,7 @@ Project Description adalah short project summary.
 
 Maximum length:
 
-`160 characters`
-
+`255 characters`
 Limit harus berlaku konsisten pada:
 
 - Project creation
@@ -329,7 +329,8 @@ Click Description:
 - visual height mengikuti content
 - initial height sekitar satu text line
 - auto-grow saat content membungkus
-- maximum visual height sekitar tiga text lines
+- visual height mengikuti seluruh content secara natural
+- tidak menggunakan internal vertical scrollbar
 - tidak menggunakan fixed textarea tinggi seperti form Settings
 - `resize: none`
 

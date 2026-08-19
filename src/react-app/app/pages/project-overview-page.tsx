@@ -266,7 +266,7 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-3">
         {editingName && canEdit ? (
-          <span className="inline-grid min-w-0 max-w-2xl">
+          <span className="relative inline-grid min-w-0 max-w-2xl align-middle">
             <span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-pre text-2xl font-semibold tracking-tight md:text-3xl">
               {nextName || " "}
             </span>
@@ -297,7 +297,7 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
                   setEditingName(false);
                 }
               }}
-              className="col-start-1 row-start-1 min-w-0 w-full border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
+              className="absolute inset-0 h-full w-full min-w-0 border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none md:text-3xl"
             />
           </span>
         ) : canEdit ? (
