@@ -76,6 +76,17 @@ project member during creation.
 This prevents a creator from creating a project that they cannot
 access afterward.
 
+Any Workspace Member selected as a Project Lead during project
+creation must also automatically become a Project Member in the
+same atomic creation operation.
+
+The creator remains a Project Member even when the creator is not
+one of the selected Project Leads.
+
+Project creation must preserve the invariant:
+
+`Project Lead ⊆ Project Members`
+
 ---
 
 ## Changing visibility
