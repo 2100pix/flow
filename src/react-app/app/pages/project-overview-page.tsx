@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowSquareOutIcon, CalendarBlankIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, CalendarBlankIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useParams } from "react-router";
 
@@ -9,16 +9,22 @@ import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useMe } from "@/features/auth/hooks/use-me";
 import { hasPermission } from "@/features/auth/permissions";
 import { useClients } from "@/features/clients/hooks/use-clients";
+import { useAddProjectMember } from "@/features/members/hooks/use-add-project-member";
+import { useMembers } from "@/features/members/hooks/use-members";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
-import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
+import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
+import type { ProjectMemberDto } from "@/features/members/types";
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_LEAD_MAX_COUNT } from "@/features/projects/constants";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
+import { useUpdateProjectLeads } from "@/features/projects/hooks/use-update-project-leads";
 import { type ProjectDto, type ProjectStatus } from "@/features/projects/types";
 
 const statusLabels: Record<ProjectStatus, string> = {
@@ -82,6 +88,23 @@ function getMemberInitials(name: string) {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
+}
+
+function getProjectMemberRoleLabel(member: ProjectMemberDto) {
+  if (member.user.customRole) {
+    return member.user.customRole.name;
+  }
+
+  switch (member.user.role) {
+    case "owner":
+      return "Owner";
+
+    case "admin":
+      return "Admin";
+
+    default:
+      return "Member";
+  }
 }
 
 function OverviewSkeleton() {
@@ -630,19 +653,396 @@ function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: b
     </select>
   );
 }
+function CollaborationControls({
+  project,
+  projectMembers,
+  membersPending,
+  membersError,
+  canEdit,
+  canManageMembers,
+  canViewWorkspaceMembers,
+}: {
+  project: ProjectDto;
+  projectMembers: ProjectMemberDto[];
+  membersPending: boolean;
+  membersError: boolean;
+  canEdit: boolean;
+  canManageMembers: boolean;
+  canViewWorkspaceMembers: boolean;
+}) {
+  const updateLeads = useUpdateProjectLeads();
 
+  const addMember = useAddProjectMember();
+
+  const removeMember = useRemoveProjectMember();
+
+  const [leadPickerOpen, setLeadPickerOpen] = useState(false);
+
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+
+  const [memberToAdd, setMemberToAdd] = useState("");
+
+  const { data: workspaceMembers = [], isPending: workspaceMembersPending, isError: workspaceMembersError } = useMembers(membersDialogOpen && canManageMembers && canViewWorkspaceMembers);
+
+  const leads = projectMembers.filter((member) => member.isLead).sort((first, second) => (first.leadPosition ?? 99) - (second.leadPosition ?? 99));
+
+  const leadIds = leads.map((member) => member.user.id);
+
+  const leadCandidates = projectMembers.filter((member) => !member.isLead);
+
+  const visibleMembers = projectMembers.slice(0, 5);
+
+  const remainingMembers = Math.max(projectMembers.length - visibleMembers.length, 0);
+
+  const assignedIds = new Set(projectMembers.map((member) => member.user.id));
+
+  const availableWorkspaceMembers = workspaceMembers.filter((member) => !assignedIds.has(member.id));
+
+  const collaborationPending = updateLeads.isPending || addMember.isPending || removeMember.isPending;
+
+  function addLead(userId: string) {
+    if (leadIds.includes(userId) || leadIds.length >= PROJECT_LEAD_MAX_COUNT) {
+      return;
+    }
+
+    updateLeads.mutate(
+      {
+        projectId: project.id,
+        userIds: [...leadIds, userId],
+      },
+      {
+        onSuccess: () => {
+          setLeadPickerOpen(false);
+
+          toast.success("Project lead added.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to add project lead."));
+        },
+      },
+    );
+  }
+
+  function removeLead(userId: string) {
+    if (leadIds.length <= 1) {
+      return;
+    }
+
+    const nextLeadIds = leadIds.filter((leadId) => leadId !== userId);
+
+    updateLeads.mutate(
+      {
+        projectId: project.id,
+        userIds: nextLeadIds,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Project lead removed.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to remove project lead."));
+        },
+      },
+    );
+  }
+
+  function handleAddMember() {
+    if (!memberToAdd) {
+      return;
+    }
+
+    addMember.mutate(
+      {
+        projectId: project.id,
+        userId: memberToAdd,
+      },
+      {
+        onSuccess: () => {
+          setMemberToAdd("");
+
+          toast.success("Project member added.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to add project member."));
+        },
+      },
+    );
+  }
+
+  function handleRemoveMember(member: ProjectMemberDto) {
+    if (member.isLead && leads.length === 1) {
+      return;
+    }
+
+    removeMember.mutate(
+      {
+        projectId: project.id,
+        userId: member.user.id,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Project member removed.");
+        },
+
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Failed to remove project member."));
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="lg:relative">
+      <div className="hidden lg:absolute lg:left-0 lg:top-0 lg:block">
+        <Badge variant="outline" aria-label={`Project status: ${statusLabels[project.status]}`}>
+          {statusLabels[project.status]}
+        </Badge>
+      </div>
+
+      <div className="space-y-8 lg:pt-12">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">Project Leads</p>
+
+            {canEdit && !membersPending && !membersError && leads.length < PROJECT_LEAD_MAX_COUNT && leadCandidates.length > 0 ? (
+              <Popover open={leadPickerOpen} onOpenChange={setLeadPickerOpen}>
+                <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-xs" aria-label="Add project lead" disabled={updateLeads.isPending} />}>
+                  <PlusIcon aria-hidden="true" />
+                </PopoverTrigger>
+
+                <PopoverContent align="start" className="w-64 p-2">
+                  <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Add project lead</p>
+
+                  <div className="space-y-1">
+                    {leadCandidates.map((member) => (
+                      <button
+                        key={member.user.id}
+                        type="button"
+                        disabled={updateLeads.isPending}
+                        onClick={() => {
+                          addLead(member.user.id);
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        <Avatar size="sm" aria-hidden="true">
+                          {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                          <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                        </Avatar>
+
+                        <span className="min-w-0 truncate">{member.user.displayName}</span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+          </div>
+
+          <div className="mt-2">
+            {membersPending ? (
+              <Skeleton className="h-8 w-32" />
+            ) : membersError ? (
+              <p className="text-sm text-muted-foreground">Unable to load leads</p>
+            ) : leads.length === 0 ? (
+              <p className="text-sm text-destructive">Lead required</p>
+            ) : (
+              <div className="space-y-2">
+                {leads.map((lead) => (
+                  <div key={lead.user.id} className="flex min-w-0 items-center gap-2">
+                    <Avatar size="sm" role="img" aria-label={lead.user.displayName} title={lead.user.displayName}>
+                      {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
+
+                      <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
+                    </Avatar>
+
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{lead.user.displayName}</span>
+
+                    {canEdit && leads.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${lead.user.displayName} as project lead`}
+                        disabled={updateLeads.isPending}
+                        onClick={() => {
+                          removeLead(lead.user.id);
+                        }}
+                      >
+                        <XIcon aria-hidden="true" />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs text-muted-foreground">Members</p>
+
+          <div className="mt-2">
+            {membersPending ? (
+              <Skeleton className="h-8 w-28" />
+            ) : membersError ? (
+              <p className="text-sm text-muted-foreground">Unable to load members</p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMembersDialogOpen(true);
+                }}
+                className="rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="View project members"
+              >
+                {projectMembers.length > 0 ? (
+                  <AvatarGroup>
+                    {visibleMembers.map((member) => (
+                      <Avatar key={member.user.id} size="sm" role="img" aria-label={member.user.displayName} title={member.user.displayName}>
+                        {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={member.user.displayName} /> : null}
+
+                        <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                      </Avatar>
+                    ))}
+
+                    {remainingMembers > 0 ? <AvatarGroupCount className="size-6 text-xs">+{remainingMembers}</AvatarGroupCount> : null}
+                  </AvatarGroup>
+                ) : (
+                  <span className="text-sm text-muted-foreground">No members</span>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs text-muted-foreground">Channel Chat</p>
+
+          <div className="mt-2">
+            {project.discordChannelUrl ? (
+              <a href={project.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline">
+                Open Discord
+                <ArrowSquareOutIcon size={14} aria-hidden="true" />
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground">Not Connected</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Project members</DialogTitle>
+
+            <DialogDescription>Manage the people assigned to this project.</DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-80 overflow-y-auto">
+            {projectMembers.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No project members.</p>
+            ) : (
+              <div className="divide-y">
+                {projectMembers.map((member) => {
+                  const soleLead = member.isLead && leads.length === 1;
+
+                  return (
+                    <div key={member.user.id} className="flex items-center gap-3 py-3">
+                      <Avatar size="sm" role="img" aria-label={member.user.displayName}>
+                        {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                        <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                      </Avatar>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-medium">{member.user.displayName}</p>
+
+                          {member.isLead ? (
+                            <Badge variant="outline" className="shrink-0 text-[10px]">
+                              Lead
+                            </Badge>
+                          ) : null}
+                        </div>
+
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{getProjectMemberRoleLabel(member)}</p>
+                      </div>
+
+                      {canManageMembers ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remove ${member.user.displayName} from project`}
+                          title={soleLead ? "Add another project lead before removing this member." : `Remove ${member.user.displayName}`}
+                          disabled={collaborationPending || soleLead}
+                          onClick={() => {
+                            handleRemoveMember(member);
+                          }}
+                        >
+                          <TrashIcon aria-hidden="true" />
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {canManageMembers && canViewWorkspaceMembers ? (
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium">Add members to this project</p>
+
+              {workspaceMembersError ? (
+                <p className="mt-2 text-xs text-destructive">Unable to load workspace members.</p>
+              ) : availableWorkspaceMembers.length === 0 && !workspaceMembersPending ? (
+                <p className="mt-2 text-sm text-muted-foreground">All workspace members are already assigned.</p>
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <select
+                    aria-label="Workspace member to add"
+                    value={memberToAdd}
+                    disabled={workspaceMembersPending || collaborationPending}
+                    onChange={(event) => {
+                      setMemberToAdd(event.target.value);
+                    }}
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
+                  >
+                    <option value="">Select workspace member</option>
+
+                    {availableWorkspaceMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.displayName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <Button type="button" disabled={!memberToAdd || workspaceMembersPending || collaborationPending} onClick={handleAddMember}>
+                    Add
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 export function ProjectOverviewPage() {
   const { projectId } = useParams();
-
   const { data: auth } = useMe();
-
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
-
   const { data: projectMembers = [], isPending: membersPending, isError: membersError } = useProjectMembers(projectId ?? "", Boolean(projectId));
-
   const canEdit = hasPermission(auth, "projects.edit");
-
   const canViewClients = hasPermission(auth, "clients.view");
+  const canViewWorkspaceMembers = hasPermission(auth, "members.view");
 
   if (!projectId) {
     return null;
@@ -662,11 +1062,7 @@ export function ProjectOverviewPage() {
     );
   }
 
-  const lead = project.leadUserId ? projectMembers.find((member) => member.user.id === project.leadUserId) : undefined;
-
-  const visibleMembers = projectMembers.slice(0, 4);
-
-  const remainingMembers = Math.max(projectMembers.length - visibleMembers.length, 0);
+  const canManageMembers = canEdit && (project.visibility === "workspace" || hasPermission(auth, "projects.private.manage"));
 
   return (
     <div className="p-6 md:p-8">
@@ -700,82 +1096,7 @@ export function ProjectOverviewPage() {
             />
           </div>
 
-          <div className="lg:relative">
-            <div className="hidden lg:absolute lg:left-0 lg:top-0 lg:block">
-              <Badge variant="outline" aria-label={`Project status: ${statusLabels[project.status]}`}>
-                {statusLabels[project.status]}
-              </Badge>
-            </div>
-
-            <div className="space-y-8 lg:pt-12">
-              <div>
-                <p className="text-xs text-muted-foreground">Lead Project</p>
-
-                <div className="mt-2">
-                  {membersPending ? (
-                    <Skeleton className="h-8 w-32" />
-                  ) : membersError ? (
-                    <p className="text-sm text-muted-foreground">Unable to load lead</p>
-                  ) : lead ? (
-                    <div className="flex items-center gap-2.5">
-                      <Avatar size="sm" role="img" aria-label={lead.user.displayName} title={lead.user.displayName}>
-                        {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
-
-                        <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
-                      </Avatar>
-
-                      <span className="text-sm font-medium">{lead.user.displayName}</span>
-                    </div>
-                  ) : project.leadUserId ? (
-                    <p className="text-sm text-muted-foreground">Unavailable</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Unassigned</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground">Members</p>
-
-                <div className="mt-2">
-                  {membersPending ? (
-                    <Skeleton className="h-8 w-28" />
-                  ) : membersError ? (
-                    <p className="text-sm text-muted-foreground">Unable to load members</p>
-                  ) : projectMembers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No members</p>
-                  ) : (
-                    <AvatarGroup>
-                      {visibleMembers.map((member) => (
-                        <Avatar key={member.user.id} size="sm" role="img" aria-label={member.user.displayName} title={member.user.displayName}>
-                          {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={member.user.displayName} /> : null}
-
-                          <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
-                        </Avatar>
-                      ))}
-
-                      {remainingMembers > 0 ? <AvatarGroupCount className="size-6 text-xs">+{remainingMembers}</AvatarGroupCount> : null}
-                    </AvatarGroup>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground">Channel Chat</p>
-
-                <div className="mt-2">
-                  {project.discordChannelUrl ? (
-                    <a href={project.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline">
-                      Open Discord
-                      <ArrowSquareOutIcon size={14} aria-hidden="true" />
-                    </a>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Not Connected</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <CollaborationControls project={project} projectMembers={projectMembers} membersPending={membersPending} membersError={membersError} canEdit={canEdit} canManageMembers={canManageMembers} canViewWorkspaceMembers={canViewWorkspaceMembers} />
         </section>
 
         <section className="mt-20">

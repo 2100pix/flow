@@ -1,1 +1,1 @@
-export { PROJECT_DESCRIPTION_MAX_LENGTH } from "../../../shared/project-constants";
+export { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_LEAD_MAX_COUNT } from "../../../shared/project-constants";
