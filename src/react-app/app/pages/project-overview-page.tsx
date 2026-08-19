@@ -21,6 +21,7 @@ import { useMembers } from "@/features/members/hooks/use-members";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
 import type { ProjectMemberDto } from "@/features/members/types";
+import { KeyResourcesSection } from "@/features/projects/components/key-resources-section";
 import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_LEAD_MAX_COUNT } from "@/features/projects/constants";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
@@ -1131,11 +1132,7 @@ export function ProjectOverviewPage() {
           </div>
         </section>
 
-        <section className="mt-20 pb-12">
-          <h2 className="text-base font-medium tracking-tight">Key resources</h2>
-
-          <p className="mt-3 text-sm text-muted-foreground/60">Add a brief, links, more</p>
-        </section>
+        <KeyResourcesSection projectId={project.id} canEdit={canEdit} />
       </div>
     </div>
   );
