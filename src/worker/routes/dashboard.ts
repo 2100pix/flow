@@ -5,7 +5,7 @@ import type { DashboardProjectDto, DashboardResponse, DashboardTaskDto } from ".
 import type { TaskStatus } from "../../shared/contracts/tasks";
 
 import { createDb } from "../db";
-import { clients, projects, tasks } from "../db/schema";
+import { clients, projects, taskAssignees, tasks } from "../db/schema";
 import { filterAccessibleProjects } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
@@ -52,21 +52,6 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
               sum(
                 case
                   when ${tasks.status} not in (${"done"}, ${"cancelled"})
-                  then 1
-                  else 0
-                end
-              ),
-              0
-            )
-          `,
-
-            myTasks: sql<number>`
-            coalesce(
-              sum(
-                case
-                  when
-                    ${tasks.status} not in (${"done"}, ${"cancelled"})
-                    and ${tasks.assigneeId} = ${auth.user.id}
                   then 1
                   else 0
                 end
@@ -157,6 +142,32 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
           .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt)))
       : [];
 
+  const [myTaskCountRow] =
+    accessibleProjectIds.length > 0
+      ? await db
+          .select({
+            count: sql<number>`
+              count(*)
+            `,
+          })
+          .from(taskAssignees)
+          .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
+          .innerJoin(projects, eq(tasks.projectId, projects.id))
+          .where(
+            and(
+              eq(taskAssignees.userId, auth.user.id),
+
+              inArray(projects.id, accessibleProjectIds),
+
+              ne(projects.status, "completed"),
+
+              isNull(tasks.archivedAt),
+
+              notInArray(tasks.status, ["done", "cancelled"]),
+            ),
+          )
+      : [];
+
   const taskStatus: Record<TaskStatus, number> = {
     backlog: Number(taskSummary?.backlog ?? 0),
     todo: Number(taskSummary?.todo ?? 0),
@@ -186,9 +197,22 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
 
             updatedAt: tasks.updatedAt,
           })
-          .from(tasks)
+          .from(taskAssignees)
+          .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
           .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), notInArray(tasks.status, ["done", "cancelled"]), eq(tasks.assigneeId, auth.user.id)))
+          .where(
+            and(
+              eq(taskAssignees.userId, auth.user.id),
+
+              inArray(projects.id, accessibleProjectIds),
+
+              ne(projects.status, "completed"),
+
+              isNull(tasks.archivedAt),
+
+              notInArray(tasks.status, ["done", "cancelled"]),
+            ),
+          )
           .orderBy(desc(tasks.updatedAt))
           .limit(6)
       : [];
@@ -310,7 +334,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
 
       openTasks: Number(taskSummary?.openTasks ?? 0),
 
-      myTasks: Number(taskSummary?.myTasks ?? 0),
+      myTasks: Number(myTaskCountRow?.count ?? 0),
     },
 
     taskStatus,

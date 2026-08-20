@@ -37,8 +37,7 @@ function TaskEditor({ task, onClose, workflowStatuses }: TaskEditorProps) {
 
   const [priority, setPriority] = useState<TaskPriority | "">(task.priority ?? "");
 
-  const [assigneeId, setAssigneeId] = useState(task.assignee?.id ?? "");
-
+  const [assigneeId, setAssigneeId] = useState(task.assignees[0]?.id ?? "");
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
 
   const [discordThreadUrl, setDiscordThreadUrl] = useState(task.discordThreadUrl ?? "");
