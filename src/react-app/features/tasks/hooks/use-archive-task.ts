@@ -32,9 +32,6 @@ export function useArchiveTask() {
           queryKey: dashboardQueryKey,
         }),
       ]);
-      await queryClient.invalidateQueries({
-        queryKey: projectTasksQueryKey(variables.projectId),
-      });
     },
   });
 }

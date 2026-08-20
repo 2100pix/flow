@@ -37,9 +37,6 @@ export function useUpdateTask() {
           queryKey: dashboardQueryKey,
         }),
       ]);
-      await queryClient.invalidateQueries({
-        queryKey: projectTasksQueryKey(task.projectId),
-      });
     },
   });
 }
