@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-import type { ArchiveProjectResponse, CreateProjectInput, ProjectLeadsResponse, ProjectResponse, ProjectsResponse, ReplaceProjectLeadsInput, UpdateProjectInput } from "../types";
+import type { ArchiveProjectResponse, CreateProjectInput, ProjectLeadsResponse, ProjectResponse, ProjectsResponse, ReplaceProjectLeadsInput, UpdateProjectInput, DeleteProjectResponse } from "../types";
 
 export async function getProjects() {
   const response = await apiFetch<ProjectsResponse>("/api/projects");
@@ -57,7 +57,13 @@ export async function replaceProjectLeads(projectId: string, input: ReplaceProje
 }
 
 export async function archiveProject(projectId: string) {
-  return apiFetch<ArchiveProjectResponse>(`/api/projects/${projectId}`, {
+  return apiFetch<ArchiveProjectResponse>(`/api/projects/${projectId}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function deleteProject(projectId: string) {
+  return apiFetch<DeleteProjectResponse>(`/api/projects/${projectId}`, {
     method: "DELETE",
   });
 }

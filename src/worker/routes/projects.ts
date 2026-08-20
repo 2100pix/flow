@@ -816,7 +816,7 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
   });
 });
 
-projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive"), async (c) => {
+projectsRoutes.post("/:id/archive", requireAuth, requirePermission("projects.archive"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
 
@@ -845,6 +845,35 @@ projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.archive")
       updatedAt: now,
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.delete"), async (c) => {
+  const auth = c.var.auth;
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const access = await findAccessibleProject(db, auth, projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(projects).where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
 
   return c.json({
     data: {
