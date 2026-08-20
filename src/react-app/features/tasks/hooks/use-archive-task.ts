@@ -4,6 +4,7 @@ import { archiveTask } from "../api/tasks";
 import type { TaskDto } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
 import { taskQueryKey } from "./use-task";
+import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
 
 type ArchiveVariables = {
   taskId: string;
@@ -22,7 +23,15 @@ export function useArchiveTask() {
       });
 
       queryClient.setQueryData<TaskDto[]>(projectTasksQueryKey(variables.projectId), (existing) => existing?.filter((task) => task.id !== variables.taskId));
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectTasksQueryKey(variables.projectId),
+        }),
 
+        queryClient.invalidateQueries({
+          queryKey: dashboardQueryKey,
+        }),
+      ]);
       await queryClient.invalidateQueries({
         queryKey: projectTasksQueryKey(variables.projectId),
       });

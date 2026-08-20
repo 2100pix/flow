@@ -156,6 +156,9 @@ function QuickCreateTask({ projectId, status, disabled }: { projectId: string; s
 }
 
 function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; dragDisabled: boolean; onOpen: () => void }) {
+  const primaryAssignee = task.assignees[0];
+
+  const additionalAssigneeCount = Math.max(task.assignees.length - 1, 0);
   const { ref, handleRef, isDragSource } = useSortable({
     id: task.id,
     index,
@@ -179,13 +182,15 @@ function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto
               {task.dueDate ? <span>Due {task.dueDate}</span> : null}
             </div>
           ) : null}
-          {task.assignee && (
+          {primaryAssignee ? (
             <div className="mt-3 flex items-center gap-2">
-              {task.assignee.avatarUrl && <img src={task.assignee.avatarUrl} alt="" className="size-5 rounded-full" />}
+              {primaryAssignee.avatarUrl ? <img src={primaryAssignee.avatarUrl} alt="" className="size-5 rounded-full" /> : null}
 
-              <span className="truncate text-xs text-muted-foreground">{task.assignee.displayName}</span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">{primaryAssignee.displayName}</span>
+
+              {additionalAssigneeCount > 0 ? <span className="shrink-0 text-xs text-muted-foreground">+{additionalAssigneeCount}</span> : null}
             </div>
-          )}
+          ) : null}
         </button>
 
         <button

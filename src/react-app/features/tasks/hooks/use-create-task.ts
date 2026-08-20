@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createTask } from "../api/tasks";
 import type { CreateTaskInput } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
+import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
 
 type CreateTaskVariables = {
   projectId: string;
@@ -16,9 +17,15 @@ export function useCreateTask() {
     mutationFn: ({ projectId, input }: CreateTaskVariables) => createTask(projectId, input),
 
     onSuccess: async (_task, variables) => {
-      await queryClient.invalidateQueries({
-        queryKey: projectTasksQueryKey(variables.projectId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectTasksQueryKey(variables.projectId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: dashboardQueryKey,
+        }),
+      ]);
     },
   });
 }

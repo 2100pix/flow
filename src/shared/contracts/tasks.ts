@@ -1,12 +1,43 @@
 import * as z from "zod";
 
 export const taskStatusSchema = z.enum(["backlog", "todo", "in_progress", "review", "done", "cancelled"]);
-export const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
-export const createTaskSchema = z.object({
-  title: z.string().trim().min(1).max(240),
 
-  status: taskStatusSchema.optional(),
+export const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
+
+const taskAssigneeIdsSchema = z.array(z.string().trim().min(1)).superRefine((value, ctx) => {
+  if (new Set(value).size !== value.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Task assignees must be unique",
+    });
+  }
 });
+
+export const createTaskSchema = z
+  .object({
+    title: z.string().trim().min(1).max(240),
+
+    description: z.string().trim().max(5000).nullable().optional(),
+
+    status: taskStatusSchema.optional(),
+
+    priority: taskPrioritySchema.nullable().optional(),
+
+    assigneeIds: taskAssigneeIdsSchema.optional(),
+
+    startDate: z.iso.date().optional(),
+
+    dueDate: z.iso.date().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.startDate && value.dueDate && value.dueDate < value.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dueDate"],
+        message: "Due date cannot be before start date",
+      });
+    }
+  });
 
 export const taskDiscordThreadUrlSchema = z.url().refine(
   (value) => {
@@ -29,14 +60,29 @@ export const updateTaskSchema = z
 
     priority: taskPrioritySchema.nullable().optional(),
 
-    assigneeId: z.string().trim().min(1).nullable().optional(),
+    assigneeIds: taskAssigneeIdsSchema.optional(),
+
+    startDate: z.iso.date().optional(),
 
     dueDate: z.iso.date().nullable().optional(),
 
     discordThreadUrl: taskDiscordThreadUrlSchema.nullable().optional(),
   })
-  .refine((value) => Object.values(value).some((item) => item !== undefined), {
-    message: "At least one field is required",
+  .superRefine((value, ctx) => {
+    if (!Object.values(value).some((item) => item !== undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "At least one field is required",
+      });
+    }
+
+    if (value.startDate && value.dueDate && value.dueDate < value.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dueDate"],
+        message: "Due date cannot be before start date",
+      });
+    }
   });
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
@@ -46,6 +92,7 @@ export type ArchiveTaskResponse = {
     success: true;
   };
 };
+
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
@@ -62,15 +109,20 @@ export type TaskDto = {
   id: string;
   projectId: string;
 
+  taskNumber: number;
+  taskCode: string;
+
   title: string;
   description: string | null;
 
   status: TaskStatus;
   priority: TaskPriority | null;
 
-  assignee: TaskAssigneeDto | null;
+  assignees: TaskAssigneeDto[];
 
+  startDate: string;
   dueDate: string | null;
+
   sortOrder: number;
 
   discordThreadUrl: string | null;

@@ -1,10 +1,11 @@
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { Hono } from "hono";
 
-import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskDto } from "../../shared/contracts/tasks";
+import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskAssigneeDto, type TaskDto } from "../../shared/contracts/tasks";
+import { resolveProjectCode } from "../../shared/project-code";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
 import { createDb } from "../db";
-import { projectMembers, projectTaskStatuses, projects, tasks, users, workspaceMembers } from "../db/schema";
+import { projectMembers, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
@@ -61,6 +62,155 @@ async function loadTaskWorkflow(db: Db, projectId: string): Promise<TaskWorkflow
   return valid ? statuses : null;
 }
 
+async function loadTaskAssigneeMap(db: Db, taskIds: readonly string[]) {
+  const result = new Map<string, TaskAssigneeDto[]>();
+
+  if (taskIds.length === 0) {
+    return result;
+  }
+
+  const rows = await db
+    .select({
+      taskId: taskAssignees.taskId,
+
+      userId: users.id,
+
+      displayName: users.displayName,
+
+      avatarUrl: users.avatarUrl,
+
+      createdAt: taskAssignees.createdAt,
+    })
+    .from(taskAssignees)
+    .innerJoin(users, eq(taskAssignees.userId, users.id))
+    .where(inArray(taskAssignees.taskId, [...taskIds]))
+    .orderBy(asc(taskAssignees.createdAt), asc(taskAssignees.userId));
+
+  for (const row of rows) {
+    const existing = result.get(row.taskId) ?? [];
+
+    existing.push({
+      id: row.userId,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+    });
+
+    result.set(row.taskId, existing);
+  }
+
+  return result;
+}
+
+async function resolveAvailableAssignees(db: Db, auth: AuthContext, projectId: string, userIds: readonly string[]): Promise<TaskAssigneeDto[] | null> {
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(projectMembers)
+    .innerJoin(users, eq(projectMembers.userId, users.id))
+    .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
+    .where(and(eq(projectMembers.projectId, projectId), inArray(projectMembers.userId, [...userIds])));
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+
+  if (byId.size !== userIds.length) {
+    return null;
+  }
+
+  return userIds.map((userId) => {
+    const user = byId.get(userId);
+
+    if (!user) {
+      throw new Error("Task assignee resolution failed");
+    }
+
+    return user;
+  });
+}
+
+async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
+  const [task] = await db
+    .select({
+      id: tasks.id,
+
+      projectId: tasks.projectId,
+
+      projectName: projects.name,
+
+      projectCodeOverride: projects.projectCodeOverride,
+
+      taskNumber: tasks.taskNumber,
+
+      title: tasks.title,
+
+      description: tasks.description,
+
+      status: tasks.status,
+
+      priority: tasks.priority,
+
+      startDate: tasks.startDate,
+
+      dueDate: tasks.dueDate,
+
+      sortOrder: tasks.sortOrder,
+
+      discordThreadUrl: tasks.discordThreadUrl,
+
+      createdAt: tasks.createdAt,
+
+      updatedAt: tasks.updatedAt,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .where(and(eq(tasks.id, taskId), isNull(tasks.archivedAt), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!task) {
+    return null;
+  }
+
+  const assigneeMap = await loadTaskAssigneeMap(db, [task.id]);
+
+  return {
+    id: task.id,
+
+    projectId: task.projectId,
+
+    taskNumber: task.taskNumber,
+
+    taskCode: `${resolveProjectCode(task.projectName, task.projectCodeOverride)}-${task.taskNumber}`,
+
+    title: task.title,
+
+    description: task.description,
+
+    status: task.status,
+
+    priority: task.priority,
+
+    assignees: assigneeMap.get(task.id) ?? [],
+
+    startDate: task.startDate,
+
+    dueDate: task.dueDate,
+
+    sortOrder: task.sortOrder,
+
+    discordThreadUrl: task.discordThreadUrl,
+
+    createdAt: task.createdAt.toISOString(),
+
+    updatedAt: task.updatedAt.toISOString(),
+  };
+}
+
 tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;
 
@@ -75,6 +225,7 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
       {
         error: {
           code: "PROJECT_NOT_FOUND",
+
           message: "Project not found",
         },
       },
@@ -85,51 +236,65 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
   const result = await db
     .select({
       id: tasks.id,
+
       projectId: tasks.projectId,
 
+      projectName: projects.name,
+
+      projectCodeOverride: projects.projectCodeOverride,
+
+      taskNumber: tasks.taskNumber,
+
       title: tasks.title,
+
       description: tasks.description,
 
       status: tasks.status,
+
       priority: tasks.priority,
 
-      assigneeId: users.id,
-      assigneeDisplayName: users.displayName,
-      assigneeAvatarUrl: users.avatarUrl,
+      startDate: tasks.startDate,
 
       dueDate: tasks.dueDate,
+
       sortOrder: tasks.sortOrder,
 
       discordThreadUrl: tasks.discordThreadUrl,
 
       createdAt: tasks.createdAt,
+
       updatedAt: tasks.updatedAt,
     })
     .from(tasks)
-    .leftJoin(users, eq(tasks.assigneeId, users.id))
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
     .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt)))
     .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
+  const assigneeMap = await loadTaskAssigneeMap(
+    db,
+    result.map((task) => task.id),
+  );
+
   const data: TaskDto[] = result.map((task) => ({
     id: task.id,
+
     projectId: task.projectId,
 
+    taskNumber: task.taskNumber,
+
+    taskCode: `${resolveProjectCode(task.projectName, task.projectCodeOverride)}-${task.taskNumber}`,
+
     title: task.title,
+
     description: task.description,
 
     status: task.status,
+
     priority: task.priority,
 
-    assignee:
-      task.assigneeId && task.assigneeDisplayName
-        ? {
-            id: task.assigneeId,
+    assignees: assigneeMap.get(task.id) ?? [],
 
-            displayName: task.assigneeDisplayName,
-
-            avatarUrl: task.assigneeAvatarUrl,
-          }
-        : null,
+    startDate: task.startDate,
 
     dueDate: task.dueDate,
 
@@ -149,8 +314,11 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
 
 tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("tasks.create"), async (c) => {
   const auth = c.var.auth;
+
   const projectId = c.req.param("projectId");
+
   const db = createDb(c.env.flow_db);
+
   const access = await findAccessibleProject(db, auth, projectId);
 
   if (!access) {
@@ -158,6 +326,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       {
         error: {
           code: "PROJECT_NOT_FOUND",
+
           message: "Project not found",
         },
       },
@@ -166,6 +335,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   }
 
   const body = await c.req.json().catch(() => undefined);
+
   const parsed = createTaskSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -173,6 +343,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       {
         error: {
           code: "VALIDATION_ERROR",
+
           message: "Invalid task data",
         },
       },
@@ -181,6 +352,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   }
 
   const input = parsed.data;
+
   const workflow = await loadTaskWorkflow(db, projectId);
 
   if (!workflow) {
@@ -188,6 +360,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       {
         error: {
           code: "WORKFLOW_INTEGRITY_ERROR",
+
           message: "Project task workflow is invalid",
         },
       },
@@ -196,6 +369,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   }
 
   const status = input.status ?? "backlog";
+
   const workflowStatus = workflow.find((item) => item.statusKey === status);
 
   if (!workflowStatus?.enabled) {
@@ -203,77 +377,210 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       {
         error: {
           code: "TASK_STATUS_DISABLED",
+
           message: "Task status is disabled for this project",
         },
       },
       400,
     );
   }
-  const [numberPosition] = await db
-    .select({
-      maxTaskNumber: max(tasks.taskNumber),
-    })
-    .from(tasks)
-    .where(eq(tasks.projectId, projectId));
 
-  const taskNumber = (numberPosition?.maxTaskNumber ?? 0) + 1;
+  const assigneeIds = input.assigneeIds ?? [];
 
-  const [position] = await db
-    .select({
-      maxSortOrder: max(tasks.sortOrder),
-    })
-    .from(tasks)
-    .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
+  if (assigneeIds.length > 0 && !hasPermission(auth, "tasks.assign")) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
 
-  const sortOrder = (position?.maxSortOrder ?? 0) + 100;
-  const id = createId("tsk");
+          message: "You do not have permission to assign tasks",
+        },
+      },
+      403,
+    );
+  }
+
+  const assignees = await resolveAvailableAssignees(db, auth, projectId, assigneeIds);
+
+  if (!assignees) {
+    return c.json(
+      {
+        error: {
+          code: "ASSIGNEE_NOT_AVAILABLE",
+
+          message: "Task assignees must be project members",
+        },
+      },
+      400,
+    );
+  }
+
   const now = new Date();
-  const startDate = now.toISOString().slice(0, 10);
-  await db.insert(tasks).values({
-    id,
-    projectId,
-    taskNumber,
-    title: input.title,
-    description: null,
 
-    status,
-    priority: null,
+  /*
+   * UI sends the browser-local
+   * YYYY-MM-DD when Start Date
+   * is left unset.
+   *
+   * This fallback exists for
+   * non-UI callers.
+   */
+  const startDate = input.startDate ?? now.toISOString().slice(0, 10);
 
-    assigneeId: null,
-    startDate,
-    dueDate: null,
+  const dueDate = input.dueDate ?? null;
 
-    sortOrder,
+  if (dueDate && dueDate < startDate) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_DATE_RANGE_INVALID",
 
-    discordThreadUrl: null,
+          message: "Due date cannot be before start date",
+        },
+      },
+      400,
+    );
+  }
 
-    createdBy: auth.user.id,
+  const id = createId("tsk");
 
-    createdAt: now,
-    updatedAt: now,
-  });
+  const description = input.description ? input.description : null;
 
-  const data: TaskDto = {
-    id,
-    projectId,
+  const priority = input.priority ?? null;
 
-    title: input.title,
-    description: null,
+  const nowSeconds = Math.floor(now.getTime() / 1000);
 
-    status,
-    priority: null,
+  /*
+   * Number allocation and task
+   * insertion happen in the
+   * same D1 transactional batch.
+   *
+   * task_number includes
+   * archived tasks, therefore
+   * numbers are never reused by
+   * normal runtime behavior.
+   */
+  const taskInsert = c.env.flow_db
+    .prepare(
+      `
+          INSERT INTO tasks (
+            id,
+            project_id,
+            task_number,
+            title,
+            description,
+            status,
+            priority,
+            assignee_id,
+            start_date,
+            due_date,
+            sort_order,
+            discord_thread_url,
+            created_by,
+            created_at,
+            updated_at,
+            archived_at
+          )
+          VALUES (
+            ?,
+            ?,
 
-    assignee: null,
-    dueDate: null,
+            (
+              SELECT
+                COALESCE(
+                  MAX(task_number),
+                  0
+                ) + 1
+              FROM tasks
+              WHERE project_id = ?
+            ),
 
-    sortOrder,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
 
-    discordThreadUrl: null,
+            (
+              SELECT
+                COALESCE(
+                  MAX(sort_order),
+                  0
+                ) + 100
+              FROM tasks
+              WHERE project_id = ?
+                AND status = ?
+                AND archived_at IS NULL
+            ),
 
-    createdAt: now.toISOString(),
+            NULL,
+            ?,
+            ?,
+            ?,
+            NULL
+          )
+        `,
+    )
+    .bind(
+      id,
+      projectId,
+      projectId,
 
-    updatedAt: now.toISOString(),
-  };
+      input.title,
+      description,
+      status,
+      priority,
+
+      assigneeIds[0] ?? null,
+
+      startDate,
+      dueDate,
+
+      projectId,
+      status,
+
+      auth.user.id,
+      nowSeconds,
+      nowSeconds,
+    );
+
+  const statements: D1PreparedStatement[] = [taskInsert];
+
+  for (const userId of assigneeIds) {
+    statements.push(
+      c.env.flow_db
+        .prepare(
+          `
+            INSERT INTO task_assignees (
+              task_id,
+              user_id,
+              created_at
+            )
+            VALUES (?, ?, ?)
+          `,
+        )
+        .bind(id, userId, nowSeconds),
+    );
+  }
+
+  await c.env.flow_db.batch(statements);
+
+  const data = await loadTaskDto(db, id);
+
+  if (!data) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_CREATE_FAILED",
+
+          message: "Task could not be loaded after creation",
+        },
+      },
+      500,
+    );
+  }
 
   return c.json(
     {
@@ -451,91 +758,35 @@ tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), 
 
   const db = createDb(c.env.flow_db);
 
-  const [task] = await db
-    .select({
-      id: tasks.id,
-      projectId: tasks.projectId,
+  const data = await loadTaskDto(db, taskId);
 
-      title: tasks.title,
-      description: tasks.description,
-
-      status: tasks.status,
-      priority: tasks.priority,
-
-      assigneeId: users.id,
-      assigneeDisplayName: users.displayName,
-      assigneeAvatarUrl: users.avatarUrl,
-
-      dueDate: tasks.dueDate,
-      sortOrder: tasks.sortOrder,
-
-      discordThreadUrl: tasks.discordThreadUrl,
-
-      createdAt: tasks.createdAt,
-      updatedAt: tasks.updatedAt,
-    })
-    .from(tasks)
-    .innerJoin(projects, eq(tasks.projectId, projects.id))
-    .leftJoin(users, eq(tasks.assigneeId, users.id))
-    .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
-    .limit(1);
-
-  if (!task) {
+  if (!data) {
     return c.json(
       {
         error: {
           code: "TASK_NOT_FOUND",
+
           message: "Task not found",
         },
       },
       404,
     );
   }
-  const access = await findAccessibleProject(db, auth, task.projectId);
+
+  const access = await findAccessibleProject(db, auth, data.projectId);
 
   if (!access) {
     return c.json(
       {
         error: {
           code: "TASK_NOT_FOUND",
+
           message: "Task not found",
         },
       },
       404,
     );
   }
-
-  const data: TaskDto = {
-    id: task.id,
-    projectId: task.projectId,
-
-    title: task.title,
-    description: task.description,
-
-    status: task.status,
-    priority: task.priority,
-
-    assignee:
-      task.assigneeId && task.assigneeDisplayName
-        ? {
-            id: task.assigneeId,
-
-            displayName: task.assigneeDisplayName,
-
-            avatarUrl: task.assigneeAvatarUrl,
-          }
-        : null,
-
-    dueDate: task.dueDate,
-
-    sortOrder: task.sortOrder,
-
-    discordThreadUrl: task.discordThreadUrl,
-
-    createdAt: task.createdAt.toISOString(),
-
-    updatedAt: task.updatedAt.toISOString(),
-  };
 
   return c.json({
     data,
@@ -556,6 +807,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       {
         error: {
           code: "FORBIDDEN",
+
           message: "You do not have permission to modify tasks",
         },
       },
@@ -568,27 +820,42 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
   const [task] = await db
     .select({
       id: tasks.id,
+
       projectId: tasks.projectId,
 
+      taskNumber: tasks.taskNumber,
+
       title: tasks.title,
+
       description: tasks.description,
 
       status: tasks.status,
+
       priority: tasks.priority,
 
       assigneeId: tasks.assigneeId,
+
+      startDate: tasks.startDate,
 
       dueDate: tasks.dueDate,
 
       sortOrder: tasks.sortOrder,
 
       discordThreadUrl: tasks.discordThreadUrl,
-
-      createdAt: tasks.createdAt,
     })
     .from(tasks)
     .innerJoin(projects, eq(tasks.projectId, projects.id))
-    .where(and(eq(tasks.id, taskId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt), isNull(tasks.archivedAt)))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(projects.workspaceId, auth.workspace.id),
+
+        isNull(projects.archivedAt),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
     .limit(1);
 
   if (!task) {
@@ -596,6 +863,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       {
         error: {
           code: "TASK_NOT_FOUND",
+
           message: "Task not found",
         },
       },
@@ -610,6 +878,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       {
         error: {
           code: "TASK_NOT_FOUND",
+
           message: "Task not found",
         },
       },
@@ -626,6 +895,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       {
         error: {
           code: "VALIDATION_ERROR",
+
           message: "Invalid task data",
         },
       },
@@ -635,15 +905,16 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
 
   const input = parsed.data;
 
-  const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
+  const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.startDate !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
 
-  const assignsTask = input.assigneeId !== undefined;
+  const assignsTask = input.assigneeIds !== undefined;
 
   if (editsTask && !canEditTasks) {
     return c.json(
       {
         error: {
           code: "FORBIDDEN",
+
           message: "You do not have permission to edit tasks",
         },
       },
@@ -656,12 +927,14 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       {
         error: {
           code: "FORBIDDEN",
+
           message: "You do not have permission to assign tasks",
         },
       },
       403,
     );
   }
+
   if (input.status !== undefined) {
     const workflow = await loadTaskWorkflow(db, task.projectId);
 
@@ -670,6 +943,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
         {
           error: {
             code: "WORKFLOW_INTEGRITY_ERROR",
+
             message: "Project task workflow is invalid",
           },
         },
@@ -684,6 +958,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
         {
           error: {
             code: "TASK_STATUS_DISABLED",
+
             message: "Task status is disabled for this project",
           },
         },
@@ -691,40 +966,24 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       );
     }
   }
-  let assignee: TaskDto["assignee"] = null;
 
-  const assigneeId = input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
+  const assigneeIds = input.assigneeIds;
 
-  if (assigneeId) {
-    const [member] = await db
-      .select({
-        id: users.id,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
-      })
-      .from(projectMembers)
-      .innerJoin(users, eq(projectMembers.userId, users.id))
-      .innerJoin(workspaceMembers, and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, auth.workspace.id)))
-      .where(and(eq(projectMembers.projectId, task.projectId), eq(projectMembers.userId, assigneeId)))
-      .limit(1);
+  if (assigneeIds) {
+    const assignees = await resolveAvailableAssignees(db, auth, task.projectId, assigneeIds);
 
-    if (!member) {
+    if (!assignees) {
       return c.json(
         {
           error: {
             code: "ASSIGNEE_NOT_AVAILABLE",
-            message: "Assignee must be a project member",
+
+            message: "Task assignees must be project members",
           },
         },
         400,
       );
     }
-
-    assignee = {
-      id: member.id,
-      displayName: member.displayName,
-      avatarUrl: member.avatarUrl,
-    };
   }
 
   const status = input.status ?? task.status;
@@ -737,7 +996,15 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
         maxSortOrder: max(tasks.sortOrder),
       })
       .from(tasks)
-      .where(and(eq(tasks.projectId, task.projectId), eq(tasks.status, status), isNull(tasks.archivedAt)));
+      .where(
+        and(
+          eq(tasks.projectId, task.projectId),
+
+          eq(tasks.status, status),
+
+          isNull(tasks.archivedAt),
+        ),
+      );
 
     sortOrder = (position?.maxSortOrder ?? 0) + 100;
   }
@@ -748,44 +1015,97 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
 
   const priority = input.priority !== undefined ? input.priority : task.priority;
 
+  const startDate = input.startDate ?? task.startDate;
+
   const dueDate = input.dueDate !== undefined ? input.dueDate : task.dueDate;
+
+  if (dueDate && dueDate < startDate) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_DATE_RANGE_INVALID",
+
+          message: "Due date cannot be before start date",
+        },
+      },
+      400,
+    );
+  }
 
   const discordThreadUrl = input.discordThreadUrl !== undefined ? input.discordThreadUrl : task.discordThreadUrl;
 
+  const legacyAssigneeId = assigneeIds !== undefined ? (assigneeIds[0] ?? null) : task.assigneeId;
+
   const now = new Date();
 
-  await db
+  const taskUpdate = db
     .update(tasks)
     .set({
       title,
       description,
       status,
       priority,
-      assigneeId,
+
+      /*
+       * Temporary legacy mirror.
+       * task_assignees is the
+       * authoritative relation.
+       */
+      assigneeId: legacyAssigneeId,
+
+      startDate,
       dueDate,
+
       sortOrder,
+
       discordThreadUrl,
+
       updatedAt: now,
     })
-    .where(and(eq(tasks.id, taskId), eq(tasks.projectId, task.projectId), isNull(tasks.archivedAt)));
+    .where(
+      and(
+        eq(tasks.id, taskId),
 
-  const data: TaskDto = {
-    id: task.id,
-    projectId: task.projectId,
+        eq(tasks.projectId, task.projectId),
 
-    title,
-    description,
-    status,
-    priority,
-    assignee,
-    dueDate,
-    sortOrder,
-    discordThreadUrl,
+        isNull(tasks.archivedAt),
+      ),
+    );
 
-    createdAt: task.createdAt.toISOString(),
+  if (assigneeIds !== undefined) {
+    const assignmentDelete = db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId));
 
-    updatedAt: now.toISOString(),
-  };
+    if (assigneeIds.length > 0) {
+      const assignmentInsert = db.insert(taskAssignees).values(
+        assigneeIds.map((userId) => ({
+          taskId,
+          userId,
+          createdAt: now,
+        })),
+      );
+
+      await db.batch([taskUpdate, assignmentDelete, assignmentInsert]);
+    } else {
+      await db.batch([taskUpdate, assignmentDelete]);
+    }
+  } else {
+    await taskUpdate;
+  }
+
+  const data = await loadTaskDto(db, taskId);
+
+  if (!data) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_UPDATE_FAILED",
+
+          message: "Task could not be loaded after update",
+        },
+      },
+      500,
+    );
+  }
 
   return c.json({
     data,
