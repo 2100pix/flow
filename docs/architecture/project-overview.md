@@ -56,6 +56,7 @@ Project Overview dibagi menjadi empat domain visual.
 - Project Leads
 - Members
 - Channel Chat
+- Project Settings shortcut
 
 ## Project Details
 
@@ -116,8 +117,8 @@ Desktop semantics:
 - Collaboration approximately 30–35%.
 - Collaboration rail tidak menempel ke viewport edge.
 - Status berada di bagian paling atas Collaboration rail.
-- Status, Project Leads, Members, dan Channel Chat menggunakan
-  horizontal origin yang sama.
+- Status, Project Leads, Members, Channel Chat, dan Project Settings shortcut
+  menggunakan horizontal origin yang sama.
 - Project Details berada di primary left column, tepat di bawah Description,
   sehingga posisinya mengikuti tinggi Description secara natural.
 - Key Resources berada setelah Project Details.
@@ -144,6 +145,8 @@ Project Leads
 Members
 
 Channel Chat
+
+Project Settings
 
 Project Details
 

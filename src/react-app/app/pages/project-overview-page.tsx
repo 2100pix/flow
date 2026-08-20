@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -1002,7 +1002,14 @@ function CollaborationControls({
           </div>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Go to Setting</p>
+          <p className="text-xs text-muted-foreground">Project Settings</p>
+
+          <div className="mt-2">
+            <Link to={`/projects/${project.id}/settings`} className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+              Go to Setting
+              <ArrowRightIcon size={14} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </div>
 
