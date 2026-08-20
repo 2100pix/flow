@@ -57,11 +57,15 @@ export const updateProjectSchema = z
 export type ProjectEngagementType = z.infer<typeof projectEngagementTypeSchema>;
 export type ProjectDueDateMode = z.infer<typeof projectDueDateModeSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
-export type ArchiveProjectResponse = {
+export type ProjectActionResponse = {
   data: {
     success: true;
   };
 };
+
+export type ArchiveProjectResponse = ProjectActionResponse;
+
+export type DeleteProjectResponse = ProjectActionResponse;
 
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
