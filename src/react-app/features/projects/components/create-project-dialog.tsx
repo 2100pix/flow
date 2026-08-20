@@ -4,61 +4,40 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-import { useMembers } from "@/features/members/hooks/use-members";
-import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
+import { useClients } from "@/features/clients/hooks/use-clients";
 import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
-import { ProjectLeadPicker, type ProjectLeadOption } from "@/features/projects/components/project-lead-picker";
+import { ProjectClientPicker } from "@/features/projects/components/project-client-picker";
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
-
-type CurrentUser = {
-  id: string;
-  displayName: string;
-  avatarUrl: string | null;
-};
 
 type CreateProjectDialogProps = {
   open: boolean;
   onClose: () => void;
   onCreated: (projectId: string) => void;
   canCreatePrivate: boolean;
-  canViewMembers: boolean;
-  currentUser: CurrentUser;
+  canViewClients: boolean;
 };
 
-export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate, canViewMembers, currentUser }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate, canViewClients }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
 
   const [description, setDescription] = useState("");
 
   const [visibility, setVisibility] = useState<"workspace" | "private">("workspace");
 
-  const [leadUserIds, setLeadUserIds] = useState<string[]>([currentUser.id]);
+  const [clientId, setClientId] = useState<string | null>(null);
 
   const createProject = useCreateProject();
 
-  const { data: workspaceMembers = [], isPending: membersPending, isError: membersError } = useMembers(open && canViewMembers);
+  const { data: clients = [], isPending: clientsPending, isError: clientsError } = useClients(open && canViewClients);
 
-  const leadOptions: ProjectLeadOption[] = [
-    {
-      id: currentUser.id,
-      displayName: currentUser.displayName,
-      avatarUrl: currentUser.avatarUrl,
-    },
-
-    ...workspaceMembers
-      .filter((member) => member.id !== currentUser.id)
-      .map((member) => ({
-        id: member.id,
-        displayName: member.displayName,
-        avatarUrl: member.avatarUrl,
-      })),
-  ];
+  const activeClients = clients.filter((client) => client.status === "active");
 
   function reset() {
     setName("");
     setDescription("");
     setVisibility("workspace");
-    setLeadUserIds([currentUser.id]);
+    setClientId(null);
 
     createProject.reset();
   }
@@ -82,7 +61,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
       }}
     >
       <DialogContent showCloseButton={!createProject.isPending} className="gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="px-5 pb-4 pt-5">
+        <DialogHeader className="px-5 pb-3 pt-5">
           <DialogTitle className="pr-10 text-lg font-semibold">Create a new project</DialogTitle>
         </DialogHeader>
 
@@ -94,7 +73,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
 
             const projectDescription = description.trim();
 
-            if (!projectName || leadUserIds.length === 0 || createProject.isPending) {
+            if (!projectName || createProject.isPending) {
               return;
             }
 
@@ -104,9 +83,9 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
 
                 description: projectDescription || undefined,
 
-                visibility: canCreatePrivate ? visibility : "workspace",
+                clientId,
 
-                leadUserIds,
+                visibility: canCreatePrivate ? visibility : "workspace",
               },
               {
                 onSuccess: (project) => {
@@ -120,7 +99,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
             );
           }}
         >
-          <div className="space-y-3 px-5 pb-5">
+          <div className="space-y-2 px-5 pb-4">
             <div>
               <label htmlFor="create-project-name" className="sr-only">
                 Project name
@@ -155,7 +134,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
                 onChange={(event) => {
                   setDescription(event.target.value);
                 }}
-                className="min-h-28 w-full resize-none rounded-lg border border-input bg-background px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                className="min-h-24 w-full resize-none bg-transparent px-0 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
               />
             </div>
 
@@ -166,11 +145,11 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
             ) : null}
           </div>
 
-          <DialogFooter className="mx-0 mb-0 flex-col gap-3 rounded-none border-t border-border/60 bg-transparent p-4 sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="mx-0 mb-0 flex-col gap-3 rounded-none bg-transparent px-5 pb-5 pt-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canCreatePrivate} disabled={createProject.isPending} />
 
-              <ProjectLeadPicker options={leadOptions} value={leadUserIds} onValueChange={setLeadUserIds} disabled={createProject.isPending} canBrowseCandidates={canViewMembers} candidatesLoading={membersPending} candidatesError={membersError} />
+              <ProjectClientPicker value={clientId} clients={activeClients} onValueChange={setClientId} disabled={!canViewClients || createProject.isPending} loading={clientsPending} error={clientsError} />
             </div>
 
             <div className="flex shrink-0 items-center justify-end gap-2">
@@ -178,7 +157,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
                 Cancel
               </Button>
 
-              <Button type="submit" disabled={!name.trim() || leadUserIds.length === 0 || createProject.isPending}>
+              <Button type="submit" disabled={!name.trim() || createProject.isPending}>
                 {createProject.isPending ? "Creating…" : "Create project"}
               </Button>
             </div>
