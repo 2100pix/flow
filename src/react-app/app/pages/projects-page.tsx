@@ -1,5 +1,5 @@
 import { PlusIcon } from "@phosphor-icons/react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/hooks/use-me";
@@ -8,11 +8,14 @@ import { useProjects } from "@/features/projects/hooks/use-projects";
 import { hasPermission } from "@/features/auth/permissions";
 
 export function ProjectsPage() {
+  const navigate = useNavigate();
+
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: auth } = useMe();
   const canView = hasPermission(auth, "projects.view");
   const canCreate = hasPermission(auth, "projects.create");
   const canCreatePrivate = hasPermission(auth, "projects.private.create");
+  const canViewMembers = hasPermission(auth, "members.view");
 
   const { data: projects = [], isPending, isError } = useProjects(canView);
 
@@ -38,6 +41,12 @@ export function ProjectsPage() {
     next.delete("create");
 
     setSearchParams(next, {
+      replace: true,
+    });
+  }
+
+  function handleProjectCreated(projectId: string) {
+    void navigate(`/projects/${projectId}`, {
       replace: true,
     });
   }
@@ -100,7 +109,7 @@ export function ProjectsPage() {
           </div>
         )}
       </div>
-      {canCreate ? <CreateProjectDialog open={createOpen} onClose={closeCreate} canCreatePrivate={canCreatePrivate} /> : null}
+      {canCreate && auth ? <CreateProjectDialog open={createOpen} onClose={closeCreate} onCreated={handleProjectCreated} canCreatePrivate={canCreatePrivate} canViewMembers={canViewMembers} currentUser={auth.user} /> : null}{" "}
     </div>
   );
 }

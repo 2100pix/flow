@@ -1,60 +1,92 @@
 import { useState } from "react";
-import { XIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { useCreateProject } from "@/features/projects/hooks/use-create-project";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+import { useMembers } from "@/features/members/hooks/use-members";
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
+import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
+import { ProjectLeadPicker, type ProjectLeadOption } from "@/features/projects/components/project-lead-picker";
+import { useCreateProject } from "@/features/projects/hooks/use-create-project";
+
+type CurrentUser = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
 
 type CreateProjectDialogProps = {
   open: boolean;
   onClose: () => void;
+  onCreated: (projectId: string) => void;
   canCreatePrivate: boolean;
+  canViewMembers: boolean;
+  currentUser: CurrentUser;
 };
 
-export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate, canViewMembers, currentUser }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
 
   const [description, setDescription] = useState("");
 
   const [visibility, setVisibility] = useState<"workspace" | "private">("workspace");
 
+  const [leadUserIds, setLeadUserIds] = useState<string[]>([currentUser.id]);
+
   const createProject = useCreateProject();
 
-  if (!open) {
-    return null;
-  }
+  const { data: workspaceMembers = [], isPending: membersPending, isError: membersError } = useMembers(open && canViewMembers);
+
+  const leadOptions: ProjectLeadOption[] = [
+    {
+      id: currentUser.id,
+      displayName: currentUser.displayName,
+      avatarUrl: currentUser.avatarUrl,
+    },
+
+    ...workspaceMembers
+      .filter((member) => member.id !== currentUser.id)
+      .map((member) => ({
+        id: member.id,
+        displayName: member.displayName,
+        avatarUrl: member.avatarUrl,
+      })),
+  ];
 
   function reset() {
     setName("");
     setDescription("");
     setVisibility("workspace");
+    setLeadUserIds([currentUser.id]);
+
     createProject.reset();
   }
 
   function close() {
+    if (createProject.isPending) {
+      return;
+    }
+
     reset();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="create-project-title" className="w-full max-w-lg rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 id="create-project-title" className="text-base font-semibold">
-              Create project
-            </h2>
-
-            <p className="mt-1 text-sm text-muted-foreground">Create a new project inside this workspace.</p>
-          </div>
-
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" onClick={close}>
-            <XIcon />
-          </Button>
-        </div>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          close();
+        }
+      }}
+    >
+      <DialogContent showCloseButton={!createProject.isPending} className="gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="px-5 pb-4 pt-5">
+          <DialogTitle className="pr-10 text-lg font-semibold">Create a new project</DialogTitle>
+        </DialogHeader>
 
         <form
-          className="mt-5 space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
 
@@ -62,7 +94,7 @@ export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateP
 
             const projectDescription = description.trim();
 
-            if (!projectName || createProject.isPending) {
+            if (!projectName || leadUserIds.length === 0 || createProject.isPending) {
               return;
             }
 
@@ -73,85 +105,86 @@ export function CreateProjectDialog({ open, onClose, canCreatePrivate }: CreateP
                 description: projectDescription || undefined,
 
                 visibility: canCreatePrivate ? visibility : "workspace",
+
+                leadUserIds,
               },
               {
-                onSuccess: () => {
+                onSuccess: (project) => {
                   reset();
-                  onClose();
+
+                  toast.success("Project created.");
+
+                  onCreated(project.id);
                 },
               },
             );
           }}
         >
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-name" className="text-sm font-medium">
-              Project name
-            </label>
+          <div className="space-y-3 px-5 pb-5">
+            <div>
+              <label htmlFor="create-project-name" className="sr-only">
+                Project name
+              </label>
 
-            <input
-              id="create-project-name"
-              value={name}
-              maxLength={160}
-              autoFocus
-              placeholder="Website 2027"
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
+              <input
+                id="create-project-name"
+                value={name}
+                maxLength={160}
+                autoFocus
+                disabled={createProject.isPending}
+                placeholder="Project name"
+                onChange={(event) => {
+                  setName(event.target.value);
+                }}
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="create-project-description" className="sr-only">
+                Description
+              </label>
+
+              <textarea
+                id="create-project-description"
+                value={description}
+                maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+                rows={4}
+                disabled={createProject.isPending}
+                placeholder="Description"
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                }}
+                className="min-h-28 w-full resize-none rounded-lg border border-input bg-background px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+              />
+            </div>
+
+            {createProject.isError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {createProject.error.message}
+              </p>
+            ) : null}
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-description" className="text-sm font-medium">
-              Description
-              <span className="ml-1 font-normal text-muted-foreground">optional</span>
-            </label>
+          <DialogFooter className="mx-0 mb-0 flex-col gap-3 rounded-none border-t border-border/60 bg-transparent p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canCreatePrivate} disabled={createProject.isPending} />
 
-            <textarea
-              id="create-project-description"
-              value={description}
-              maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
-              rows={4}
-              placeholder="Short project description"
-              onChange={(event) => {
-                setDescription(event.target.value);
-              }}
-              className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </div>
+              <ProjectLeadPicker options={leadOptions} value={leadUserIds} onValueChange={setLeadUserIds} disabled={createProject.isPending} canBrowseCandidates={canViewMembers} candidatesLoading={membersPending} candidatesError={membersError} />
+            </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="create-project-visibility" className="text-sm font-medium">
-              Project Access
-            </label>
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              <Button type="button" variant="ghost" disabled={createProject.isPending} onClick={close}>
+                Cancel
+              </Button>
 
-            <select
-              id="create-project-visibility"
-              value={visibility}
-              onChange={(event) => {
-                setVisibility(event.target.value as "workspace" | "private");
-              }}
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="workspace">Workspace</option>
-
-              {canCreatePrivate ? <option value="private">Private</option> : null}
-            </select>
-          </div>
-
-          {createProject.isError ? <p className="text-sm text-destructive">{createProject.error.message}</p> : null}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={close}>
-              Cancel
-            </Button>
-
-            <Button type="submit" disabled={!name.trim() || createProject.isPending}>
-              {createProject.isPending ? "Creating…" : "Create project"}
-            </Button>
-          </div>
+              <Button type="submit" disabled={!name.trim() || leadUserIds.length === 0 || createProject.isPending}>
+                {createProject.isPending ? "Creating…" : "Create project"}
+              </Button>
+            </div>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
