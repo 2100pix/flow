@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
@@ -60,12 +60,36 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
         }
       }}
     >
-      <DialogContent showCloseButton={!createProject.isPending} className="gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="px-5 pb-3 pt-5">
-          <DialogTitle className="pr-10 text-lg font-semibold">Create a new project</DialogTitle>
+      <DialogContent
+        showCloseButton={!createProject.isPending}
+        className="
+          flex
+          h-[430px]
+          w-[517px]
+          max-h-[calc(100dvh-2rem)]
+          max-w-[calc(100vw-2rem)]
+          flex-col
+          gap-4
+          overflow-y-auto
+          rounded-[10px]
+          p-6
+          shadow-lg
+          sm:overflow-hidden
+          [&>[data-slot=dialog-close]]:right-[18px]
+          [&>[data-slot=dialog-close]]:top-6
+          [&>[data-slot=dialog-close]]:size-7
+          [&>[data-slot=dialog-close]]:bg-transparent
+          [&>[data-slot=dialog-close]>svg]:opacity-70
+        "
+      >
+        <DialogHeader className="h-14 shrink-0 gap-2 p-0">
+          <DialogTitle className="pr-10 text-lg font-semibold leading-7">Create a new project</DialogTitle>
+
+          <div aria-hidden="true" className="h-5 w-full shrink-0" />
         </DialogHeader>
 
         <form
+          className="flex min-h-0 flex-1 flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
 
@@ -95,12 +119,16 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
 
                   onCreated(project.id);
                 },
+
+                onError: (error) => {
+                  toast.error(error instanceof Error && error.message ? error.message : "Failed to create project.");
+                },
               },
             );
           }}
         >
-          <div className="space-y-2 px-5 pb-4">
-            <div>
+          <div className="flex h-[210px] shrink-0 flex-col gap-[15px]">
+            <div className="h-[35px] shrink-0">
               <label htmlFor="create-project-name" className="sr-only">
                 Project name
               </label>
@@ -115,11 +143,33 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
                 onChange={(event) => {
                   setName(event.target.value);
                 }}
-                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                className="
+                  h-[35px]
+                  w-full
+                  rounded-none
+                  border-0
+                  bg-transparent
+                  px-0
+                  py-1
+                  text-base
+                  font-medium
+                  shadow-none
+                  outline-none
+                  ring-0
+                  placeholder:font-medium
+                  placeholder:text-muted-foreground
+                  focus:border-transparent
+                  focus:outline-none
+                  focus:ring-0
+                  focus-visible:border-transparent
+                  focus-visible:outline-none
+                  focus-visible:ring-0
+                  disabled:opacity-50
+                "
               />
             </div>
 
-            <div>
+            <div className="h-[160px] shrink-0">
               <label htmlFor="create-project-description" className="sr-only">
                 Description
               </label>
@@ -128,40 +178,54 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
                 id="create-project-description"
                 value={description}
                 maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
-                rows={4}
                 disabled={createProject.isPending}
                 placeholder="Description"
                 onChange={(event) => {
                   setDescription(event.target.value);
                 }}
-                className="min-h-24 w-full resize-none bg-transparent px-0 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+                className="
+                  h-[160px]
+                  w-full
+                  resize-none
+                  overflow-hidden
+                  rounded-none
+                  border-0
+                  bg-transparent
+                  px-0
+                  py-1
+                  text-base
+                  leading-6
+                  shadow-none
+                  outline-none
+                  ring-0
+                  placeholder:text-muted-foreground
+                  focus:border-transparent
+                  focus:outline-none
+                  focus:ring-0
+                  focus-visible:border-transparent
+                  focus-visible:outline-none
+                  focus-visible:ring-0
+                  disabled:opacity-50
+                "
               />
             </div>
-
-            {createProject.isError ? (
-              <p className="text-sm text-destructive" role="alert">
-                {createProject.error.message}
-              </p>
-            ) : null}
           </div>
 
-          <DialogFooter className="mx-0 mb-0 flex-col gap-3 rounded-none bg-transparent px-5 pb-5 pt-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canCreatePrivate} disabled={createProject.isPending} />
+          <div className="flex h-8 shrink-0 items-start gap-4">
+            <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canCreatePrivate} disabled={createProject.isPending} appearance="create" />
 
-              <ProjectClientPicker value={clientId} clients={activeClients} onValueChange={setClientId} disabled={!canViewClients || createProject.isPending} loading={clientsPending} error={clientsError} />
-            </div>
+            <ProjectClientPicker value={clientId} clients={activeClients} onValueChange={setClientId} disabled={!canViewClients || createProject.isPending} loading={clientsPending} error={clientsError} />
+          </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-2">
-              <Button type="button" variant="ghost" disabled={createProject.isPending} onClick={close}>
-                Cancel
-              </Button>
+          <div className="flex h-9 shrink-0 items-start justify-end gap-2">
+            <Button type="button" variant="secondary" size="lg" className="border border-border px-4 shadow-xs" disabled={createProject.isPending} onClick={close}>
+              Cancel
+            </Button>
 
-              <Button type="submit" disabled={!name.trim() || createProject.isPending}>
-                {createProject.isPending ? "Creating…" : "Create project"}
-              </Button>
-            </div>
-          </DialogFooter>
+            <Button type="submit" size="lg" className="px-4 shadow-xs" disabled={!name.trim() || createProject.isPending}>
+              {createProject.isPending ? "Creating…" : "Create project"}
+            </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
