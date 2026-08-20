@@ -1,7 +1,6 @@
-import { BuildingsIcon, CaretDownIcon, LockSimpleIcon } from "@phosphor-icons/react";
+import { BriefcaseIcon, KeyIcon } from "@phosphor-icons/react";
 
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 
 import type { ProjectDto } from "@/features/projects/types";
 
@@ -10,65 +9,78 @@ type ProjectAccessPickerProps = {
   onValueChange: (value: ProjectDto["visibility"]) => void;
   canChoosePrivate: boolean;
   disabled?: boolean;
+  appearance?: "default" | "create";
 };
 
 const accessConfig = {
   workspace: {
     label: "Workspace",
-    Icon: BuildingsIcon,
+    Icon: BriefcaseIcon,
+    iconClassName: "size-4",
   },
 
   private: {
     label: "Private",
-    Icon: LockSimpleIcon,
+    Icon: KeyIcon,
+    iconClassName: "size-5",
   },
 } satisfies Record<
   ProjectDto["visibility"],
   {
     label: string;
-    Icon: typeof BuildingsIcon;
+    Icon: typeof BriefcaseIcon;
+    iconClassName: string;
   }
 >;
 
-export function ProjectAccessPicker({ value, onValueChange, canChoosePrivate, disabled = false }: ProjectAccessPickerProps) {
+export function ProjectAccessPicker({ value, onValueChange, canChoosePrivate, disabled = false, appearance = "default" }: ProjectAccessPickerProps) {
   const current = accessConfig[value];
 
   const CurrentIcon = current.Icon;
 
+  const values: ProjectDto["visibility"][] = canChoosePrivate || value === "private" ? ["workspace", "private"] : ["workspace"];
+
+  const createAppearance = appearance === "create";
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger disabled={disabled} render={<Button type="button" variant="outline" size="sm" className="min-w-0 gap-1.5 px-2.5 font-normal" aria-label={`Project access: ${current.label}`} />}>
-        <CurrentIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+    <Select
+      value={value}
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        if (nextValue !== "workspace" && nextValue !== "private") {
+          return;
+        }
+
+        onValueChange(nextValue);
+      }}
+    >
+      <SelectTrigger aria-label={`Project access: ${current.label}`} className={createAppearance ? "h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden" : "w-full"}>
+        <CurrentIcon aria-hidden="true" className={current.iconClassName} />
 
         <span className="truncate">{current.label}</span>
+      </SelectTrigger>
 
-        <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-      </DropdownMenuTrigger>
+      <SelectContent align="start" alignItemWithTrigger={false} className={createAppearance ? "w-56 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden" : "w-44"}>
+        <SelectGroup className="p-0">
+          <SelectLabel className={createAppearance ? "px-2 py-1.5 text-sm font-medium text-popover-foreground" : undefined}>Project access</SelectLabel>
 
-      <DropdownMenuContent align="start" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Project Access</DropdownMenuLabel>
+          {createAppearance ? <SelectSeparator className="-mx-1 my-1" /> : null}
 
-          <DropdownMenuRadioGroup
-            value={value}
-            onValueChange={(nextValue) => {
-              onValueChange(nextValue as ProjectDto["visibility"]);
-            }}
-          >
-            <DropdownMenuRadioItem value="workspace">
-              <BuildingsIcon aria-hidden="true" />
-              Workspace
-            </DropdownMenuRadioItem>
+          {values.map((accessValue) => {
+            const option = accessConfig[accessValue];
 
-            {canChoosePrivate ? (
-              <DropdownMenuRadioItem value="private">
-                <LockSimpleIcon aria-hidden="true" />
-                Private
-              </DropdownMenuRadioItem>
-            ) : null}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            const OptionIcon = option.Icon;
+
+            return (
+              <SelectItem key={accessValue} value={accessValue} className={createAppearance ? "h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]" : undefined}>
+                <OptionIcon aria-hidden="true" className={option.iconClassName} />
+
+                {option.label}
+              </SelectItem>
+            );
+          })}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
