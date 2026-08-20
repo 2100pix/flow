@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
+
 import { updateProject } from "../api/projects";
 import type { UpdateProjectInput } from "../types";
 import { projectQueryKey } from "./use-project";
@@ -19,9 +21,15 @@ export function useUpdateProject() {
     onSuccess: async (project) => {
       queryClient.setQueryData(projectQueryKey(project.id), project);
 
-      await queryClient.invalidateQueries({
-        queryKey: projectsQueryKey,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectsQueryKey,
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: dashboardQueryKey,
+        }),
+      ]);
     },
   });
 }
