@@ -63,7 +63,7 @@ The route remains project-scoped and therefore inherits project access control.
 
 Approved layout:
 
-Project / Overview / Project Settings
+<Project Name> / Overview / Project Settings
 
 Project Settings
 
@@ -76,9 +76,13 @@ Description Project
 Client Project status Project access
 [ Select client ▾ ] [ Select a status ▾ ] [ Select access ▾ ]
 
+Lead Project
+
+lead rows
+
 Team members
 
-member rows / empty state
+non-Lead member rows / empty state
 
                                          Update project
 
@@ -98,7 +102,7 @@ The page must not become a collection of unrelated cards.
 
 Breadcrumb hierarchy:
 
-Project
+<Project Name>
 /
 Overview
 /
@@ -106,8 +110,8 @@ Project Settings
 
 Behavior:
 
-Project
-→ project root / relevant project navigation context
+<Project Name>
+→ identifies the current project and matches Project Overview breadcrumb semantics
 
 Overview
 → `/projects/:projectId`
@@ -435,18 +439,40 @@ The Update Project button remains disabled.
 
 ---
 
-# 19. Team Members
+# 19. Project Team Structure
 
-Team Members is a dedicated management section below project metadata.
+Project staffing is visually separated into two dedicated sections:
 
-It manages:
+1. Lead Project
+2. Team members
 
-- Project Members
-- Project Lead assignment
+Both sections are backed by the same Project Member / Project Lead domain model.
 
-It is not part of the Update Project form transaction.
+The separation is presentational and interaction-focused.
 
-Member and Lead mutations occur immediately.
+Project Lead remains a subset of Project Members at the domain level.
+
+Lead Project contains only current Project Leads.
+
+Team members contains only Project Members who are not currently Leads.
+
+Member and Lead mutations occur immediately and are not part of the Update Project metadata transaction.
+
+Promoting a Team Member to Lead:
+
+Team members
+→ Set as Lead
+→ add to `project_leads`
+→ refreshed UI moves the person into Lead Project
+
+Removing Lead status:
+
+Lead Project
+→ Remove Lead
+→ remove from `project_leads`
+→ refreshed UI moves the person back into Team members
+
+The system must never duplicate the same person visually in both sections.
 
 ---
 
@@ -471,24 +497,15 @@ The empty state must remain compact and not become a large bordered card.
 
 # 21. Team Member Populated State
 
-Each member row contains:
+Each Team Member row contains:
 
 - avatar
 - display name
 - secondary identity metadata
-- Lead state when applicable
-- Lead action when applicable
+- Set as Lead action when permitted
 - remove member action when permitted
 
-Example:
-
-[avatar] Ramshal
-Member / custom role Lead remove
-
-or:
-
-[avatar] Alice
-Designer set-lead remove
+Current Project Leads are not rendered in Team members.
 
 Rows use subtle separators.
 
@@ -573,13 +590,21 @@ It does not automatically make the user a Lead.
 
 ---
 
-# 26. Lead Display
+# 26. Lead Project
 
-Current Leads show a visible:
+Project Leads are displayed in the dedicated:
 
-`Lead`
+`Lead Project`
 
-badge.
+section.
+
+Each Lead row contains:
+
+- avatar
+- display name
+- secondary identity metadata
+- visible `Lead` badge
+- remove Lead action when permitted
 
 Lead state is derived from:
 
@@ -588,6 +613,8 @@ Lead state is derived from:
 not from legacy `lead_user_id`.
 
 Project Leads remain ordered by explicit Lead position.
+
+A Lead must not simultaneously appear in Team members.
 
 ---
 
