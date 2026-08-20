@@ -15,7 +15,7 @@ import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflo
 import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
-import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
+import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
 import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -1282,9 +1282,47 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
       409,
     );
   }
+  const now = new Date();
+
+  const projectTaskIds = db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .where(eq(tasks.projectId, projectId));
+
+  const taskAssignmentDelete = db.delete(taskAssignees).where(
+    and(
+      eq(taskAssignees.userId, userId),
+
+      inArray(taskAssignees.taskId, projectTaskIds),
+    ),
+  );
+
+  const legacyAssigneeClear = db
+    .update(tasks)
+    .set({
+      assigneeId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(tasks.projectId, projectId),
+
+        eq(tasks.assigneeId, userId),
+      ),
+    );
+
+  const projectMemberDelete = db.delete(projectMembers).where(
+    and(
+      eq(projectMembers.projectId, projectId),
+
+      eq(projectMembers.userId, userId),
+    ),
+  );
 
   if (!removedLead) {
-    await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    await db.batch([taskAssignmentDelete, legacyAssigneeClear, projectMemberDelete]);
 
     return c.json({
       data: {
@@ -1292,8 +1330,6 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
       },
     });
   }
-
-  const now = new Date();
 
   const remainingLeads = currentLeads
     .filter((lead) => lead.userId !== userId)
@@ -1305,6 +1341,10 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
     }));
 
   await db.batch([
+    taskAssignmentDelete,
+
+    legacyAssigneeClear,
+
     db.delete(projectLeads).where(eq(projectLeads.projectId, projectId)),
 
     db.insert(projectLeads).values(remainingLeads),
@@ -1313,11 +1353,20 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
       .update(projects)
       .set({
         leadUserId: remainingLeads[0].userId,
+
         updatedAt: now,
       })
-      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt))),
+      .where(
+        and(
+          eq(projects.id, projectId),
 
-    db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
+          eq(projects.workspaceId, auth.workspace.id),
+
+          isNull(projects.archivedAt),
+        ),
+      ),
+
+    projectMemberDelete,
   ]);
 
   return c.json({
