@@ -1,32 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { CrownIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useMe } from "@/features/auth/hooks/use-me";
 import { hasPermission } from "@/features/auth/permissions";
 import { useClients } from "@/features/clients/hooks/use-clients";
-import { useAddProjectMember } from "@/features/members/hooks/use-add-project-member";
-import { useMembers } from "@/features/members/hooks/use-members";
-import { useProjectMembers } from "@/features/members/hooks/use-project-members";
-import { useRemoveProjectMember } from "@/features/members/hooks/use-remove-project-member";
-import type { ProjectMemberDto } from "@/features/members/types";
 import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
-import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_LEAD_MAX_COUNT } from "@/features/projects/constants";
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
 import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
 import { useDeleteProject } from "@/features/projects/hooks/use-delete-project";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
-import { useUpdateProjectLeads } from "@/features/projects/hooks/use-update-project-leads";
+import { ProjectSettingsTeam } from "@/features/projects/components/project-settings-team";
 import type { ProjectDto, ProjectStatus, UpdateProjectInput } from "@/features/projects/types";
 
 import { deriveProjectCode } from "../../../shared/project-code";
@@ -61,35 +53,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function getMemberInitials(displayName: string) {
-  return (
-    displayName
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join("") || "?"
-  );
-}
-
-function getMemberRoleLabel(member: ProjectMemberDto) {
-  if (member.user.customRole) {
-    return member.user.customRole.name;
-  }
-
-  switch (member.user.role) {
-    case "owner":
-      return "Owner";
-
-    case "admin":
-      return "Admin";
-
-    default:
-      return "Member";
-  }
-}
-
 function ProjectSettingsSkeleton() {
   return (
     <div className="space-y-10">
@@ -114,329 +77,6 @@ function ProjectSettingsSkeleton() {
 
       <Skeleton className="h-44 w-full" />
     </div>
-  );
-}
-
-type TeamMembersSectionProps = {
-  project: ProjectDto;
-  canEdit: boolean;
-  canManageMembers: boolean;
-  canViewWorkspaceMembers: boolean;
-};
-
-function TeamMembersSection({ project, canEdit, canManageMembers, canViewWorkspaceMembers }: TeamMembersSectionProps) {
-  const [inviteOpen, setInviteOpen] = useState(false);
-
-  const [expanded, setExpanded] = useState(false);
-
-  const { data: projectMembers = [], isPending: membersPending, isError: membersError } = useProjectMembers(project.id);
-
-  const { data: workspaceMembers = [], isPending: workspaceMembersPending, isError: workspaceMembersError } = useMembers(inviteOpen && canManageMembers && canViewWorkspaceMembers);
-
-  const addMember = useAddProjectMember();
-
-  const removeMember = useRemoveProjectMember();
-
-  const updateLeads = useUpdateProjectLeads();
-
-  const orderedMembers = [...projectMembers].sort((first, second) => {
-    const dateOrder = first.addedAt.localeCompare(second.addedAt);
-
-    if (dateOrder !== 0) {
-      return dateOrder;
-    }
-
-    return first.user.id.localeCompare(second.user.id);
-  });
-
-  const leads = orderedMembers.filter((member) => member.isLead).sort((first, second) => (first.leadPosition ?? 99) - (second.leadPosition ?? 99));
-
-  const leadIds = leads.map((lead) => lead.user.id);
-
-  const assignedIds = new Set(orderedMembers.map((member) => member.user.id));
-
-  const availableWorkspaceMembers = workspaceMembers.filter((member) => !assignedIds.has(member.id));
-
-  const visibleMembers = expanded ? orderedMembers : orderedMembers.slice(0, 5);
-
-  const hiddenMemberCount = Math.max(orderedMembers.length - 5, 0);
-
-  const teamMutationPending = addMember.isPending || removeMember.isPending || updateLeads.isPending;
-
-  function addProjectMember(userId: string) {
-    if (!canManageMembers || teamMutationPending) {
-      return;
-    }
-
-    addMember.mutate(
-      {
-        projectId: project.id,
-        userId,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Project member added.");
-        },
-
-        onError: (error) => {
-          toast.error(getErrorMessage(error, "Failed to add project member."));
-        },
-      },
-    );
-  }
-
-  function addLead(userId: string) {
-    if (!canEdit || leadIds.includes(userId) || leadIds.length >= PROJECT_LEAD_MAX_COUNT || teamMutationPending) {
-      return;
-    }
-
-    updateLeads.mutate(
-      {
-        projectId: project.id,
-        userIds: [...leadIds, userId],
-      },
-      {
-        onSuccess: () => {
-          toast.success("Project lead added.");
-        },
-
-        onError: (error) => {
-          toast.error(getErrorMessage(error, "Failed to add project lead."));
-        },
-      },
-    );
-  }
-
-  function removeLead(userId: string) {
-    if (!canEdit || leadIds.length <= 1 || teamMutationPending) {
-      return;
-    }
-
-    updateLeads.mutate(
-      {
-        projectId: project.id,
-
-        userIds: leadIds.filter((leadId) => leadId !== userId),
-      },
-      {
-        onSuccess: () => {
-          toast.success("Project lead removed.");
-        },
-
-        onError: (error) => {
-          toast.error(getErrorMessage(error, "Failed to remove project lead."));
-        },
-      },
-    );
-  }
-
-  function removeProjectMember(member: ProjectMemberDto) {
-    if (!canManageMembers || teamMutationPending) {
-      return;
-    }
-
-    if (member.isLead && leadIds.length <= 1) {
-      return;
-    }
-
-    removeMember.mutate(
-      {
-        projectId: project.id,
-        userId: member.user.id,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Project member removed.");
-        },
-
-        onError: (error) => {
-          toast.error(getErrorMessage(error, "Failed to remove project member."));
-        },
-      },
-    );
-  }
-
-  return (
-    <section>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-medium">Team members</h2>
-
-          <p className="mt-1 text-xs text-muted-foreground">Members assigned to this project and its project leads.</p>
-        </div>
-
-        {canManageMembers && canViewWorkspaceMembers ? (
-          <Popover open={inviteOpen} onOpenChange={setInviteOpen}>
-            <PopoverTrigger render={<Button type="button" variant="outline" size="icon-sm" aria-label="Invite project member" />}>
-              <PlusIcon aria-hidden="true" />
-            </PopoverTrigger>
-
-            <PopoverContent align="end" className="w-72 p-2">
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Invite Members</p>
-
-              {workspaceMembersPending ? (
-                <p className="px-2 py-3 text-xs text-muted-foreground">Loading workspace members…</p>
-              ) : workspaceMembersError ? (
-                <p className="px-2 py-3 text-xs text-destructive">Unable to load workspace members.</p>
-              ) : availableWorkspaceMembers.length === 0 ? (
-                <p className="px-2 py-3 text-xs text-muted-foreground">All workspace members are already assigned.</p>
-              ) : (
-                <div className="mt-1 space-y-1">
-                  {availableWorkspaceMembers.map((member) => (
-                    <button
-                      key={member.id}
-                      type="button"
-                      disabled={teamMutationPending}
-                      onClick={() => {
-                        addProjectMember(member.id);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                    >
-                      <Avatar size="sm" aria-hidden="true">
-                        {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
-
-                        <AvatarFallback>{getMemberInitials(member.displayName)}</AvatarFallback>
-                      </Avatar>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate">{member.displayName}</p>
-
-                        <p className="truncate text-xs capitalize text-muted-foreground">{member.customRole?.name ?? member.role}</p>
-                      </div>
-
-                      <PlusIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
-        ) : null}
-      </div>
-
-      <div className="mt-5">
-        {membersPending ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : membersError ? (
-          <p className="text-sm text-destructive">Unable to load project members.</p>
-        ) : orderedMembers.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-sm font-medium">Invite your team to collaborate on this project.</p>
-
-            <p className="mt-1 text-xs text-muted-foreground">Project members will appear here.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/60 border-y border-border/60">
-            {visibleMembers.map((member) => {
-              const soleLead = member.isLead && leadIds.length === 1;
-
-              return (
-                <div key={member.user.id} className="flex min-w-0 items-center gap-3 py-3">
-                  <Avatar size="default" aria-hidden="true">
-                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
-
-                    <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
-                  </Avatar>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <p className="truncate text-sm font-medium">{member.user.displayName}</p>
-
-                      {member.isLead ? (
-                        <Badge variant="outline" className="shrink-0 text-[10px]">
-                          Lead
-                        </Badge>
-                      ) : null}
-                    </div>
-
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{getMemberRoleLabel(member)}</p>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-1">
-                    {canEdit && !member.isLead && leadIds.length < PROJECT_LEAD_MAX_COUNT ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={teamMutationPending}
-                        onClick={() => {
-                          addLead(member.user.id);
-                        }}
-                      >
-                        <CrownIcon aria-hidden="true" />
-                        Set Lead
-                      </Button>
-                    ) : null}
-
-                    {canEdit && member.isLead && leadIds.length > 1 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={teamMutationPending}
-                        onClick={() => {
-                          removeLead(member.user.id);
-                        }}
-                      >
-                        Remove Lead
-                      </Button>
-                    ) : null}
-
-                    {canManageMembers ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Remove ${member.user.displayName} from project`}
-                        title={soleLead ? "Assign another project lead before removing this member" : `Remove ${member.user.displayName}`}
-                        disabled={teamMutationPending || soleLead}
-                        onClick={() => {
-                          removeProjectMember(member);
-                        }}
-                      >
-                        <TrashIcon aria-hidden="true" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {!expanded && hiddenMemberCount > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2"
-            onClick={() => {
-              setExpanded(true);
-            }}
-          >
-            View more
-            <span className="text-muted-foreground">+{hiddenMemberCount}</span>
-          </Button>
-        ) : null}
-
-        {expanded && hiddenMemberCount > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2"
-            onClick={() => {
-              setExpanded(false);
-            }}
-          >
-            Show less
-          </Button>
-        ) : null}
-      </div>
-    </section>
   );
 }
 
@@ -641,7 +281,7 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
 
     textarea.style.height = "auto";
 
-    textarea.style.height = `${Math.max(112, textarea.scrollHeight)}px`;
+    textarea.style.height = `${Math.max(80, textarea.scrollHeight)}px`;
   }, [description]);
 
   const availableClients = clients.filter((client) => client.status === "active" || client.id === project.client?.id);
@@ -740,12 +380,13 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
         id={PROJECT_SETTINGS_FORM_ID}
         onSubmit={(event) => {
           event.preventDefault();
+
           submitUpdate();
         }}
       >
-        <div className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_160px]">
-            <div className="space-y-1.5">
+        <div className="space-y-[30px]">
+          <div className="grid gap-[30px] sm:grid-cols-[minmax(0,1fr)_160px]">
+            <div className="space-y-3">
               <label htmlFor="project-settings-name" className="text-sm font-medium">
                 Project name
               </label>
@@ -758,11 +399,11 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                 onChange={(event) => {
                   setName(event.target.value);
                 }}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <label htmlFor="project-settings-code" className="text-sm font-medium">
                 Project code
               </label>
@@ -776,16 +417,16 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                 onChange={(event) => {
                   setProjectCodeOverride(event.target.value.toUpperCase());
                 }}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm uppercase outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm uppercase shadow-xs outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
               />
 
               {!codeValid ? <p className="text-xs text-destructive">Use 1–8 alphanumeric characters.</p> : null}
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-3">
             <label htmlFor="project-settings-description" className="text-sm font-medium">
-              Description
+              Description Project
             </label>
 
             <textarea
@@ -794,17 +435,17 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
               value={description}
               maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
               disabled={!canEdit || updateProject.isPending}
-              rows={4}
+              rows={3}
               placeholder="Add a description"
               onChange={(event) => {
                 setDescription(event.target.value);
               }}
-              className="min-h-28 w-full resize-none overflow-hidden rounded-lg border border-input bg-background px-3 py-2.5 text-sm leading-6 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+              className="min-h-20 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base leading-6 shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
             />
           </div>
 
-          <div className="grid gap-5 md:grid-cols-3">
-            <div className="space-y-1.5">
+          <div className="grid gap-[30px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.06fr)_minmax(180px,0.5fr)]">
+            <div className="space-y-3">
               <label className="text-sm font-medium">Client</label>
 
               {canChangeClient ? (
@@ -816,14 +457,16 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                     setClientId(nextValue === NO_CLIENT_VALUE ? "" : String(nextValue ?? ""));
                   }}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select client" />
+                  <SelectTrigger className="h-9 w-full rounded-lg px-3 text-sm font-normal shadow-xs">
+                    <span className="min-w-0 flex-1 truncate text-left">{clientId ? (clientItems.find((item) => item.value === clientId)?.label ?? "Select client") : "Select client"}</span>
                   </SelectTrigger>
 
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectGroup>
+                  <SelectContent align="start" alignItemWithTrigger={false} className="rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
+                    <SelectGroup className="p-0">
+                      <SelectLabel className="px-2 py-1.5 text-xs font-normal text-muted-foreground">Clients</SelectLabel>
+
                       {clientItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
+                        <SelectItem key={item.value} value={item.value} className="h-8 rounded-md py-1.5 pr-8 pl-2 text-sm data-selected:bg-accent">
                           {item.label}
                         </SelectItem>
                       ))}
@@ -831,11 +474,11 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                   </SelectContent>
                 </Select>
               ) : (
-                <div className="flex h-9 items-center rounded-lg border border-input bg-background px-3 text-sm text-muted-foreground">{project.client?.name ?? "Select client"}</div>
+                <div className="flex h-9 items-center rounded-lg border border-input bg-background px-3 text-sm text-muted-foreground shadow-xs">{project.client?.name ?? "Select client"}</div>
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <label className="text-sm font-medium">Project status</label>
 
               <Select
@@ -850,14 +493,16 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                   setStatus(nextValue as ProjectStatus);
                 }}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a status" />
+                <SelectTrigger className="h-9 w-full rounded-lg px-3 text-sm font-normal shadow-xs">
+                  <span className="min-w-0 flex-1 truncate text-left">{statusItems.find((item) => item.value === status)?.label ?? "Select a status"}</span>
                 </SelectTrigger>
 
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
+                <SelectContent align="start" alignItemWithTrigger={false} className="rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
+                  <SelectGroup className="p-0">
+                    <SelectLabel className="px-2 py-1.5 text-xs font-normal text-muted-foreground">Status</SelectLabel>
+
                     {statusItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
+                      <SelectItem key={item.value} value={item.value} className="h-8 rounded-md py-1.5 pr-8 pl-2 text-sm data-selected:bg-accent">
                         {item.label}
                       </SelectItem>
                     ))}
@@ -866,23 +511,21 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
               </Select>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <label className="text-sm font-medium">Project access</label>
 
-              <div className="[&_[data-slot=button]]:w-full [&_[data-slot=button]]:justify-between">
-                <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canManageVisibility} disabled={!canManageVisibility || updateProject.isPending} />
-              </div>
+              <ProjectAccessPicker value={visibility} onValueChange={setVisibility} canChoosePrivate={canManageVisibility} disabled={!canManageVisibility || updateProject.isPending} />
             </div>
           </div>
         </div>
       </form>
 
-      <div className="mt-12">
-        <TeamMembersSection project={project} canEdit={canEdit} canManageMembers={canManageMembers} canViewWorkspaceMembers={canViewWorkspaceMembers} />
+      <div className="mt-8">
+        <ProjectSettingsTeam project={project} canEdit={canEdit} canManageMembers={canManageMembers} canViewWorkspaceMembers={canViewWorkspaceMembers} />
       </div>
 
       {canEdit ? (
-        <div className="mt-6 flex justify-end">
+        <div className="mt-8 flex justify-end">
           <Button type="submit" form={PROJECT_SETTINGS_FORM_ID} disabled={!metadataDirty || !normalizedName || !codeValid || updateProject.isPending}>
             {updateProject.isPending ? "Updating…" : "Update project"}
           </Button>
@@ -923,7 +566,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="p-6 md:p-8">
-      <main className="mx-auto max-w-4xl">
+      <main className="mx-auto max-w-6xl">
         {isPending ? (
           <ProjectSettingsSkeleton />
         ) : isError || !project ? (
@@ -932,8 +575,10 @@ export function ProjectDetailPage() {
           <>
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink render={<Link to="/projects" />}>Project</BreadcrumbLink>
+                <BreadcrumbItem className="min-w-0">
+                  <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
+                    {project.name}
+                  </span>
                 </BreadcrumbItem>
 
                 <BreadcrumbSeparator />
@@ -950,8 +595,7 @@ export function ProjectDetailPage() {
               </BreadcrumbList>
             </Breadcrumb>
 
-            <h1 className="mt-8 text-2xl font-semibold tracking-tight">Project Settings</h1>
-
+            <h1 className="mt-10 text-2xl font-semibold tracking-tight md:text-3xl">Project Settings</h1>
             <div className="mt-8">
               <ProjectSettingsContent
                 key={`${project.id}:${project.updatedAt}`}

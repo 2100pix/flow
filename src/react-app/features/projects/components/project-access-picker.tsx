@@ -22,7 +22,7 @@ const accessConfig = {
   private: {
     label: "Private",
     Icon: KeyIcon,
-    iconClassName: "size-5",
+    iconClassName: "size-4",
   },
 } satisfies Record<
   ProjectDto["visibility"],
@@ -54,15 +54,22 @@ export function ProjectAccessPicker({ value, onValueChange, canChoosePrivate, di
         onValueChange(nextValue);
       }}
     >
-      <SelectTrigger aria-label={`Project access: ${current.label}`} className={createAppearance ? "h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden" : "w-full"}>
-        <CurrentIcon aria-hidden="true" className={current.iconClassName} />
+      <SelectTrigger
+        aria-label={`Project access: ${current.label}`}
+        className={createAppearance ? "h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden" : "h-9 w-full rounded-lg px-3 text-sm font-normal shadow-xs"}
+      >
+        {createAppearance ? <CurrentIcon aria-hidden="true" className={current.iconClassName} /> : null}
 
-        <span className="truncate">{current.label}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{current.label}</span>
       </SelectTrigger>
 
-      <SelectContent align="start" alignItemWithTrigger={false} className={createAppearance ? "w-56 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden" : "w-44"}>
+      <SelectContent
+        align="start"
+        alignItemWithTrigger={false}
+        className={createAppearance ? "w-56 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden" : "rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden"}
+      >
         <SelectGroup className="p-0">
-          <SelectLabel className={createAppearance ? "px-2 py-1.5 text-sm font-medium text-popover-foreground" : undefined}>Project access</SelectLabel>
+          <SelectLabel className={createAppearance ? "px-2 py-1.5 text-sm font-medium text-popover-foreground" : "px-2 py-1.5 text-xs font-normal text-muted-foreground"}>{createAppearance ? "Project access" : "Access"}</SelectLabel>
 
           {createAppearance ? <SelectSeparator className="-mx-1 my-1" /> : null}
 
@@ -72,8 +79,12 @@ export function ProjectAccessPicker({ value, onValueChange, canChoosePrivate, di
             const OptionIcon = option.Icon;
 
             return (
-              <SelectItem key={accessValue} value={accessValue} className={createAppearance ? "h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]" : undefined}>
-                <OptionIcon aria-hidden="true" className={option.iconClassName} />
+              <SelectItem
+                key={accessValue}
+                value={accessValue}
+                className={createAppearance ? "h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]" : "h-8 rounded-md py-1.5 pr-8 pl-2 text-sm data-selected:bg-accent"}
+              >
+                {createAppearance ? <OptionIcon aria-hidden="true" className={option.iconClassName} /> : null}
 
                 {option.label}
               </SelectItem>

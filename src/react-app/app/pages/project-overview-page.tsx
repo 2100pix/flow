@@ -863,7 +863,6 @@ function CollaborationControls({
 
       <div className="space-y-8 lg:pt-12">
         <div className="project-leads-control group/leads">
-          {" "}
           <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">Project Leads</p>
 
@@ -1001,6 +1000,9 @@ function CollaborationControls({
               <p className="text-sm text-muted-foreground">Not Connected</p>
             )}
           </div>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Go to Setting</p>
         </div>
       </div>
 
