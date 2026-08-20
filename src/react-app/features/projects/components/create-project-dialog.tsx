@@ -67,7 +67,7 @@ export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate
           h-[430px]
           w-[517px]
           max-h-[calc(100dvh-2rem)]
-          max-w-[calc(150vw-2rem)]!
+          max-w-[calc(100vw-2rem)]!
           sm:max-w-[517px]!
           flex-col
           gap-4
