@@ -209,6 +209,14 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       400,
     );
   }
+  const [numberPosition] = await db
+    .select({
+      maxTaskNumber: max(tasks.taskNumber),
+    })
+    .from(tasks)
+    .where(eq(tasks.projectId, projectId));
+
+  const taskNumber = (numberPosition?.maxTaskNumber ?? 0) + 1;
 
   const [position] = await db
     .select({
@@ -220,10 +228,11 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   const sortOrder = (position?.maxSortOrder ?? 0) + 100;
   const id = createId("tsk");
   const now = new Date();
+  const startDate = now.toISOString().slice(0, 10);
   await db.insert(tasks).values({
     id,
     projectId,
-
+    taskNumber,
     title: input.title,
     description: null,
 
@@ -231,6 +240,7 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
     priority: null,
 
     assigneeId: null,
+    startDate,
     dueDate: null,
 
     sortOrder,

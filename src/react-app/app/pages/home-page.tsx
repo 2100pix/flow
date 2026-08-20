@@ -12,19 +12,23 @@ const taskStatuses = [
   },
   {
     key: "todo",
-    label: "To do",
+    label: "Ready",
   },
   {
     key: "in_progress",
-    label: "In progress",
+    label: "Progress",
   },
   {
     key: "review",
-    label: "Review",
+    label: "In review",
   },
   {
     key: "done",
-    label: "Done",
+    label: "Complete",
+  },
+  {
+    key: "cancelled",
+    label: "Cancelled",
   },
 ] as const;
 

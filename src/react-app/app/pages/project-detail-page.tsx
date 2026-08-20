@@ -314,8 +314,7 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
 
   const normalizedCodeOverride = projectCodeOverride.trim() ? projectCodeOverride.trim().toUpperCase() : null;
 
-  const codeValid = normalizedCodeOverride === null || /^[A-Z0-9]{1,8}$/.test(normalizedCodeOverride);
-
+  const codeValid = normalizedCodeOverride === null || /^[A-Z0-9]{1,4}$/.test(normalizedCodeOverride);
   const clientChanged = canChangeClient && clientId !== (project.client?.id ?? "");
 
   const visibilityChanged = canManageVisibility && visibility !== project.visibility;
@@ -411,7 +410,7 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
               <input
                 id="project-settings-code"
                 value={projectCodeOverride}
-                maxLength={8}
+                maxLength={4}
                 disabled={!canEdit || updateProject.isPending}
                 placeholder={deriveProjectCode(name)}
                 onChange={(event) => {
@@ -420,7 +419,7 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm uppercase shadow-xs outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
               />
 
-              {!codeValid ? <p className="text-xs text-destructive">Use 1–8 alphanumeric characters.</p> : null}
+              {!codeValid ? <p className="text-xs text-destructive">Use 1–4 alphanumeric characters.</p> : null}
             </div>
           </div>
 
