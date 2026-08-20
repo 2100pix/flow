@@ -202,7 +202,35 @@ projectsRoutes.post(
         403,
       );
     }
+    let selectedClient: {
+      id: string;
+      name: string;
+    } | null = null;
 
+    if (input.clientId) {
+      const [targetClient] = await db
+        .select({
+          id: clients.id,
+          name: clients.name,
+        })
+        .from(clients)
+        .where(and(eq(clients.id, input.clientId), eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)))
+        .limit(1);
+
+      if (!targetClient) {
+        return c.json(
+          {
+            error: {
+              code: "CLIENT_NOT_AVAILABLE",
+              message: "An active client is required",
+            },
+          },
+          400,
+        );
+      }
+
+      selectedClient = targetClient;
+    }
     const leadUserIds = input.leadUserIds ?? [auth.user.id];
 
     const leadMembershipRows = await db
@@ -235,8 +263,7 @@ projectsRoutes.post(
       id,
       workspaceId: auth.workspace.id,
 
-      clientId: null,
-
+      clientId: selectedClient?.id ?? null,
       leadUserId: leadUserIds[0],
 
       name: input.name,
@@ -292,8 +319,7 @@ projectsRoutes.post(
     const data: ProjectDto = {
       id,
 
-      client: null,
-
+      client: selectedClient,
       name: input.name,
 
       projectCode: resolveProjectCode(input.name, null),

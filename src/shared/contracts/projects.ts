@@ -21,6 +21,7 @@ export const projectCodeOverrideSchema = z
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(160),
   description: projectDescriptionSchema.optional(),
+  clientId: z.string().trim().min(1).nullable().optional(),
   visibility: projectVisibilitySchema.optional(),
   leadUserIds: projectLeadUserIdsSchema.optional(),
 });
