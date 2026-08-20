@@ -27,6 +27,7 @@ function buildBoard(tasks: TaskDto[]): TaskBoardState {
     in_progress: [],
     review: [],
     done: [],
+    cancelled: [],
   };
 
   for (const task of tasks) {

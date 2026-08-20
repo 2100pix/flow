@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 
 import type { DashboardProjectDto, DashboardResponse, DashboardTaskDto } from "../../shared/contracts/dashboard";
@@ -51,7 +51,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
             coalesce(
               sum(
                 case
-                  when ${tasks.status} <> ${"done"}
+                  when ${tasks.status} not in (${"done"}, ${"cancelled"})
                   then 1
                   else 0
                 end
@@ -65,7 +65,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
               sum(
                 case
                   when
-                    ${tasks.status} <> ${"done"}
+                    ${tasks.status} not in (${"done"}, ${"cancelled"})
                     and ${tasks.assigneeId} = ${auth.user.id}
                   then 1
                   else 0
@@ -139,6 +139,18 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
               0
             )
           `,
+            cancelled: sql<number>`
+            coalesce(
+              sum(
+                case
+                  when ${tasks.status} = ${"cancelled"}
+                  then 1
+                  else 0
+                end
+              ),
+              0
+            )
+          `,
           })
           .from(tasks)
           .innerJoin(projects, eq(tasks.projectId, projects.id))
@@ -147,14 +159,11 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
 
   const taskStatus: Record<TaskStatus, number> = {
     backlog: Number(taskSummary?.backlog ?? 0),
-
     todo: Number(taskSummary?.todo ?? 0),
-
     in_progress: Number(taskSummary?.inProgress ?? 0),
-
     review: Number(taskSummary?.review ?? 0),
-
     done: Number(taskSummary?.done ?? 0),
+    cancelled: Number(taskSummary?.cancelled ?? 0),
   };
 
   const myTaskRows =
@@ -179,7 +188,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
           })
           .from(tasks)
           .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), ne(tasks.status, "done"), eq(tasks.assigneeId, auth.user.id)))
+          .where(and(inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), notInArray(tasks.status, ["done", "cancelled"]), eq(tasks.assigneeId, auth.user.id)))
           .orderBy(desc(tasks.updatedAt))
           .limit(6)
       : [];
@@ -250,7 +259,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
                 `,
           })
           .from(tasks)
-          .where(and(inArray(tasks.projectId, recentProjectIds), isNull(tasks.archivedAt)))
+          .where(and(inArray(tasks.projectId, recentProjectIds), ne(tasks.status, "cancelled"), isNull(tasks.archivedAt)))
           .groupBy(tasks.projectId)
       : [];
 

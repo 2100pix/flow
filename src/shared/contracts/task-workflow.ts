@@ -27,26 +27,32 @@ export const defaultTaskWorkflowStatuses = [
   },
   {
     statusKey: "todo",
-    label: "To do",
+    label: "Ready",
     position: 1,
     enabled: true,
   },
   {
     statusKey: "in_progress",
-    label: "In progress",
+    label: "Progress",
     position: 2,
     enabled: true,
   },
   {
     statusKey: "review",
-    label: "Review",
+    label: "In review",
     position: 3,
     enabled: true,
   },
   {
     statusKey: "done",
-    label: "Done",
+    label: "Complete",
     position: 4,
+    enabled: true,
+  },
+  {
+    statusKey: "cancelled",
+    label: "Cancelled",
+    position: 5,
     enabled: true,
   },
 ] satisfies readonly TaskWorkflowStatusDto[];
@@ -61,7 +67,7 @@ export const updateTaskWorkflowStatusSchema = z.object({
 
 export const updateTaskWorkflowSchema = z
   .object({
-    statuses: z.array(updateTaskWorkflowStatusSchema).length(5),
+    statuses: z.array(updateTaskWorkflowStatusSchema).length(6),
   })
   .superRefine((value, ctx) => {
     const statusKeys = value.statuses.map((status) => status.statusKey);

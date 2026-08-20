@@ -489,7 +489,7 @@ export const projectTaskStatuses = sqliteTable(
       }),
 
     statusKey: text("status_key", {
-      enum: ["backlog", "todo", "in_progress", "review", "done"],
+      enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
     }).notNull(),
 
     label: text("label").notNull(),
@@ -507,10 +507,8 @@ export const projectTaskStatuses = sqliteTable(
 
     uniqueIndex("project_task_statuses_project_position_unique").on(table.projectId, table.position),
 
-    check("project_task_statuses_status_key_check", sql`${table.statusKey} in ('backlog', 'todo', 'in_progress', 'review', 'done')`),
-
+    check("project_task_statuses_status_key_check", sql`${table.statusKey} in ('backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled')`),
     check("project_task_statuses_position_check", sql`${table.position} >= 0`),
-
     check("project_task_statuses_enabled_check", sql`${table.enabled} in (0, 1)`),
   ],
 );
@@ -525,13 +523,13 @@ export const tasks = sqliteTable(
       .references(() => projects.id, {
         onDelete: "cascade",
       }),
-
+    taskNumber: integer("task_number").notNull(),
     title: text("title").notNull(),
 
     description: text("description"),
 
     status: text("status", {
-      enum: ["backlog", "todo", "in_progress", "review", "done"],
+      enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
     }).notNull(),
 
     priority: text("priority", {
@@ -541,11 +539,9 @@ export const tasks = sqliteTable(
     assigneeId: text("assignee_id").references(() => users.id, {
       onDelete: "set null",
     }),
-
+    startDate: text("start_date").notNull(),
     dueDate: text("due_date"),
-
     sortOrder: integer("sort_order").notNull(),
-
     discordThreadUrl: text("discord_thread_url"),
 
     createdBy: text("created_by")
@@ -567,12 +563,38 @@ export const tasks = sqliteTable(
     }),
   },
   (table) => [
+    uniqueIndex("tasks_project_number_unique").on(table.projectId, table.taskNumber),
     index("tasks_project_status_sort_idx").on(table.projectId, table.status, table.sortOrder),
-
     index("tasks_assignee_id_idx").on(table.assigneeId),
-
-    check("tasks_status_check", sql`${table.status} in ('backlog', 'todo', 'in_progress', 'review', 'done')`),
-
+    check("tasks_status_check", sql`${table.status} in ('backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled')`),
     check("tasks_priority_check", sql`${table.priority} is null or ${table.priority} in ('low', 'medium', 'high', 'urgent')`),
+  ],
+);
+
+export const taskAssignees = sqliteTable(
+  "task_assignees",
+  {
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.taskId, table.userId],
+    }),
+
+    index("task_assignees_user_id_idx").on(table.userId),
   ],
 );

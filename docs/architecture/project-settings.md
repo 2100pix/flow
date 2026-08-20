@@ -197,7 +197,7 @@ otherwise automatic code derived from Project Name
 
 Custom override rules:
 
-- 1–8 characters
+- 1–4 characters
 - alphanumeric only
 - uppercase normalization
 

@@ -14,7 +14,7 @@ export const projectCodeOverrideSchema = z
   .string()
   .trim()
   .min(1)
-  .max(8)
+  .max(4)
   .regex(/^[A-Za-z0-9]+$/)
   .transform((value) => value.toUpperCase());
 
