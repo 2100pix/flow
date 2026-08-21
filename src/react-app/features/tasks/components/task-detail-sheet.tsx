@@ -677,10 +677,8 @@ export function TaskDetailSheet({
 
         <div className="h-[calc(100%-3.5rem)]">
           {isPending ? <div className="p-6 text-sm text-muted-foreground">Loading task…</div> : null}
-
           {isError ? <div className="p-6 text-sm text-destructive">Unable to load task.</div> : null}
-
-          {task ? <TaskEditor key={task.updatedAt} task={task} onClose={onClose} workflowStatuses={workflowStatuses} /> : null}
+          {task ? <TaskEditor key={task.id} task={task} onClose={onClose} workflowStatuses={workflowStatuses} /> : null}{" "}
         </div>
       </aside>
     </>
