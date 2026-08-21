@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { CalendarBlankIcon, PlusIcon } from "@phosphor-icons/react";
 
 import { DragOverlay, useDragOperation, useDroppable } from "@dnd-kit/react";
@@ -97,7 +98,23 @@ function findBoardTask(board: TaskBoardState, taskId: string) {
   return null;
 }
 
-function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; dragDisabled: boolean; onOpen: () => void }) {
+function TaskBoardCard({
+  task,
+  index,
+  status,
+  dragDisabled,
+  onOpen,
+}: {
+  task: TaskDto;
+
+  index: number;
+
+  status: TaskStatus;
+
+  dragDisabled: boolean;
+
+  onOpen: () => void;
+}) {
   const { ref, isDragSource } = useSortable({
     id: task.id,
     index,
@@ -109,32 +126,71 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
     disabled: dragDisabled,
   });
 
+  const pointerOriginRef = useRef<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const pointerMovedRef = useRef(false);
+
   const dueDate = formatTaskDate(task.dueDate);
 
   return (
-    <article
+    <button
       ref={ref}
+      type="button"
       data-board-card={task.id}
       data-drag-placeholder={isDragSource ? "true" : undefined}
+      aria-label={`Open ${task.title}`}
+      onPointerDown={(event) => {
+        pointerOriginRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+        };
+
+        pointerMovedRef.current = false;
+      }}
+      onPointerMove={(event) => {
+        const origin = pointerOriginRef.current;
+
+        if (!origin) {
+          return;
+        }
+
+        const distance = Math.hypot(event.clientX - origin.x, event.clientY - origin.y);
+
+        if (distance > 5) {
+          pointerMovedRef.current = true;
+        }
+      }}
+      onPointerCancel={() => {
+        pointerOriginRef.current = null;
+
+        pointerMovedRef.current = false;
+      }}
+      onClick={(event) => {
+        pointerOriginRef.current = null;
+
+        if (pointerMovedRef.current) {
+          event.preventDefault();
+
+          pointerMovedRef.current = false;
+
+          return;
+        }
+
+        onOpen();
+      }}
       className={[
-        "relative flex min-h-[111px] w-full shrink-0 cursor-grab flex-col overflow-hidden rounded-lg border p-4 outline-none",
+        "relative flex min-h-[111px] w-full shrink-0 cursor-grab flex-col overflow-hidden rounded-lg border p-4 text-left outline-none",
         "active:cursor-grabbing",
         "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out",
+        "focus-visible:ring-2 focus-visible:ring-ring",
         isDragSource ? "scale-[0.985] border-border/60 bg-card/40 shadow-inner" : "scale-100 border-transparent bg-card shadow-none hover:bg-accent/70",
-        dragDisabled ? "cursor-default active:cursor-default" : "",
+        dragDisabled ? "cursor-pointer active:cursor-pointer" : "",
       ].join(" ")}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${task.title}`}
-        className={[
-          "relative z-10 flex min-h-0 flex-1 flex-col justify-between text-left outline-none",
-          "transition-[opacity,transform] duration-100 ease-out",
-          "focus-visible:ring-2 focus-visible:ring-ring",
-          isDragSource ? "pointer-events-none translate-y-0.5 opacity-0" : "translate-y-0 opacity-100",
-        ].join(" ")}
-      >
+      <div className={["relative z-10 flex min-h-0 flex-1 flex-col justify-between", "transition-[opacity,transform] duration-100 ease-out", isDragSource ? "pointer-events-none translate-y-0.5 opacity-0" : "translate-y-0 opacity-100"].join(" ")}>
         <div>
           <div className="flex min-w-0 items-start justify-between gap-4">
             <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
@@ -154,8 +210,8 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
 
           <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
         </div>
-      </button>
-    </article>
+      </div>
+    </button>
   );
 }
 

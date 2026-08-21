@@ -278,7 +278,9 @@ function TaskAssigneePicker({
   onValueChange,
 }: {
   projectId: string;
+
   value: string[];
+
   disabled: boolean;
 
   onValueChange: (userIds: string[]) => void;
@@ -309,70 +311,91 @@ function TaskAssigneePicker({
 
   const hiddenCount = Math.max(selectedMembers.length - visibleAvatars.length, 0);
 
+  const assigneeLabel = selectedMembers.length > 0 ? `Assignees: ${selectedMembers.map((member) => member.user.displayName).join(", ")}` : "Assignees";
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" size="sm" className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs" />}>
-        {value.length === 0 ? (
-          <>
-            <UsersIcon className="size-4" aria-hidden="true" />
-            Assignees
-          </>
+      <PopoverTrigger
+        disabled={disabled}
+        render={
+          <Button
+            type="button"
+            variant={selectedMembers.length === 0 ? "outline" : "ghost"}
+            aria-label={assigneeLabel}
+            title={assigneeLabel}
+            className={
+              selectedMembers.length === 0 ? "h-8 w-auto justify-start rounded-lg px-2.5 text-xs font-normal" : "h-8 w-auto justify-start border-0 bg-transparent p-0 shadow-none hover:bg-transparent hover:text-foreground focus-visible:bg-transparent"
+            }
+          />
+        }
+      >
+        {selectedMembers.length === 0 ? (
+          "Assignees"
         ) : (
-          <>
-            <AvatarGroup className="-space-x-2">
-              {visibleAvatars.map((member) => (
-                <Avatar key={member.user.id} size="sm" className="size-[18px]" aria-hidden="true">
-                  {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+          <AvatarGroup className="-space-x-1.5">
+            {visibleAvatars.map((member) => (
+              <Avatar key={member.user.id} size="sm" className="size-[18px]" aria-hidden="true">
+                {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                  <AvatarFallback className="text-[8px]">{getInitials(member.user.displayName)}</AvatarFallback>
-                </Avatar>
-              ))}
+                <AvatarFallback className="text-[8px]">{getInitials(member.user.displayName)}</AvatarFallback>
+              </Avatar>
+            ))}
 
-              {hiddenCount > 0 ? <AvatarGroupCount className="size-[18px] text-[9px]">+{hiddenCount}</AvatarGroupCount> : null}
-            </AvatarGroup>
-
-            <span>{value.length === 1 ? "1 assignee" : `${value.length} assignees`}</span>
-          </>
+            {hiddenCount > 0 ? <AvatarGroupCount className="size-[18px] text-[8px]">+{hiddenCount}</AvatarGroupCount> : null}
+          </AvatarGroup>
         )}
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-72 p-2">
-        <p className="px-2 py-1 text-sm font-medium">Assignees</p>
+      <PopoverContent align="start" className="w-56 p-0">
+        <div className="p-1">
+          <div className="px-1.5 py-1 text-xs text-muted-foreground">Assignees</div>
 
-        <div className="my-1 h-px bg-border" />
+          <div className="-mx-1 my-1 h-px bg-border" />
 
-        {isPending ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">Loading project members…</p>
-        ) : isError ? (
-          <p className="px-2 py-3 text-xs text-destructive">Unable to load project members.</p>
-        ) : (
-          <div className="max-h-64 space-y-1 overflow-y-auto">
-            {orderedMembers.map((member) => {
-              const selected = selectedSet.has(member.user.id);
+          {isPending ? (
+            <p className="px-1.5 py-3 text-xs text-muted-foreground">Loading project members…</p>
+          ) : isError ? (
+            <p className="px-1.5 py-3 text-xs text-destructive">Unable to load project members.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto">
+              {orderedMembers.map((member) => {
+                const selected = selectedSet.has(member.user.id);
 
-              return (
-                <button
-                  key={member.user.id}
-                  type="button"
-                  onClick={() => {
-                    onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Avatar size="sm" aria-hidden="true">
-                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+                return (
+                  <button
+                    key={member.user.id}
+                    type="button"
+                    onClick={() => {
+                      onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
+                    }}
+                    className="
+                        relative
+                        flex h-8 w-full
+                        cursor-default
+                        items-center gap-1.5
+                        rounded-md
+                        py-1 pr-8 pl-1.5
+                        text-left text-sm
+                        outline-none
+                        hover:bg-foreground/10
+                        focus-visible:bg-foreground/10
+                      "
+                  >
+                    <Avatar size="sm" className="size-5" aria-hidden="true">
+                      {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                    <AvatarFallback>{getInitials(member.user.displayName)}</AvatarFallback>
-                  </Avatar>
+                      <AvatarFallback className="text-[9px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                    </Avatar>
 
-                  <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
 
-                  {selected ? <CheckIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                    {selected ? <CheckIcon className="absolute right-2 size-4" aria-hidden="true" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );

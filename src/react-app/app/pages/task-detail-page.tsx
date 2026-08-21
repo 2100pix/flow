@@ -2,8 +2,6 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
-import { Button } from "@/components/ui/button";
-
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useProject } from "@/features/projects/hooks/use-project";
@@ -11,7 +9,7 @@ import { useProject } from "@/features/projects/hooks/use-project";
 import { TaskActionsMenu } from "@/features/tasks/components/task-actions-menu";
 
 import { TaskDetailContent } from "@/features/tasks/components/task-detail-content";
-
+import { TaskWorkspaceFilterButton, TaskWorkspaceFilterGroup } from "@/features/tasks/components/task-workspace-filter";
 import { useProjectTaskWorkflow } from "@/features/tasks/hooks/use-project-task-workflow";
 
 import { useTask } from "@/features/tasks/hooks/use-task";
@@ -19,8 +17,7 @@ import { useTask } from "@/features/tasks/hooks/use-task";
 function TaskDetailPageSkeleton() {
   return (
     <div className="p-6 md:p-8">
-      <Skeleton className="h-4 w-72" />
-
+      <Skeleton className="h-5 w-72" />
       <div className="mt-8 flex items-center gap-2">
         <Skeleton className="h-6 w-16 rounded-lg" />
 
@@ -105,7 +102,7 @@ export function TaskDetailPage() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="flex min-w-0 items-start gap-1">
+      <div className="relative w-fit max-w-[calc(100%-2rem)]">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem className="min-w-0">
@@ -136,67 +133,26 @@ export function TaskDetailPage() {
           </BreadcrumbList>
         </Breadcrumb>
 
-        <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
+        <div className="absolute left-full top-1/2 ml-1 -translate-y-1/2">
+          <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
+        </div>
       </div>
 
-      <nav aria-label="Task detail sections" className="mt-8 flex min-w-0 flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          aria-current="page"
-          className="
-            h-6
-            rounded-full
-            bg-foreground/20
-            px-2.5
-            text-xs
-            font-normal
-            text-foreground
-            hover:bg-foreground/25
-          "
-        >
-          Overview
-        </Button>
+      <div className="mt-8">
+        <div className="mt-8">
+          <nav aria-label="Task detail sections">
+            <TaskWorkspaceFilterGroup>
+              <TaskWorkspaceFilterButton active ariaCurrent="page">
+                Overview
+              </TaskWorkspaceFilterButton>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled
-          title="Coming soon"
-          className="
-            h-6
-            rounded-full
-            px-2.5
-            text-xs
-            font-normal
-            text-muted-foreground
-            disabled:opacity-100
-          "
-        >
-          Activity
-        </Button>
+              <TaskWorkspaceFilterButton active={false}>Activity</TaskWorkspaceFilterButton>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled
-          title="Coming soon"
-          className="
-            h-6
-            rounded-full
-            px-2.5
-            text-xs
-            font-normal
-            text-muted-foreground
-            disabled:opacity-100
-          "
-        >
-          Updates
-        </Button>
-      </nav>
+              <TaskWorkspaceFilterButton active={false}>Updates</TaskWorkspaceFilterButton>
+            </TaskWorkspaceFilterGroup>
+          </nav>
+        </div>
+      </div>
 
       <div className="mx-auto max-w-6xl">
         <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} presentation="page" />

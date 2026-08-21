@@ -15,11 +15,8 @@ import {
   WarningCircleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
-
+import { CopyCode } from "@/components/copy-code";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
-
-import { Badge } from "@/components/ui/badge";
-
 import { Button } from "@/components/ui/button";
 
 import { Calendar } from "@/components/ui/calendar";
@@ -302,16 +299,15 @@ function TaskLeadControl({
         onValueChange(member.user.id);
       }}
     >
-      <SelectTrigger className="h-8 w-auto min-w-28 max-w-48 rounded-lg px-2.5 text-xs">
+      <SelectTrigger className="h-8 w-auto max-w-56 rounded-lg px-2.5 text-xs">
         {selectedName ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Avatar size="sm" className="size-5" aria-hidden="true">
               {selectedAvatarUrl ? <AvatarImage src={selectedAvatarUrl} alt="" /> : null}
 
               <AvatarFallback className="text-[9px]">{getMemberInitials(selectedName)}</AvatarFallback>
             </Avatar>
-
-            <span className="min-w-0 flex-1 truncate text-left">{selectedName}</span>
+            <span className="max-w-44 truncate text-left">{selectedName}</span>{" "}
           </span>
         ) : (
           <span className="flex items-center gap-1.5">
@@ -322,20 +318,13 @@ function TaskLeadControl({
         )}
       </SelectTrigger>
 
-      <SelectContent align="start" alignItemWithTrigger={false} className="w-56">
+      <SelectContent align="start" alignItemWithTrigger={false} className="min-w-48 max-w-72">
         <SelectGroup>
-          <SelectLabel className="flex items-center gap-2">
-            <UserCircleCheckIcon className="size-4" aria-hidden="true" />
-            Lead
-          </SelectLabel>
+          <SelectLabel>Lead</SelectLabel>
 
           <SelectSeparator />
 
-          <SelectItem value={NO_LEAD} className="h-8 gap-2 py-0 pr-8 pl-2">
-            <UserCircleCheckIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-
-            <span className="leading-none">No lead</span>
-          </SelectItem>
+          <SelectItem value={NO_LEAD}>No lead</SelectItem>
 
           <SelectSeparator />
 
@@ -521,13 +510,7 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
       <div className="min-h-0 flex-1">
         <div className={isPage ? "flex min-h-full flex-col pt-10" : "flex min-h-full flex-col px-6 py-6 md:px-7"}>
           <div className={isPage ? "min-w-0 max-w-2xl" : undefined}>
-            {isPage ? (
-              <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
-                {task.taskCode}
-              </Badge>
-            ) : (
-              <p className="inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{task.taskCode}</p>
-            )}
+            <CopyCode value={task.taskCode} appearance={isPage ? "badge" : "plain"} className={isPage ? undefined : "inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground"} />
 
             <label htmlFor={`task-title-${task.id}`} className="sr-only">
               Task title
