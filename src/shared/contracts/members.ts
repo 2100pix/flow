@@ -2,9 +2,14 @@ import * as z from "zod";
 
 export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
+export const updateWorkspaceMemberSchema = z.object({
+  displayName: z.string().trim().min(1).max(120),
+});
+
 export const addProjectMemberSchema = z.object({
   userId: z.string().trim().min(1),
 });
+
 export const updateWorkspaceMemberRoleSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("built_in"),
@@ -17,23 +22,59 @@ export const updateWorkspaceMemberRoleSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+export type UpdateWorkspaceMemberInput = z.infer<typeof updateWorkspaceMemberSchema>;
+
 export type UpdateWorkspaceMemberRoleInput = z.infer<typeof updateWorkspaceMemberRoleSchema>;
 
 export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;
 
+export const createWorkspaceExpertiseSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
+export const updateMemberExpertiseSchema = z.object({
+  expertiseIds: z.array(z.string().trim().min(1)).max(32),
+});
+
+export type CreateWorkspaceExpertiseInput = z.infer<typeof createWorkspaceExpertiseSchema>;
+
+export type UpdateMemberExpertiseInput = z.infer<typeof updateMemberExpertiseSchema>;
+
+export type WorkspaceExpertiseDto = {
+  id: string;
+
+  name: string;
+
+  createdAt: string;
+};
 export type AddProjectMemberInput = z.infer<typeof addProjectMemberSchema>;
 
 export type MemberDto = {
   id: string;
+
   displayName: string;
+
   avatarUrl: string | null;
 
   role: WorkspaceRole;
 
   customRole: {
     id: string;
+
     name: string;
   } | null;
+
+  expertise: WorkspaceExpertiseDto[];
+
+  joinedAt?: string;
+};
+
+export type WorkspaceExpertiseResponse = {
+  data: WorkspaceExpertiseDto[];
+};
+
+export type WorkspaceExpertiseItemResponse = {
+  data: WorkspaceExpertiseDto;
 };
 
 export type MemberAccessRequestDto = {
@@ -77,6 +118,12 @@ export type ProjectMemberResponse = {
 };
 
 export type RemoveProjectMemberResponse = {
+  data: {
+    success: true;
+  };
+};
+
+export type RemoveWorkspaceMemberResponse = {
   data: {
     success: true;
   };

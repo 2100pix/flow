@@ -1,16 +1,11 @@
 import { useState } from "react";
-
 import { useSearchParams } from "react-router";
-
 import { Button } from "@/components/ui/button";
-
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { RolesSettings } from "@/features/roles/components/roles-settings";
-
 import { TeamsSettings } from "@/features/teams/components/teams-settings";
+import { MembersSettings } from "@/features/members/components/members-settings";
 
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 
@@ -22,6 +17,10 @@ const settingsSections = [
   {
     id: "teams",
     label: "Teams",
+  },
+  {
+    id: "members",
+    label: "Members",
   },
   {
     id: "roles",
@@ -64,13 +63,12 @@ function GeneralSettings() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">General</h1>
+      <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">General</h1>
 
-        <div className="mt-10 max-w-xl space-y-12">
+      <div className="mt-8">
+        <div className="mx-auto mt-10 max-w-xl space-y-12">
           <section>
             <p className="text-xs font-medium text-muted-foreground">Workspace</p>
-
             <form
               className="mt-3"
               onSubmit={(event) => {
@@ -222,28 +220,26 @@ export function SettingsPage() {
   const activeSection =
     requestedSection === "teams" && !hasPermission(auth, "teams.view")
       ? "general"
-      : requestedSection === "roles" && !hasPermission(auth, "roles.view")
+      : requestedSection === "members" && !hasPermission(auth, "members.view")
         ? "general"
-        : requestedSection === "task-fields" && !hasPermission(auth, "task_fields.view")
+        : requestedSection === "roles" && !hasPermission(auth, "roles.view")
           ? "general"
-          : requestedSection === "task-appearance" && !hasPermission(auth, "task_appearance.view")
+          : requestedSection === "task-fields" && !hasPermission(auth, "task_fields.view")
             ? "general"
-            : requestedSection;
+            : requestedSection === "task-appearance" && !hasPermission(auth, "task_appearance.view")
+              ? "general"
+              : requestedSection;
 
   if (activeSection === "general") {
     return <GeneralSettings />;
   }
 
   if (activeSection === "teams") {
-    return (
-      <div className="p-6 md:p-8">
-        <div className="mx-auto max-w-6xl">
-          <TeamsSettings />
-        </div>
-      </div>
-    );
+    return <TeamsSettings />;
   }
-
+  if (activeSection === "members") {
+    return <MembersSettings />;
+  }
   if (activeSection === "roles") {
     return (
       <div className="p-6 md:p-8">

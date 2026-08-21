@@ -284,7 +284,7 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
   );
 }
 
-type SettingsSectionId = "general" | "teams" | "roles" | "task-fields" | "task-appearance";
+type SettingsSectionId = "general" | "teams" | "members" | "roles" | "task-fields" | "task-appearance";
 
 function SettingsSidebarNavigation({
   auth,
@@ -311,6 +311,13 @@ function SettingsSidebarNavigation({
       href: "/settings?section=teams",
       icon: UsersIcon,
       visible: hasPermission(auth, "teams.view"),
+    },
+    {
+      id: "members",
+      label: "Members",
+      href: "/settings?section=members",
+      icon: UsersIcon,
+      visible: hasPermission(auth, "members.view"),
     },
     {
       id: "roles",
@@ -409,7 +416,8 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const location = useLocation();
   const settingsMode = location.pathname === "/settings";
   const rawSettingsSection = new URLSearchParams(location.search).get("section");
-  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "teams" || rawSettingsSection === "roles" || rawSettingsSection === "task-fields" || rawSettingsSection === "task-appearance" ? rawSettingsSection : "general";
+  const activeSettingsSection: SettingsSectionId =
+    rawSettingsSection === "teams" || rawSettingsSection === "members" || rawSettingsSection === "roles" || rawSettingsSection === "task-fields" || rawSettingsSection === "task-appearance" ? rawSettingsSection : "general";
   const activeProjectId = getActiveProjectId(location.pathname);
   const canViewHome = hasPermission(auth, "dashboard.view");
   const canViewClients = hasPermission(auth, "clients.view");

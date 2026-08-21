@@ -172,8 +172,8 @@ authRoutes.get("/discord/callback", async (c) => {
     })
     .onConflictDoUpdate({
       target: users.discordUserId,
+
       set: {
-        displayName,
         avatarUrl,
         updatedAt: now,
         lastLoginAt: now,

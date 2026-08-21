@@ -189,6 +189,60 @@ export const teamMembers = sqliteTable(
   ],
 );
 
+export const workspaceExpertise = sqliteTable(
+  "workspace_expertise",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    name: text("name").notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [index("workspace_expertise_workspace_id_idx").on(table.workspaceId), uniqueIndex("workspace_expertise_workspace_name_unique").on(table.workspaceId, table.name)],
+);
+
+export const memberExpertise = sqliteTable(
+  "member_expertise",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    expertiseId: text("expertise_id")
+      .notNull()
+      .references(() => workspaceExpertise.id, {
+        onDelete: "cascade",
+      }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.userId, table.expertiseId],
+    }),
+
+    index("member_expertise_user_id_idx").on(table.userId),
+
+    index("member_expertise_expertise_id_idx").on(table.expertiseId),
+  ],
+);
+
 export const workspaceRoles = sqliteTable(
   "workspace_roles",
   {
