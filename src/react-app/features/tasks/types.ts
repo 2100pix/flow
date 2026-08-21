@@ -1,3 +1,19 @@
-export type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, ReorderTasksInput, ReorderTasksResponse, TaskAssigneeDto, TaskDto, TaskPriority, TaskResponse, TaskStatus, UpdateTaskInput } from "../../../shared/contracts/tasks";
+export type {
+  ArchiveTaskResponse,
+  CreateTaskInput,
+  DeleteTaskResponse,
+  ProjectTasksResponse,
+  ReorderTasksInput,
+  ReorderTasksResponse,
+  TaskAssigneeDto,
+  TaskDto,
+  TaskLeadDto,
+  TaskPriority,
+  TaskResponse,
+  TaskStatus,
+  UpdateTaskInput,
+} from "../../../shared/contracts/tasks";
 
 export type { TaskWorkflowDto, TaskWorkflowResponse, TaskWorkflowStatusDto, UpdateTaskWorkflowInput } from "../../../shared/contracts/task-workflow";
+
+export type { CreateTaskResourceInput, DeleteTaskResourceResponse, TaskResourceDto, TaskResourceResponse, TaskResourcesResponse, TaskResourceType, UpdateTaskResourceInput } from "../../../shared/contracts/task-resources";

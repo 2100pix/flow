@@ -15,7 +15,7 @@ import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflo
 import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
-import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers, workspaceRoles } from "../db/schema";
+import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers, workspaceRoles, projectTaskSequences } from "../db/schema";
 import { createId } from "../lib/id";
 import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -314,7 +314,12 @@ projectsRoutes.post(
       })),
     );
 
-    await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert]);
+    const taskSequenceInsert = db.insert(projectTaskSequences).values({
+      projectId: id,
+      nextNumber: 1,
+    });
+
+    await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert]);
 
     const data: ProjectDto = {
       id,
@@ -1313,6 +1318,20 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
       ),
     );
 
+  const taskLeadClear = db
+    .update(tasks)
+    .set({
+      leadUserId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(tasks.projectId, projectId),
+
+        eq(tasks.leadUserId, userId),
+      ),
+    );
+
   const projectMemberDelete = db.delete(projectMembers).where(
     and(
       eq(projectMembers.projectId, projectId),
@@ -1322,7 +1341,7 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
   );
 
   if (!removedLead) {
-    await db.batch([taskAssignmentDelete, legacyAssigneeClear, projectMemberDelete]);
+    await db.batch([taskAssignmentDelete, legacyAssigneeClear, taskLeadClear, projectMemberDelete]);
 
     return c.json({
       data: {
@@ -1342,7 +1361,7 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
 
   await db.batch([
     taskAssignmentDelete,
-
+    taskLeadClear,
     legacyAssigneeClear,
 
     db.delete(projectLeads).where(eq(projectLeads.projectId, projectId)),

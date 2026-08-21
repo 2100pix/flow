@@ -539,6 +539,11 @@ export const tasks = sqliteTable(
     assigneeId: text("assignee_id").references(() => users.id, {
       onDelete: "set null",
     }),
+
+    leadUserId: text("lead_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
     startDate: text("start_date").notNull(),
     dueDate: text("due_date"),
     sortOrder: integer("sort_order").notNull(),
@@ -566,9 +571,24 @@ export const tasks = sqliteTable(
     uniqueIndex("tasks_project_number_unique").on(table.projectId, table.taskNumber),
     index("tasks_project_status_sort_idx").on(table.projectId, table.status, table.sortOrder),
     index("tasks_assignee_id_idx").on(table.assigneeId),
+    index("tasks_lead_user_id_idx").on(table.leadUserId),
     check("tasks_status_check", sql`${table.status} in ('backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled')`),
     check("tasks_priority_check", sql`${table.priority} is null or ${table.priority} in ('low', 'medium', 'high', 'urgent')`),
   ],
+);
+
+export const projectTaskSequences = sqliteTable(
+  "project_task_sequences",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    nextNumber: integer("next_number").notNull(),
+  },
+  (table) => [check("project_task_sequences_next_number_check", sql`${table.nextNumber} >= 1`)],
 );
 
 export const taskAssignees = sqliteTable(
@@ -596,5 +616,69 @@ export const taskAssignees = sqliteTable(
     }),
 
     index("task_assignees_user_id_idx").on(table.userId),
+  ],
+);
+
+export const taskResources = sqliteTable(
+  "task_resources",
+  {
+    id: text("id").primaryKey(),
+
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    type: text("type", {
+      enum: ["document_brief", "link"],
+    }).notNull(),
+
+    title: text("title"),
+
+    url: text("url"),
+
+    content: text("content"),
+
+    position: integer("position").notNull(),
+
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+      }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    index("task_resources_task_id_idx").on(table.taskId),
+
+    uniqueIndex("task_resources_task_position_unique").on(table.taskId, table.position),
+
+    check("task_resources_type_check", sql`${table.type} in ('document_brief', 'link')`),
+
+    check("task_resources_position_check", sql`${table.position} >= 0`),
+
+    check(
+      "task_resources_payload_check",
+      sql`(
+        (
+          ${table.type} = 'link'
+          and ${table.url} is not null
+          and ${table.content} is null
+        )
+        or
+        (
+          ${table.type} = 'document_brief'
+          and ${table.url} is null
+        )
+      )`,
+    ),
   ],
 );
