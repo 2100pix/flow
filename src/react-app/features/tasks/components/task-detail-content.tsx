@@ -11,6 +11,7 @@ import {
   CircleIcon,
   EyeIcon,
   SpinnerGapIcon,
+  UserCircleCheckIcon,
   WarningCircleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
@@ -301,7 +302,7 @@ function TaskLeadControl({
         onValueChange(member.user.id);
       }}
     >
-      <SelectTrigger className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
+      <SelectTrigger className="h-8 w-auto min-w-28 max-w-48 gap-1.5 rounded-lg px-2.5 text-xs">
         {selectedName ? (
           <>
             <Avatar size="sm" className="size-5" aria-hidden="true">
@@ -310,20 +311,30 @@ function TaskLeadControl({
               <AvatarFallback className="text-[9px]">{getMemberInitials(selectedName)}</AvatarFallback>
             </Avatar>
 
-            <span className="max-w-32 truncate">{selectedName}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{selectedName}</span>
           </>
         ) : (
-          "Lead"
+          <>
+            <UserCircleCheckIcon className="size-4 shrink-0" aria-hidden="true" />
+
+            <span>Lead</span>
+          </>
         )}
       </SelectTrigger>
 
-      <SelectContent align="start" alignItemWithTrigger={false}>
+      <SelectContent align="start" alignItemWithTrigger={false} className="w-56">
         <SelectGroup>
-          <SelectLabel>Lead</SelectLabel>
+          <SelectLabel className="flex items-center gap-2">
+            <UserCircleCheckIcon className="size-4" aria-hidden="true" />
+            Lead
+          </SelectLabel>
 
           <SelectSeparator />
 
-          <SelectItem value={NO_LEAD}>No lead</SelectItem>
+          <SelectItem value={NO_LEAD}>
+            <UserCircleCheckIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+            No lead
+          </SelectItem>
 
           <SelectSeparator />
 
@@ -335,7 +346,7 @@ function TaskLeadControl({
                 <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
               </Avatar>
 
-              <span className="min-w-0 truncate">{member.user.displayName}</span>
+              <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
             </SelectItem>
           ))}
         </SelectGroup>
@@ -399,36 +410,42 @@ function TaskAssigneeControl({
             variant={selectedAssignees.length === 0 ? "outline" : "ghost"}
             aria-label={assigneeLabel}
             title={assigneeLabel}
-            className={selectedAssignees.length === 0 ? "h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal" : "h-8 w-auto justify-start border-0 bg-transparent p-0 shadow-none hover:bg-transparent focus-visible:bg-transparent"}
+            className={
+              selectedAssignees.length === 0
+                ? "h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal"
+                : "h-8 w-auto justify-start border-0 bg-transparent p-0 text-foreground shadow-none hover:bg-transparent hover:text-foreground focus-visible:bg-transparent"
+            }
           />
         }
       >
         {selectedAssignees.length === 0 ? (
           "Assignees"
         ) : (
-          <AvatarGroup className="-space-x-2">
+          <AvatarGroup className="-space-x-1.5">
             {visibleAssignees.map((assignee) => (
-              <Avatar key={assignee.id} size="sm" className="size-5" aria-hidden="true">
+              <Avatar key={assignee.id} size="sm" className="size-[18px]" aria-hidden="true">
                 {assignee.avatarUrl ? <AvatarImage src={assignee.avatarUrl} alt="" /> : null}
 
                 <AvatarFallback className="text-[9px]">{getMemberInitials(assignee.displayName)}</AvatarFallback>
               </Avatar>
             ))}
-
-            {hiddenAssigneeCount > 0 ? <AvatarGroupCount className="size-5 text-[9px]">+{hiddenAssigneeCount}</AvatarGroupCount> : null}
+            {hiddenAssigneeCount > 0 ? <AvatarGroupCount className="size-[18px] text-[8px]">+{hiddenAssigneeCount}</AvatarGroupCount> : null}{" "}
           </AvatarGroup>
         )}
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-72 p-2">
-        <p className="px-2 py-1 text-sm font-medium">Assignees</p>
+      <PopoverContent align="start" className="w-56 p-1">
+        <div className="flex items-center gap-2 px-2 py-1.5 text-sm font-medium">
+          <UserCircleCheckIcon className="size-4" aria-hidden="true" />
+          Assignees
+        </div>
 
-        <div className="my-1 h-px bg-border" />
+        <div className="-mx-1 my-1 h-px bg-border" />
 
         {members.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">No project members.</p>
         ) : (
-          <div className="max-h-64 space-y-1 overflow-y-auto">
+          <div className="max-h-64 overflow-y-auto">
             {members.map((member) => {
               const selected = selectedSet.has(member.user.id);
 
@@ -439,12 +456,20 @@ function TaskAssigneeControl({
                   onClick={() => {
                     onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="
+                    flex h-8 w-full
+                    items-center gap-2
+                    rounded-md px-2
+                    text-left text-sm
+                    outline-none
+                    hover:bg-muted
+                    focus-visible:bg-muted
+                  "
                 >
-                  <Avatar size="sm" aria-hidden="true">
+                  <Avatar size="sm" className="size-5" aria-hidden="true">
                     {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                    <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                    <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
                   </Avatar>
 
                   <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
@@ -551,7 +576,7 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
           <div className={isPage ? "mt-24 max-w-2xl" : "mt-24"}>
             <p className="mb-2 text-xs text-muted-foreground">Properties</p>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Select
                 value={autosave.draft.status}
                 disabled={!canEdit}
@@ -587,7 +612,6 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   </SelectGroup>
                 </SelectContent>
               </Select>
-
               <Select
                 value={autosave.draft.priority ?? NO_PRIORITY}
                 disabled={!canEdit}
@@ -642,7 +666,6 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   </SelectGroup>
                 </SelectContent>
               </Select>
-
               <TaskLeadControl
                 task={task}
                 members={orderedMembers}
@@ -652,7 +675,6 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   autosave.setLeadUserId(userId);
                 }}
               />
-
               <TaskAssigneeControl
                 task={task}
                 members={orderedMembers}
@@ -662,7 +684,6 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   autosave.setAssigneeIds(userIds);
                 }}
               />
-
               <TaskDateControl
                 label="Start Date"
                 value={autosave.draft.startDate}
@@ -676,7 +697,6 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   autosave.setStartDate(value);
                 }}
               />
-
               <TaskDateControl
                 label="Due Date"
                 value={autosave.draft.dueDate}

@@ -21,15 +21,15 @@ function TaskDetailPageSkeleton() {
     <div className="p-6 md:p-8">
       <Skeleton className="h-4 w-72" />
 
+      <div className="mt-8 flex items-center gap-2">
+        <Skeleton className="h-6 w-16 rounded-lg" />
+
+        <Skeleton className="h-6 w-14 rounded-lg" />
+
+        <Skeleton className="h-6 w-16 rounded-lg" />
+      </div>
+
       <div className="mx-auto max-w-6xl">
-        <div className="mt-8 flex items-center gap-2">
-          <Skeleton className="h-6 w-16 rounded-lg" />
-
-          <Skeleton className="h-6 w-14 rounded-lg" />
-
-          <Skeleton className="h-6 w-16 rounded-lg" />
-        </div>
-
         <div className="pt-10">
           <div className="max-w-2xl">
             <Skeleton className="h-6 w-20 rounded-md" />
@@ -105,7 +105,7 @@ export function TaskDetailPage() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="flex min-w-0 items-center gap-1">
+      <div className="flex min-w-0 items-start gap-1">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem className="min-w-0">
@@ -139,21 +139,21 @@ export function TaskDetailPage() {
         <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
       </div>
 
+      <nav aria-label="Task detail sections" className="mt-8 flex items-center gap-1.5">
+        <Button type="button" variant="secondary" size="xs" aria-current="page">
+          Overview
+        </Button>
+
+        <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
+          Activity
+        </Button>
+
+        <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
+          Updates
+        </Button>
+      </nav>
+
       <div className="mx-auto max-w-6xl">
-        <nav aria-label="Task detail sections" className="mt-8 flex items-center gap-1.5">
-          <Button type="button" variant="secondary" size="xs" aria-current="page">
-            Overview
-          </Button>
-
-          <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
-            Activity
-          </Button>
-
-          <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
-            Updates
-          </Button>
-        </nav>
-
         <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} presentation="page" />
       </div>
     </div>
