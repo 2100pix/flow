@@ -4,6 +4,7 @@ import { createTask } from "../api/tasks";
 import type { CreateTaskInput } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
 import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
+import { projectQueryKey } from "@/features/projects/hooks/use-project";
 
 type CreateTaskVariables = {
   projectId: string;
@@ -20,6 +21,10 @@ export function useCreateTask() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectTasksQueryKey(variables.projectId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKey(variables.projectId),
         }),
 
         queryClient.invalidateQueries({

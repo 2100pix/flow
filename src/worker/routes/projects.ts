@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createProjectSchema, updateProjectSchema, type ProjectDto, type ProjectDueDateMode } from "../../shared/contracts/projects";
+import { createProjectSchema, updateProjectSchema, type ProjectDetailDto, type ProjectDto, type ProjectDueDateMode } from "../../shared/contracts/projects";
 
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
 
@@ -74,6 +74,17 @@ function resolveProjectDueState(currentDueDate: string | null, currentDueDateMod
     dueDate,
     dueDateMode,
   };
+}
+
+async function resolveEffectiveProjectDueDate(db: ReturnType<typeof createDb>, projectId: string, storedDueDate: string | null) {
+  const [result] = await db
+    .select({
+      dueDate: max(tasks.dueDate),
+    })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt)));
+
+  return result?.dueDate ?? storedDueDate;
 }
 
 projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (c) => {
@@ -602,7 +613,9 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     );
   }
 
-  const data: ProjectDto = {
+  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, project.dueDate);
+
+  const data: ProjectDetailDto = {
     id: project.id,
 
     client:
@@ -622,8 +635,12 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     visibility: project.visibility,
     status: project.status,
     startDate: project.startDate,
+
     dueDate: project.dueDate,
     dueDateMode: project.dueDateMode,
+
+    effectiveDueDate,
+
     discordChannelUrl: project.discordChannelUrl,
 
     createdAt: project.createdAt.toISOString(),
@@ -817,10 +834,13 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
 
-  const data: ProjectDto = {
+  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, dueDate);
+
+  const data: ProjectDetailDto = {
     id: project.id,
 
     client: selectedClient,
+
     projectCode: resolveProjectCode(name, projectCodeOverride),
 
     projectCodeOverride,
@@ -833,8 +853,12 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
     visibility,
     status,
     startDate,
+
     dueDate,
     dueDateMode,
+
+    effectiveDueDate,
+
     discordChannelUrl,
 
     createdAt: project.createdAt.toISOString(),

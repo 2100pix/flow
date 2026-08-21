@@ -459,14 +459,18 @@ function StartDateField({ projectId, value, canEdit }: { projectId: string; valu
   );
 }
 
-function DueDateField({ projectId, dueDate, dueDateMode, canEdit }: { projectId: string; dueDate: string | null; dueDateMode: ProjectDto["dueDateMode"]; canEdit: boolean }) {
+function DueDateField({ projectId, dueDate, dueDateMode, effectiveDueDate, canEdit }: { projectId: string; dueDate: string | null; dueDateMode: ProjectDto["dueDateMode"]; effectiveDueDate: string | null; canEdit: boolean }) {
   const updateProject = useUpdateProject();
 
   const [open, setOpen] = useState(false);
 
   const selected = dueDateMode === "date" ? parseProjectDate(dueDate) : undefined;
 
-  const label = dueDateMode === "ongoing" ? "Ongoing" : dueDateMode === "date" ? formatProjectDate(dueDate) : "Not set";
+  const effectiveSelected = parseProjectDate(effectiveDueDate);
+
+  const taskDerived = effectiveDueDate !== null && (dueDateMode !== "date" || effectiveDueDate !== dueDate);
+
+  const label = effectiveDueDate ? formatProjectDate(effectiveDueDate) : dueDateMode === "ongoing" ? "Ongoing" : dueDateMode === "date" ? formatProjectDate(dueDate) : "Not set";
 
   function updateDueDate(nextDueDate: string | null, nextMode: ProjectDto["dueDateMode"]) {
     if (nextDueDate === dueDate && nextMode === dueDateMode) {
@@ -497,7 +501,13 @@ function DueDateField({ projectId, dueDate, dueDateMode, canEdit }: { projectId:
   }
 
   if (!canEdit) {
-    return <p className="mt-2 text-sm">{label}</p>;
+    return (
+      <div className="mt-2">
+        <p className="text-sm">{label}</p>
+
+        {taskDerived ? <p className="mt-1 text-[11px] text-muted-foreground">From active tasks</p> : null}
+      </div>
+    );
   }
 
   return (
@@ -506,13 +516,23 @@ function DueDateField({ projectId, dueDate, dueDateMode, canEdit }: { projectId:
         <CalendarBlankIcon aria-hidden="true" />
 
         {label}
+
+        {taskDerived ? <span className="text-[10px] text-muted-foreground">Tasks</span> : null}
       </PopoverTrigger>
 
       <PopoverContent align="start" className="w-auto p-0">
+        {taskDerived ? (
+          <div className="max-w-72 border-b px-3 py-2">
+            <p className="text-xs font-medium">Effective due date: {label}</p>
+
+            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Derived from the latest active Task due date. Changes here update only the Project fallback.</p>
+          </div>
+        ) : null}
+
         <Calendar
           mode="single"
           selected={selected}
-          defaultMonth={selected}
+          defaultMonth={selected ?? effectiveSelected}
           timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
           onSelect={(date) => {
             if (!date) {
@@ -1185,8 +1205,7 @@ export function ProjectOverviewPage() {
 
                 <div>
                   <p className="text-xs text-muted-foreground">Due Date</p>
-
-                  <DueDateField projectId={project.id} dueDate={project.dueDate} dueDateMode={project.dueDateMode} canEdit={canEdit} />
+                  <DueDateField projectId={project.id} dueDate={project.dueDate} dueDateMode={project.dueDateMode} effectiveDueDate={project.effectiveDueDate} canEdit={canEdit} />{" "}
                 </div>
               </div>
 

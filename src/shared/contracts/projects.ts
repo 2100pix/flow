@@ -92,10 +92,18 @@ export type ProjectDto = {
   updatedAt: string;
 };
 
+export type ProjectDetailDto = ProjectDto & {
+  effectiveDueDate: string | null;
+};
+
 export type ProjectsResponse = {
   data: ProjectDto[];
 };
 
 export type ProjectResponse = {
   data: ProjectDto;
+};
+
+export type ProjectDetailResponse = {
+  data: ProjectDetailDto;
 };
