@@ -139,16 +139,61 @@ export function TaskDetailPage() {
         <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
       </div>
 
-      <nav aria-label="Task detail sections" className="mt-8 flex items-center gap-1.5">
-        <Button type="button" variant="secondary" size="xs" aria-current="page">
+      <nav aria-label="Task detail sections" className="mt-8 flex min-w-0 flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          aria-current="page"
+          className="
+            h-6
+            rounded-full
+            bg-foreground/20
+            px-2.5
+            text-xs
+            font-normal
+            text-foreground
+            hover:bg-foreground/25
+          "
+        >
           Overview
         </Button>
 
-        <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled
+          title="Coming soon"
+          className="
+            h-6
+            rounded-full
+            px-2.5
+            text-xs
+            font-normal
+            text-muted-foreground
+            disabled:opacity-100
+          "
+        >
           Activity
         </Button>
 
-        <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled
+          title="Coming soon"
+          className="
+            h-6
+            rounded-full
+            px-2.5
+            text-xs
+            font-normal
+            text-muted-foreground
+            disabled:opacity-100
+          "
+        >
           Updates
         </Button>
       </nav>
