@@ -586,7 +586,7 @@ function TaskListRow({
   });
 
   return (
-    <div ref={ref} className={["group flex min-h-11 min-w-0 flex-col gap-2 py-1 transition-opacity md:flex-row md:items-center md:justify-between", isDragSource ? "opacity-50" : ""].join(" ")}>
+    <div ref={ref} className={["group flex min-h-14 min-w-0 flex-col gap-2 py-2 transition-opacity md:flex-row md:items-center md:justify-between", isDragSource ? "opacity-50" : ""].join(" ")}>
       <button
         ref={handleRef}
         type="button"
@@ -654,9 +654,9 @@ function TaskListSection({
   });
 
   return (
-    <section ref={ref} className="space-y-2">
-      <h2 className="px-3 text-base font-medium text-muted-foreground">{label}</h2>
-      <div className={["min-h-12 overflow-hidden rounded-lg bg-muted/30 px-3", "dark:bg-muted/25", isDropTarget ? "ring-2 ring-ring/30" : ""].join(" ")}>
+    <section ref={ref} className="space-y-2.5">
+      <h2 className="px-1 text-sm font-medium text-muted-foreground">{label}</h2>
+      <div className={["min-h-14 overflow-hidden rounded-lg bg-card px-4", isDropTarget ? "ring-2 ring-ring/30" : ""].join(" ")}>
         <div className="divide-y divide-border/60">
           {tasks.length === 0 ? (
             <div className="flex min-h-10 items-center px-1 text-xs text-muted-foreground/50">No tasks</div>
@@ -686,8 +686,7 @@ function TaskListSection({
 
 export function TaskListView({ projectId, statuses, workflowStatuses, board, dragDisabled, canEditTask, canAssignTask, onOpenTask }: TaskListViewProps) {
   return (
-    <div className="space-y-3">
-      {" "}
+    <div className="space-y-4">
       {statuses
         .filter((status) => board[status.statusKey].length > 0)
         .map((status) => (

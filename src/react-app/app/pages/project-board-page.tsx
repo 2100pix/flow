@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { move } from "@dnd-kit/helpers";
+import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { TaskListView } from "@/features/tasks/components/task-list-view";
@@ -200,6 +202,28 @@ export function ProjectBoardPage() {
 
         boardRef.current = snapshot;
       }}
+      sensors={(defaults) => [
+        ...defaults.filter((sensor) => sensor !== PointerSensor),
+
+        PointerSensor.configure({
+          activationConstraints: (event) => {
+            if (event.pointerType === "touch") {
+              return [
+                new PointerActivationConstraints.Delay({
+                  value: 250,
+                  tolerance: 5,
+                }),
+              ];
+            }
+
+            return [
+              new PointerActivationConstraints.Distance({
+                value: 5,
+              }),
+            ];
+          },
+        }),
+      ]}
       onDragOver={(event) => {
         const source = event.operation.source;
 
@@ -252,21 +276,44 @@ export function ProjectBoardPage() {
 
         const affectedStatuses: TaskStatus[] = sourceStatus === targetStatus ? [sourceStatus] : [sourceStatus, targetStatus];
 
+        const changed = affectedStatuses.some((status) => {
+          const before = snapshot[status];
+
+          const after = currentBoard[status];
+
+          return before.length !== after.length || before.some((task, index) => task.id !== after[index]?.id);
+        });
+
+        if (!changed) {
+          resetDragState();
+          return;
+        }
+
         const input: ReorderTasksInput = {
           columns: affectedStatuses.map((status) => ({
             status,
-
             taskIds: currentBoard[status].map((task) => task.id),
           })),
         };
 
+        const toastId = toast.loading("Saving task order…");
+
         reorderTasks.mutate(
           {
             projectId: project.id,
-
             input,
           },
           {
+            onSuccess: () => {
+              toast.dismiss(toastId);
+            },
+
+            onError: (error) => {
+              toast.error(error instanceof Error ? error.message : "Failed to save task order.", {
+                id: toastId,
+              });
+            },
+
             onSettled: () => {
               resetDragState();
             },
@@ -275,47 +322,45 @@ export function ProjectBoardPage() {
       }}
     >
       <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
-        <main className="flex min-h-0 flex-1 flex-col p-6 md:p-8">
-          <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
-            {" "}
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="min-w-0">
-                  <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
-                    {project.name}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 px-6 pt-6 md:px-8 md:pt-8">
+            <div className="mx-auto w-full max-w-6xl">
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="min-w-0">
+                    <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
+                      {project.name}
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
 
-                <BreadcrumbSeparator />
+                  <BreadcrumbSeparator />
 
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Task List</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-            <div className="mt-8">
-              <TaskWorkspaceToolbar
-                view={view}
-                onCreateTask={() => {
-                  openCreateTask();
-                }}
-                status={activeStatus}
-                statuses={columns}
-                canCreateTask={canCreateTask}
-                onViewChange={changeView}
-                onStatusChange={changeStatus}
-              />
-            </div>
-            {reorderTasks.isPending || reorderTasks.isError ? (
-              <div className="mt-2 text-sm" aria-live="polite">
-                {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>Task List</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
 
-                {reorderTasks.isError ? <p className="text-destructive">{reorderTasks.error.message}</p> : null}
+              <div className="mt-8">
+                <TaskWorkspaceToolbar
+                  view={view}
+                  status={activeStatus}
+                  statuses={columns}
+                  canCreateTask={canCreateTask}
+                  onCreateTask={() => {
+                    openCreateTask();
+                  }}
+                  onViewChange={changeView}
+                  onStatusChange={changeStatus}
+                />
               </div>
-            ) : null}
-            <div className="mt-4 min-h-0 flex-1">
-              {view === "list" ? (
-                <div className="h-full overflow-y-auto overscroll-contain">
+            </div>
+          </div>
+
+          <div className="mt-4 min-h-0 flex-1">
+            {view === "list" ? (
+              <div className="h-full px-6 pb-6 md:px-8 md:pb-8">
+                <div className="mx-auto h-full w-full max-w-6xl overflow-y-auto overscroll-contain">
                   <TaskListView
                     projectId={project.id}
                     statuses={visibleColumns}
@@ -327,10 +372,12 @@ export function ProjectBoardPage() {
                     onOpenTask={openTask}
                   />
                 </div>
-              ) : (
-                <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} onCreateTask={openCreateTask} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onOpenTask={openTask} />
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="h-full min-w-0 pl-6 pb-6 md:pl-8 md:pb-8">
+                <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onCreateTask={openCreateTask} onOpenTask={openTask} />
+              </div>
+            )}
           </div>
         </main>
         {createTaskStatus ? <CreateTaskDialog open projectId={project.id} statuses={columns} initialStatus={createTaskStatus} onClose={closeCreateTask} /> : null}
