@@ -2,6 +2,7 @@ import { DotsThreeIcon, ListIcon, PlusIcon, SquaresFourIcon } from "@phosphor-ic
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { TaskWorkspaceFilterButton, TaskWorkspaceFilterGroup } from "./task-workspace-filter";
 
 import type { TaskStatus } from "@/features/tasks/types";
 import type { TaskWorkflowStatusDto } from "../../../../shared/contracts/task-workflow";
@@ -20,14 +21,6 @@ type TaskWorkspaceToolbarProps = {
   onStatusChange: (status: TaskStatus | null) => void;
 };
 
-function FilterButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <Button type="button" variant="ghost" size="xs" onClick={onClick} className={cn("h-6 rounded-full px-2.5 text-xs font-normal text-muted-foreground", active && "bg-foreground/20 text-foreground hover:bg-foreground/25")}>
-      {children}
-    </Button>
-  );
-}
-
 export function TaskWorkspaceToolbar({ view, status, statuses, canCreateTask, onViewChange, onStatusChange, onCreateTask }: TaskWorkspaceToolbarProps) {
   const enabledStatuses = [...statuses].filter((item) => item.enabled).sort((first, second) => first.position - second.position);
 
@@ -39,18 +32,18 @@ export function TaskWorkspaceToolbar({ view, status, statuses, canCreateTask, on
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <FilterButton
+      <TaskWorkspaceFilterGroup>
+        <TaskWorkspaceFilterButton
           active={status === null}
           onClick={() => {
             onStatusChange(null);
           }}
         >
           All project
-        </FilterButton>
+        </TaskWorkspaceFilterButton>
 
         {primaryStatuses.map((item) => (
-          <FilterButton
+          <TaskWorkspaceFilterButton
             key={item.statusKey}
             active={status === item.statusKey}
             onClick={() => {
@@ -58,7 +51,7 @@ export function TaskWorkspaceToolbar({ view, status, statuses, canCreateTask, on
             }}
           >
             {item.label}
-          </FilterButton>
+          </TaskWorkspaceFilterButton>
         ))}
 
         {moreStatuses.length > 0 ? (
@@ -95,7 +88,7 @@ export function TaskWorkspaceToolbar({ view, status, statuses, canCreateTask, on
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-      </div>
+      </TaskWorkspaceFilterGroup>
 
       <div className="flex shrink-0 items-center gap-2">
         <div className="flex h-7 items-center rounded-lg bg-muted p-0.5">

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowRightIcon, ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, CopyIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowSquareOutIcon, CalendarBlankIcon, PlusIcon, TrashIcon, XIcon, CheckIcon } from "@phosphor-icons/react";
+import { CopyCode } from "@/components/copy-code";
+
 import { toast } from "sonner";
 import { Link, useParams } from "react-router";
 
@@ -10,7 +12,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbS
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -318,38 +320,7 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
           <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{name}</h1>
         )}
 
-        <Badge
-          variant="outline"
-          render={
-            <button
-              type="button"
-              aria-label={`Copy project code ${projectCode}`}
-              title="Copy project code"
-              onClick={() => {
-                void navigator.clipboard
-                  .writeText(projectCode)
-                  .then(() => {
-                    toast.success("Project code copied.");
-                  })
-                  .catch(() => {
-                    toast.error("Failed to copy project code.");
-                  });
-              }}
-            />
-          }
-          className="
-            cursor-copy
-            font-mono
-            text-[11px]
-            tracking-wide
-            text-muted-foreground
-            hover:bg-muted
-          "
-        >
-          {projectCode}
-
-          <CopyIcon data-icon="inline-end" aria-hidden="true" />
-        </Badge>
+        <CopyCode value={projectCode} />
 
         <Badge variant="outline" className="lg:hidden" aria-label={`Project status: ${statusLabel}`}>
           {statusLabel}
@@ -654,101 +625,101 @@ function ClientField({ project, canEdit, canViewClients }: { project: ProjectDto
 
   return (
     <div className="-ml-2 mt-1 inline-flex max-w-full">
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          disabled={isPending || updateProject.isPending}
-          render={<Button type="button" variant="ghost" className="h-8 max-w-full justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project client" />}
-        >
-          <span className="min-w-0 truncate">{project.client?.name ?? "Not set"}</span>
+      <Select
+        value={currentClientId ?? noClientValue}
+        disabled={isPending || updateProject.isPending}
+        onValueChange={(value) => {
+          selectClient(value === noClientValue ? null : String(value));
+        }}
+      >
+        <SelectTrigger aria-label="Change project client" className="h-8 w-auto min-w-0 max-w-56 rounded-lg px-2.5 text-xs">
+          <span className="min-w-0 max-w-48 truncate">{project.client?.name ?? "Not set"}</span>
+        </SelectTrigger>
 
-          <CaretDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />
-        </DropdownMenuTrigger>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          <SelectGroup>
+            <SelectLabel>Client</SelectLabel>
 
-        <DropdownMenuContent align="start" className="w-56 ring-0">
-          <DropdownMenuRadioGroup
-            value={currentClientId ?? noClientValue}
-            onValueChange={(value) => {
-              selectClient(value === noClientValue ? null : String(value));
-            }}
-          >
-            <DropdownMenuRadioItem value={noClientValue} disabled={updateProject.isPending}>
-              Not set
-            </DropdownMenuRadioItem>
+            <SelectSeparator />
+
+            <SelectItem value={noClientValue}>Not set</SelectItem>
 
             {availableClients.map((client) => (
-              <DropdownMenuRadioItem key={client.id} value={client.id} disabled={updateProject.isPending}>
-                <span className="min-w-0 flex-1 truncate">{client.name}</span>
-
-                {client.status === "inactive" ? <span className="mr-5 shrink-0 text-xs text-muted-foreground">Inactive</span> : null}
-              </DropdownMenuRadioItem>
+              <SelectItem key={client.id} value={client.id}>
+                <span className="max-w-56 truncate">{client.name}</span>
+              </SelectItem>
             ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
 
-function EngagementField({ project, canEdit }: { project: ProjectDto; canEdit: boolean }) {
+function EngagementField({
+  project,
+  canEdit,
+}: {
+  project: ProjectDto;
+
+  canEdit: boolean;
+}) {
   const updateProject = useUpdateProject();
 
   if (!canEdit) {
     return <p className="mt-2 text-sm">{engagementLabels[project.engagementType]}</p>;
   }
 
-  function selectEngagement(engagementType: ProjectDto["engagementType"]) {
-    if (engagementType === project.engagementType || updateProject.isPending) {
-      return;
-    }
-
-    updateProject.mutate(
-      {
-        projectId: project.id,
-        input: {
-          engagementType,
-        },
-      },
-      {
-        onSuccess: () => {
-          toast.success("Engagement updated.");
-        },
-
-        onError: (error) => {
-          toast.error(getErrorMessage(error, "Failed to update engagement."));
-        },
-      },
-    );
-  }
-
   return (
     <div className="-ml-2 mt-1 inline-flex">
-      {" "}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          disabled={updateProject.isPending}
-          render={<Button type="button" variant="ghost" className="h-8 justify-start gap-1.5 px-2 font-normal focus-visible:border-transparent focus-visible:ring-0" aria-label="Change project engagement" />}
-        >
+      <Select
+        value={project.engagementType}
+        disabled={updateProject.isPending}
+        onValueChange={(value) => {
+          if (value !== "project" && value !== "retainer") {
+            return;
+          }
+
+          if (value === project.engagementType) {
+            return;
+          }
+
+          updateProject.mutate(
+            {
+              projectId: project.id,
+
+              input: {
+                engagementType: value,
+              },
+            },
+            {
+              onSuccess: () => {
+                toast.success("Engagement updated.");
+              },
+
+              onError: (error) => {
+                toast.error(getErrorMessage(error, "Failed to update engagement."));
+              },
+            },
+          );
+        }}
+      >
+        <SelectTrigger aria-label="Change project engagement" className="h-8 w-auto min-w-0 rounded-lg px-2.5 text-xs">
           {engagementLabels[project.engagementType]}
-          <CaretDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/button:opacity-100 group-aria-[expanded=true]/button:opacity-100" />{" "}
-        </DropdownMenuTrigger>
+        </SelectTrigger>
 
-        <DropdownMenuContent align="start" className="w-40 ring-0">
-          <DropdownMenuRadioGroup
-            value={project.engagementType}
-            onValueChange={(value) => {
-              selectEngagement(value as ProjectDto["engagementType"]);
-            }}
-          >
-            <DropdownMenuRadioItem value="project" disabled={updateProject.isPending}>
-              Project
-            </DropdownMenuRadioItem>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          <SelectGroup>
+            <SelectLabel>Engagement</SelectLabel>
 
-            <DropdownMenuRadioItem value="retainer" disabled={updateProject.isPending}>
-              Retainer
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <SelectSeparator />
+
+            <SelectItem value="project">Project</SelectItem>
+
+            <SelectItem value="retainer">Retainer</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -782,6 +753,7 @@ function CollaborationControls({
 
   const [memberToAdd, setMemberToAdd] = useState("");
 
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const { data: workspaceMembers = [], isPending: workspaceMembersPending, isError: workspaceMembersError } = useMembers(membersDialogOpen && canManageMembers && canViewWorkspaceMembers);
   const orderedMembers = [...projectMembers].sort((first, second) => {
     const addedAtOrder = first.addedAt.localeCompare(second.addedAt);
@@ -804,7 +776,7 @@ function CollaborationControls({
 
   const assignedIds = new Set(orderedMembers.map((member) => member.user.id));
   const availableWorkspaceMembers = workspaceMembers.filter((member) => !assignedIds.has(member.id));
-
+  const selectedMemberToAdd = availableWorkspaceMembers.find((member) => member.id === memberToAdd) ?? null;
   const collaborationPending = updateLeads.isPending || addMember.isPending || removeMember.isPending;
 
   function addLead(userId: string) {
@@ -922,29 +894,47 @@ function CollaborationControls({
                       <PlusIcon aria-hidden="true" />
                     </PopoverTrigger>
 
-                    <PopoverContent align="start" className="w-64 p-2">
-                      <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Add project lead</p>
+                    <PopoverContent align="start" className="w-56 p-0">
+                      <div className="p-1">
+                        <div className="px-1.5 py-1 text-xs text-muted-foreground">Add project lead</div>
 
-                      <div className="space-y-1">
-                        {leadCandidates.map((member) => (
-                          <button
-                            key={member.user.id}
-                            type="button"
-                            disabled={updateLeads.isPending}
-                            onClick={() => {
-                              addLead(member.user.id);
-                            }}
-                            className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                          >
-                            <Avatar size="sm" aria-hidden="true">
-                              {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+                        <div className="-mx-1 my-1 h-px bg-border" />
 
-                              <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
-                            </Avatar>
+                        <div className="max-h-64 overflow-y-auto">
+                          {leadCandidates.map((member) => (
+                            <button
+                              key={member.user.id}
+                              type="button"
+                              disabled={updateLeads.isPending}
+                              onClick={() => {
+                                addLead(member.user.id);
 
-                            <span className="min-w-0 truncate">{member.user.displayName}</span>
-                          </button>
-                        ))}
+                                setLeadPickerOpen(false);
+                              }}
+                              className="
+                              flex h-8 w-full
+                              cursor-default
+                              items-center gap-1.5
+                              rounded-md
+                              py-1 px-1.5
+                              text-left text-sm
+                              outline-none
+                              hover:bg-foreground/10
+                              focus-visible:bg-foreground/10
+                              disabled:pointer-events-none
+                              disabled:opacity-50
+                            "
+                            >
+                              <Avatar size="sm" className="size-5" aria-hidden="true">
+                                {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                                <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                              </Avatar>
+
+                              <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -1131,23 +1121,71 @@ function CollaborationControls({
                 <p className="mt-2 text-sm text-muted-foreground">All workspace members are already assigned.</p>
               ) : (
                 <div className="mt-3 flex gap-2">
-                  <select
-                    aria-label="Workspace member to add"
-                    value={memberToAdd}
-                    disabled={workspaceMembersPending || collaborationPending}
-                    onChange={(event) => {
-                      setMemberToAdd(event.target.value);
-                    }}
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
-                  >
-                    <option value="">Select workspace member</option>
+                  <Popover open={memberPickerOpen} onOpenChange={setMemberPickerOpen}>
+                    <PopoverTrigger disabled={workspaceMembersPending || collaborationPending} render={<Button type="button" variant="outline" className="h-8 min-w-0 flex-1 justify-between rounded-lg px-2.5 text-xs font-normal" />}>
+                      {selectedMemberToAdd ? (
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Avatar size="sm" className="size-5" aria-hidden="true">
+                            {selectedMemberToAdd.avatarUrl ? <AvatarImage src={selectedMemberToAdd.avatarUrl} alt="" /> : null}
 
-                    {availableWorkspaceMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.displayName}
-                      </option>
-                    ))}
-                  </select>
+                            <AvatarFallback className="text-[9px]">{getMemberInitials(selectedMemberToAdd.displayName)}</AvatarFallback>
+                          </Avatar>
+
+                          <span className="min-w-0 truncate">{selectedMemberToAdd.displayName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Select workspace member</span>
+                      )}
+                    </PopoverTrigger>
+
+                    <PopoverContent align="start" className="w-(--anchor-width) min-w-56 p-0">
+                      <div className="p-1">
+                        <div className="px-1.5 py-1 text-xs text-muted-foreground">Workspace members</div>
+
+                        <div className="-mx-1 my-1 h-px bg-border" />
+
+                        <div className="max-h-64 overflow-y-auto">
+                          {availableWorkspaceMembers.map((member) => {
+                            const selected = member.id === memberToAdd;
+
+                            return (
+                              <button
+                                key={member.id}
+                                type="button"
+                                onClick={() => {
+                                  setMemberToAdd(member.id);
+
+                                  setMemberPickerOpen(false);
+                                }}
+                                className="
+                                relative
+                                flex h-8 w-full
+                                cursor-default
+                                items-center gap-1.5
+                                rounded-md
+                                py-1 pr-8 pl-1.5
+                                text-left text-sm
+                                outline-none
+                                hover:bg-foreground/10
+                                focus-visible:bg-foreground/10
+                              "
+                              >
+                                <Avatar size="sm" className="size-5" aria-hidden="true">
+                                  {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
+
+                                  <AvatarFallback className="text-[9px]">{getMemberInitials(member.displayName)}</AvatarFallback>
+                                </Avatar>
+
+                                <span className="min-w-0 flex-1 truncate">{member.displayName}</span>
+
+                                {selected ? <CheckIcon className="absolute right-2 size-4" aria-hidden="true" /> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
 
                   <Button type="button" disabled={!memberToAdd || workspaceMembersPending || collaborationPending} onClick={handleAddMember}>
                     Add

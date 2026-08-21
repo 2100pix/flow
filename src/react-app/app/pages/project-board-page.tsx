@@ -64,8 +64,10 @@ export function ProjectBoardPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [createTaskStatus, setCreateTaskStatus] = useState<TaskStatus | null>(null);
-  const activeTaskId = searchParams.get("task");
+
   const view: TaskWorkspaceView = searchParams.get("view") === "board" ? "board" : "list";
+
+  const activeTaskId = view === "list" ? searchParams.get("task") : null;
   const requestedStatus = searchParams.get("status") as TaskStatus | null;
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
   const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
@@ -134,6 +136,10 @@ export function ProjectBoardPage() {
         const next = new URLSearchParams(current);
 
         next.set("view", nextView);
+
+        if (nextView === "board") {
+          next.delete("task");
+        }
 
         return next;
       },
@@ -329,7 +335,14 @@ export function ProjectBoardPage() {
       }}
     >
       <div className="flex h-[calc(100vh-3rem)] min-w-0 overflow-hidden">
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+          onPointerDownCapture={() => {
+            if (view === "list" && activeTaskId) {
+              closeTask();
+            }
+          }}
+        >
           <div className="shrink-0 px-6 pt-6 md:px-8 md:pt-8">
             <Breadcrumb>
               <BreadcrumbList>
@@ -361,7 +374,6 @@ export function ProjectBoardPage() {
               />
             </div>
           </div>
-
           <div className="mt-4 min-h-0 flex-1">
             {view === "list" ? (
               <div className="h-full px-6 pb-6 md:px-8 md:pb-8">
@@ -385,10 +397,8 @@ export function ProjectBoardPage() {
             )}
           </div>
         </main>
-
-        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} workflowStatuses={columns} /> : null}
-
-        {createTaskStatus ? <CreateTaskDialog open projectId={project.id} statuses={columns} initialStatus={createTaskStatus} onClose={closeCreateTask} /> : null}
+        <TaskDetailSheet taskId={activeTaskId ?? undefined} onClose={closeTask} workflowStatuses={columns} />
+        {createTaskStatus ? <CreateTaskDialog open projectId={project.id} statuses={columns} initialStatus={createTaskStatus} onClose={closeCreateTask} /> : null}{" "}
       </div>
     </DragDropProvider>
   );

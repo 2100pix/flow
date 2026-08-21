@@ -15,6 +15,7 @@ import {
   XCircleIcon,
   CheckIcon,
 } from "@phosphor-icons/react";
+import { CopyCode } from "@/components/copy-code";
 import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { toast } from "sonner";
@@ -491,59 +492,80 @@ function TaskAssigneeControl({ task, projectId, disabled }: { task: TaskDto; pro
         <TaskAssigneeAvatars task={task} />
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-72 p-2">
-        <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Assignees</p>
+      <PopoverContent align="end" className="w-56 p-0">
+        <div className="p-1">
+          <div className="px-1.5 py-1 text-xs text-muted-foreground">Assignees</div>
 
-        {isPending ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">Loading project members…</p>
-        ) : isError ? (
-          <p className="px-2 py-3 text-xs text-destructive">Unable to load project members.</p>
-        ) : orderedMembers.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">No project members.</p>
-        ) : (
-          <div className="mt-1 max-h-72 space-y-1 overflow-y-auto">
-            {orderedMembers.map((member) => {
-              const selected = selectedIdSet.has(member.user.id);
+          <div className="-mx-1 my-1 h-px bg-border" />
 
-              return (
-                <button
-                  key={member.user.id}
-                  type="button"
-                  disabled={updateTask.isPending}
-                  onClick={() => {
-                    const nextIds = selected ? selectedIds.filter((userId) => userId !== member.user.id) : [...selectedIds, member.user.id];
+          {isPending ? (
+            <p className="px-1.5 py-3 text-xs text-muted-foreground">Loading project members…</p>
+          ) : isError ? (
+            <p className="px-1.5 py-3 text-xs text-destructive">Unable to load project members.</p>
+          ) : orderedMembers.length === 0 ? (
+            <p className="px-1.5 py-3 text-xs text-muted-foreground">No project members.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto">
+              {orderedMembers.map((member) => {
+                const selected = selectedIdSet.has(member.user.id);
 
-                    updateTask.mutate(
-                      {
-                        taskId: task.id,
+                return (
+                  <button
+                    key={member.user.id}
+                    type="button"
+                    disabled={updateTask.isPending}
+                    onClick={() => {
+                      const nextIds = selected ? selectedIds.filter((userId) => userId !== member.user.id) : [...selectedIds, member.user.id];
 
-                        input: {
-                          assigneeIds: nextIds,
+                      updateTask.mutate(
+                        {
+                          taskId: task.id,
+
+                          input: {
+                            assigneeIds: nextIds,
+                          },
                         },
-                      },
-                      {
-                        onError: (error) => {
-                          toast.error(getErrorMessage(error, "Failed to update task assignees."));
+                        {
+                          onError: (error) => {
+                            toast.error(getErrorMessage(error, "Failed to update task assignees."));
+                          },
                         },
-                      },
-                    );
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                >
-                  <Avatar size="sm" aria-hidden="true">
-                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+                      );
+                    }}
+                    className="
+                        relative
+                        flex h-8 w-full
+                        cursor-default
+                        items-center gap-1.5
+                        rounded-md
+                        py-1 pr-8 pl-1.5
+                        text-left text-sm
+                        outline-none
+                        hover:bg-foreground/10
+                        focus-visible:bg-foreground/10
+                        disabled:pointer-events-none
+                        disabled:opacity-50
+                      "
+                  >
+                    <Avatar size="sm" className="size-5" aria-hidden="true">
+                      {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                    <AvatarFallback>{getInitials(member.user.displayName)}</AvatarFallback>
-                  </Avatar>
+                      <AvatarFallback className="text-[9px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                    </Avatar>
 
-                  <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
 
-                  {selected ? <CheckIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                    {selected ? (
+                      <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
+                        <CheckIcon className="size-4" aria-hidden="true" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -587,17 +609,13 @@ function TaskListRow({
 
   return (
     <div ref={ref} className={["group flex min-h-14 min-w-0 flex-col gap-2 py-2 transition-opacity md:flex-row md:items-center md:justify-between", isDragSource ? "opacity-50" : ""].join(" ")}>
-      <button
-        ref={handleRef}
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${task.title}`}
-        className="flex min-w-0 flex-1 cursor-grab items-center gap-4 rounded-sm text-left outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring md:gap-7"
-      >
-        <span className="w-[78px] shrink-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
+      <div ref={handleRef} className="flex min-w-0 flex-1 cursor-grab items-center gap-4 rounded-sm active:cursor-grabbing md:gap-7">
+        <CopyCode value={task.taskCode} appearance="plain" className="w-[78px] shrink-0 truncate text-left text-xs text-muted-foreground hover:text-foreground" />
 
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{task.title}</span>
-      </button>
+        <button type="button" onClick={onOpen} aria-label={`Open ${task.title}`} className="min-w-0 flex-1 truncate rounded-sm text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {task.title}
+        </button>
+      </div>
 
       <div className="flex w-full flex-wrap items-center justify-end gap-1 md:w-auto md:flex-nowrap md:gap-2">
         <InlineControl>
