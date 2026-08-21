@@ -5,8 +5,7 @@ import { DragOverlay, useDragOperation, useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 
-import type { TaskDto, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
-
+import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
 type TaskBoardViewProps = {
@@ -21,7 +20,12 @@ type TaskBoardViewProps = {
 
   onCreateTask?: (status: TaskStatus) => void;
 };
-
+const priorityLabels: Record<TaskPriority, string> = {
+  low: "Low Priority",
+  medium: "Medium Priority",
+  high: "High Priority",
+  urgent: "Urgent",
+};
 function parseTaskDate(value: string | null) {
   if (!value) {
     return undefined;
@@ -116,45 +120,54 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
       ref={ref}
       data-board-card={task.id}
       data-drag-placeholder={isDragSource ? "true" : undefined}
-      className={["relative flex min-h-[111px] w-full shrink-0 flex-col justify-between overflow-hidden rounded-lg p-4", isDragSource ? "border border-border/60 bg-muted/15 shadow-none" : "bg-muted/45 hover:bg-muted/55"].join(" ")}
+      className={["relative flex min-h-[111px] w-full shrink-0 flex-col justify-between overflow-hidden rounded-lg p-4", isDragSource ? "border border-border/60 bg-card/40 shadow-none" : "bg-card hover:bg-accent/70"].join(" ")}
     >
+      <button
+        ref={handleRef}
+        type="button"
+        disabled={dragDisabled}
+        aria-label={`Drag ${task.title}`}
+        className="
+      absolute
+      inset-0
+      z-0
+      cursor-grab
+      rounded-lg
+      outline-none
+      disabled:cursor-default
+      active:cursor-grabbing
+      focus-visible:ring-2
+      focus-visible:ring-ring
+    "
+      />
+
       <div className={isDragSource ? "invisible" : ""}>
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
+
+          <TaskCardAssignees task={task} />
+        </div>
+
         <button
-          ref={handleRef}
           type="button"
-          disabled={dragDisabled}
-          aria-label={`Drag ${task.title}`}
-          className="absolute inset-0 z-0 cursor-grab rounded-lg outline-none disabled:cursor-default active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring"
-        />
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={onOpen}
+          className="pointer-events-auto mt-1.5 block max-w-full rounded-sm text-left text-sm font-medium leading-5 outline-none hover:underline hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="line-clamp-2">{task.title}</span>
+        </button>
+      </div>
 
-        <div className="pointer-events-none relative z-10 min-w-0">
-          <div className="flex min-w-0 items-start justify-between gap-4">
-            <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
+      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-5 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <CalendarBlankIcon aria-hidden="true" className="size-3.5 shrink-0" />
 
-            <TaskCardAssignees task={task} />
-          </div>
-
-          <button
-            type="button"
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={onOpen}
-            className="pointer-events-auto mt-1.5 block max-w-full rounded-sm text-left text-sm font-medium leading-5 outline-none hover:underline hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="line-clamp-2">{task.title}</span>
-          </button>
+          <span className="truncate">{dueDate ?? "Due date"}</span>
         </div>
 
-        <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-5 text-xs text-muted-foreground">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <CalendarBlankIcon aria-hidden="true" className="size-3.5 shrink-0" />
-
-            <span className="truncate">{dueDate ?? "Due date"}</span>
-          </div>
-
-          <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
-        </div>
+        <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
       </div>
     </article>
   );
@@ -191,10 +204,10 @@ function TaskBoardColumn({
   });
 
   return (
-    <section ref={ref} data-board-column="true" className={["group/column flex h-full min-h-0 w-[355px] shrink-0 flex-col overflow-hidden rounded-lg bg-muted/15 px-3.5 py-1.5", isDropTarget ? "ring-2 ring-ring/30" : ""].join(" ")}>
+    <section ref={ref} data-board-column="true" className={["group/column flex h-full min-h-0 w-[355px] shrink-0 flex-col overflow-hidden rounded-lg bg-muted/10 px-3.5 py-1.5", isDropTarget ? "ring-2 ring-ring/30" : ""].join(" ")}>
       <header className="flex h-[41px] shrink-0 items-center justify-between">
         <div className="flex min-w-0 items-center gap-1.5">
-          <h2 className="truncate text-base font-medium text-muted-foreground">{label}</h2>
+          <h2 className="truncate text-sm font-medium text-muted-foreground">{label}</h2>
 
           <span className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-muted/55 px-1.5 text-xs text-muted-foreground">{count}</span>
         </div>
@@ -235,7 +248,7 @@ function TaskBoardColumn({
           className={[
             "flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-muted/30 text-xs text-muted-foreground outline-none transition-[background-color,color,opacity]",
             "opacity-0 group-hover/column:opacity-100 group-focus-within/column:opacity-100",
-            "hover:bg-muted/45 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring",
+            "bg-card hover:bg-accent/70 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring",
             "disabled:pointer-events-none disabled:opacity-0 group-hover/column:disabled:opacity-50",
           ].join(" ")}
         >
@@ -275,7 +288,7 @@ export function TaskBoardView({ statuses, board, dragDisabled, canCreateTask, ta
             onCreateTask={onCreateTask}
           />
         ))}
-        <DragOverlay className="pointer-events-none z-[100]">
+        <DragOverlay dropAnimation={null} className="pointer-events-none z-[100]">
           {overlayTask ? (
             <article
               data-board-drag-overlay="true"
