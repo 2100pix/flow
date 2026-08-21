@@ -1,25 +1,15 @@
 import { useState } from "react";
-
 import { ArrowsOutSimpleIcon, DotsThreeIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
-
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
-
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Button } from "@/components/ui/button";
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { TaskDetailContent } from "./task-detail-content";
-
 import { useArchiveTask } from "../hooks/use-archive-task";
-
 import { useTask } from "../hooks/use-task";
-
 import type { TaskWorkflowStatusDto } from "../types";
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -39,6 +29,8 @@ function LoadedTaskDetailSheet({
 }) {
   const { data: auth } = useMe();
 
+  const navigate = useNavigate();
+
   const { data: task, isPending, isError } = useTask(taskId);
 
   const canArchive = hasPermission(auth, "tasks.archive");
@@ -55,7 +47,21 @@ function LoadedTaskDetailSheet({
             <SidebarSimpleIcon aria-hidden="true" />
           </Button>
 
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Open task fullscreen" title="Fullscreen" disabled className="disabled:opacity-100">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Open task fullscreen"
+            title="Fullscreen"
+            disabled={!task}
+            onClick={() => {
+              if (!task) {
+                return;
+              }
+
+              void navigate(`/projects/${task.projectId}/tasks/${task.id}`);
+            }}
+          >
             <ArrowsOutSimpleIcon aria-hidden="true" />
           </Button>
 

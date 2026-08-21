@@ -21,6 +21,12 @@ const ProjectBoardPage = lazy(() =>
   })),
 );
 
+const TaskDetailPage = lazy(() =>
+  import("@/app/pages/task-detail-page").then((module) => ({
+    default: module.TaskDetailPage,
+  })),
+);
+
 const SettingsPage = lazy(() =>
   import("@/app/pages/settings-page").then((module) => ({
     default: module.SettingsPage,
@@ -86,6 +92,15 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
             <ProjectBoardPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "/projects/:projectId/tasks/:taskId",
+
+        element: (
+          <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
+            <TaskDetailPage />
           </Suspense>
         ),
       },
