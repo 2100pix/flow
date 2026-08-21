@@ -1,0 +1,670 @@
+import { useMemo, useState } from "react";
+
+import { CellSignalHighIcon, CellSignalLowIcon, CellSignalMediumIcon, CellSignalNoneIcon, CheckCircleIcon, CircleDashedIcon, CircleIcon, EyeIcon, SpinnerGapIcon, WarningCircleIcon, XCircleIcon, CheckIcon } from "@phosphor-icons/react";
+
+import { toast } from "sonner";
+
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
+
+import { Button } from "@/components/ui/button";
+
+import { Calendar } from "@/components/ui/calendar";
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
+
+import { useProjectMembers } from "@/features/members/hooks/use-project-members";
+
+import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
+
+import type { TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+
+type CreateTaskDialogProps = {
+  open: boolean;
+  projectId: string;
+
+  statuses: TaskWorkflowStatusDto[];
+
+  initialStatus: TaskStatus;
+
+  onClose: () => void;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseDate(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return undefined;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function serializeDate(date: Date) {
+  return getLocalDateString(date);
+}
+
+function formatDate(value: string | null) {
+  const date = parseDate(value);
+
+  if (!date) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function getInitials(displayName: string) {
+  return (
+    displayName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "?"
+  );
+}
+
+function TaskStatusIcon({ status }: { status: TaskStatus }) {
+  const className = "size-4";
+
+  switch (status) {
+    case "backlog":
+      return <CircleDashedIcon className={className} aria-hidden="true" />;
+
+    case "todo":
+      return <CircleIcon className={className} aria-hidden="true" />;
+
+    case "in_progress":
+      return <SpinnerGapIcon className={className} aria-hidden="true" />;
+
+    case "review":
+      return <EyeIcon className={className} aria-hidden="true" />;
+
+    case "done":
+      return <CheckCircleIcon weight="fill" className={className} aria-hidden="true" />;
+
+    case "cancelled":
+      return <XCircleIcon className={className} aria-hidden="true" />;
+  }
+}
+
+function TaskStatusPicker({
+  value,
+  statuses,
+  disabled,
+  onValueChange,
+}: {
+  value: TaskStatus;
+
+  statuses: TaskWorkflowStatusDto[];
+
+  disabled: boolean;
+
+  onValueChange: (status: TaskStatus) => void;
+}) {
+  const current = statuses.find((status) => status.statusKey === value);
+
+  return (
+    <Select
+      value={value}
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        const nextStatus = statuses.find((status) => status.statusKey === nextValue);
+
+        if (!nextStatus) {
+          return;
+        }
+
+        onValueChange(nextStatus.statusKey);
+      }}
+    >
+      <SelectTrigger aria-label={`Task status: ${current?.label ?? value}`} className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden">
+        <TaskStatusIcon status={value} />
+
+        <span>{current?.label ?? value}</span>
+      </SelectTrigger>
+
+      <SelectContent align="start" alignItemWithTrigger={false} className="w-52 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
+        <SelectGroup className="p-0">
+          <SelectLabel className="px-2 py-1.5 text-sm font-medium text-popover-foreground">Status</SelectLabel>
+
+          <SelectSeparator className="-mx-1 my-1" />
+
+          {statuses.map((status) => (
+            <SelectItem key={status.statusKey} value={status.statusKey} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+              <TaskStatusIcon status={status.statusKey} />
+
+              {status.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function TaskPriorityIcon({ priority }: { priority: TaskPriority | null }) {
+  const className = "size-4";
+
+  switch (priority) {
+    case null:
+      return <CellSignalNoneIcon className={className} aria-hidden="true" />;
+
+    case "urgent":
+      return <WarningCircleIcon className={className} aria-hidden="true" />;
+
+    case "low":
+      return <CellSignalLowIcon className={className} aria-hidden="true" />;
+
+    case "medium":
+      return <CellSignalMediumIcon className={className} aria-hidden="true" />;
+
+    case "high":
+      return <CellSignalHighIcon className={className} aria-hidden="true" />;
+  }
+}
+
+const priorityLabels: Record<TaskPriority, string> = {
+  urgent: "Urgent",
+  low: "Low Priority",
+  medium: "Medium Priority",
+  high: "High Priority",
+};
+
+const NO_PRIORITY = "__flow_no_priority__";
+
+function TaskPriorityPicker({
+  value,
+  disabled,
+  onValueChange,
+}: {
+  value: TaskPriority | null;
+
+  disabled: boolean;
+
+  onValueChange: (priority: TaskPriority | null) => void;
+}) {
+  return (
+    <Select
+      value={value ?? NO_PRIORITY}
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        if (nextValue === NO_PRIORITY) {
+          onValueChange(null);
+
+          return;
+        }
+
+        if (nextValue === "urgent" || nextValue === "high" || nextValue === "medium" || nextValue === "low") {
+          onValueChange(nextValue);
+        }
+      }}
+    >
+      <SelectTrigger aria-label={`Task priority: ${value ? priorityLabels[value] : "None"}`} className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden">
+        <TaskPriorityIcon priority={value} />
+
+        <span>{value ? priorityLabels[value] : "Priority"}</span>
+      </SelectTrigger>
+
+      <SelectContent align="start" alignItemWithTrigger={false} className="w-52 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
+        <SelectGroup className="p-0">
+          <SelectLabel className="px-2 py-1.5 text-sm font-medium text-popover-foreground">Priority</SelectLabel>
+
+          <SelectSeparator className="-mx-1 my-1" />
+
+          <SelectItem value={NO_PRIORITY} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+            <TaskPriorityIcon priority={null} />
+            None
+          </SelectItem>
+
+          {(["urgent", "low", "medium", "high"] as const).map((priority) => (
+            <SelectItem key={priority} value={priority} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+              <TaskPriorityIcon priority={priority} />
+
+              {priorityLabels[priority]}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function TaskAssigneePicker({
+  projectId,
+  value,
+  disabled,
+  onValueChange,
+}: {
+  projectId: string;
+  value: string[];
+  disabled: boolean;
+
+  onValueChange: (userIds: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const { data: projectMembers = [], isPending, isError } = useProjectMembers(projectId, open && !disabled);
+
+  const selectedSet = new Set(value);
+
+  const orderedMembers = useMemo(
+    () =>
+      [...projectMembers].sort((first, second) => {
+        const addedOrder = first.addedAt.localeCompare(second.addedAt);
+
+        if (addedOrder !== 0) {
+          return addedOrder;
+        }
+
+        return first.user.id.localeCompare(second.user.id);
+      }),
+    [projectMembers],
+  );
+
+  const selectedMembers = orderedMembers.filter((member) => selectedSet.has(member.user.id));
+
+  const visibleAvatars = selectedMembers.slice(0, 3);
+
+  const hiddenCount = Math.max(selectedMembers.length - visibleAvatars.length, 0);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" size="sm" className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs" />}>
+        {value.length === 0 ? (
+          <>
+            <UsersIcon className="size-4" aria-hidden="true" />
+            Assignees
+          </>
+        ) : (
+          <>
+            <AvatarGroup className="-space-x-2">
+              {visibleAvatars.map((member) => (
+                <Avatar key={member.user.id} size="sm" className="size-[18px]" aria-hidden="true">
+                  {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                  <AvatarFallback className="text-[8px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                </Avatar>
+              ))}
+
+              {hiddenCount > 0 ? <AvatarGroupCount className="size-[18px] text-[9px]">+{hiddenCount}</AvatarGroupCount> : null}
+            </AvatarGroup>
+
+            <span>{value.length === 1 ? "1 assignee" : `${value.length} assignees`}</span>
+          </>
+        )}
+      </PopoverTrigger>
+
+      <PopoverContent align="start" className="w-72 p-2">
+        <p className="px-2 py-1 text-sm font-medium">Assignees</p>
+
+        <div className="my-1 h-px bg-border" />
+
+        {isPending ? (
+          <p className="px-2 py-3 text-xs text-muted-foreground">Loading project members…</p>
+        ) : isError ? (
+          <p className="px-2 py-3 text-xs text-destructive">Unable to load project members.</p>
+        ) : (
+          <div className="max-h-64 space-y-1 overflow-y-auto">
+            {orderedMembers.map((member) => {
+              const selected = selectedSet.has(member.user.id);
+
+              return (
+                <button
+                  key={member.user.id}
+                  type="button"
+                  onClick={() => {
+                    onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Avatar size="sm" aria-hidden="true">
+                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                    <AvatarFallback>{getInitials(member.user.displayName)}</AvatarFallback>
+                  </Avatar>
+
+                  <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+
+                  {selected ? <CheckIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TaskDatePicker({
+  label,
+  value,
+  minDate,
+  disabled,
+  onValueChange,
+}: {
+  label: string;
+
+  value: string | null;
+
+  minDate?: string | null;
+
+  disabled: boolean;
+
+  onValueChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selected = parseDate(value);
+
+  const minimum = parseDate(minDate ?? null);
+
+  const formatted = formatDate(value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" size="sm" className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs" />}>
+        <CalendarBlankIcon className="size-4" aria-hidden="true" />
+
+        {formatted ?? label}
+      </PopoverTrigger>
+
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected ?? minimum ?? new Date()}
+          disabled={
+            minimum
+              ? {
+                  before: minimum,
+                }
+              : undefined
+          }
+          timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+          onSelect={(date) => {
+            if (!date) {
+              return;
+            }
+
+            onValueChange(serializeDate(date));
+
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onClose }: CreateTaskDialogProps) {
+  const enabledStatuses = useMemo(() => [...statuses].filter((status) => status.enabled).sort((first, second) => first.position - second.position), [statuses]);
+
+  const resolvedInitialStatus = enabledStatuses.some((status) => status.statusKey === initialStatus) ? initialStatus : (enabledStatuses[0]?.statusKey ?? "backlog");
+
+  const [title, setTitle] = useState("");
+
+  const [description, setDescription] = useState("");
+
+  const [status, setStatus] = useState<TaskStatus>(resolvedInitialStatus);
+
+  const [priority, setPriority] = useState<TaskPriority | null>(null);
+
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+
+  const [startDate, setStartDate] = useState<string | null>(null);
+
+  const [dueDate, setDueDate] = useState<string | null>(null);
+
+  const createTask = useCreateTask();
+
+  const effectiveStartDate = startDate ?? getLocalDateString();
+
+  const dateRangeValid = !dueDate || dueDate >= effectiveStartDate;
+
+  function close() {
+    if (createTask.isPending) {
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          close();
+        }
+      }}
+    >
+      <DialogContent
+        showCloseButton={!createTask.isPending}
+        className="
+          flex
+          h-[473px]
+          w-[603px]
+          max-h-[calc(100dvh-2rem)]
+          max-w-[calc(100vw-2rem)]!
+          sm:max-w-[603px]!
+          flex-col
+          gap-4
+          overflow-y-auto
+          rounded-[10px]
+          p-6
+          shadow-lg
+          sm:overflow-hidden
+          [&>[data-slot=dialog-close]]:right-[18px]
+          [&>[data-slot=dialog-close]]:top-6
+          [&>[data-slot=dialog-close]]:size-7
+          [&>[data-slot=dialog-close]]:bg-transparent
+          [&>[data-slot=dialog-close]>svg]:opacity-70
+        "
+      >
+        <DialogHeader className="h-14 shrink-0 gap-2 p-0">
+          <DialogTitle className="pr-10 text-lg font-semibold leading-7">Create a new task</DialogTitle>
+
+          <div aria-hidden="true" className="h-5 w-full shrink-0" />
+        </DialogHeader>
+
+        <form
+          className="flex min-h-0 flex-1 flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+
+            const taskTitle = title.trim();
+
+            if (!taskTitle || !dateRangeValid || createTask.isPending) {
+              return;
+            }
+
+            createTask.mutate(
+              {
+                projectId,
+
+                input: {
+                  title: taskTitle,
+
+                  description: description.trim() || undefined,
+
+                  status,
+
+                  priority,
+
+                  assigneeIds,
+
+                  /*
+                   * Explicit browser-local
+                   * date prevents the UTC
+                   * rollover problem.
+                   */
+                  startDate: effectiveStartDate,
+
+                  dueDate,
+                },
+              },
+              {
+                onSuccess: () => {
+                  toast.success("Task created.");
+
+                  onClose();
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to create task."));
+                },
+              },
+            );
+          }}
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-[15px]">
+            <div className="h-[35px] shrink-0">
+              <label htmlFor="create-task-title" className="sr-only">
+                Task name
+              </label>
+
+              <input
+                id="create-task-title"
+                value={title}
+                maxLength={240}
+                autoFocus
+                disabled={createTask.isPending}
+                placeholder="Task name"
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                }}
+                className="
+                  h-[35px]
+                  w-full
+                  rounded-none
+                  border-0
+                  bg-transparent
+                  px-0
+                  py-1
+                  text-base
+                  font-medium
+                  shadow-none
+                  outline-none
+                  ring-0
+                  placeholder:font-medium
+                  placeholder:text-muted-foreground
+                  focus:border-transparent
+                  focus:outline-none
+                  focus:ring-0
+                  focus-visible:border-transparent
+                  focus-visible:outline-none
+                  focus-visible:ring-0
+                  disabled:opacity-50
+                "
+              />
+            </div>
+
+            <div className="min-h-[130px] flex-1">
+              <label htmlFor="create-task-description" className="sr-only">
+                Description
+              </label>
+
+              <textarea
+                id="create-task-description"
+                value={description}
+                maxLength={5000}
+                disabled={createTask.isPending}
+                placeholder="Description"
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                }}
+                className="
+                  h-full
+                  min-h-[130px]
+                  w-full
+                  resize-none
+                  overflow-y-auto
+                  rounded-none
+                  border-0
+                  bg-transparent
+                  px-0
+                  py-1
+                  text-base
+                  leading-6
+                  shadow-none
+                  outline-none
+                  ring-0
+                  placeholder:text-muted-foreground
+                  focus:border-transparent
+                  focus:outline-none
+                  focus:ring-0
+                  focus-visible:border-transparent
+                  focus-visible:outline-none
+                  focus-visible:ring-0
+                  disabled:opacity-50
+                "
+              />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-2.5">
+            <TaskStatusPicker value={status} statuses={enabledStatuses} disabled={createTask.isPending} onValueChange={setStatus} />
+
+            <TaskPriorityPicker value={priority} disabled={createTask.isPending} onValueChange={setPriority} />
+
+            <TaskAssigneePicker projectId={projectId} value={assigneeIds} disabled={createTask.isPending} onValueChange={setAssigneeIds} />
+
+            <TaskDatePicker
+              label="Start Date"
+              value={startDate}
+              disabled={createTask.isPending}
+              onValueChange={(nextStartDate) => {
+                setStartDate(nextStartDate);
+
+                if (dueDate && dueDate < nextStartDate) {
+                  setDueDate(null);
+                }
+              }}
+            />
+
+            <TaskDatePicker label="Due Date" value={dueDate} minDate={effectiveStartDate} disabled={createTask.isPending} onValueChange={setDueDate} />
+          </div>
+
+          <div className="flex h-9 shrink-0 items-start justify-end gap-2">
+            <Button type="button" variant="secondary" size="lg" className="border border-border px-4 shadow-xs" disabled={createTask.isPending} onClick={close}>
+              Cancel
+            </Button>
+
+            <Button type="submit" size="lg" className="px-4 shadow-xs" disabled={!title.trim() || !dateRangeValid || createTask.isPending}>
+              {createTask.isPending ? "Creating…" : "Create task"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
