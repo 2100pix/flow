@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { BriefcaseIcon, BuildingsIcon, CaretDownIcon, FolderIcon, HouseIcon, ListChecksIcon, PlusIcon, SidebarSimpleIcon, SquaresFourIcon, UsersIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, BriefcaseIcon, BuildingsIcon, CaretDownIcon, FolderIcon, GearSixIcon, HouseIcon, KeyIcon, ListChecksIcon, PlusIcon, SidebarSimpleIcon, SquaresFourIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
@@ -284,9 +284,132 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
   );
 }
 
+type SettingsSectionId = "general" | "teams" | "roles" | "task-fields" | "task-appearance";
+
+function SettingsSidebarNavigation({
+  auth,
+  activeSection,
+  onNavigate,
+}: {
+  auth: AuthContext;
+
+  activeSection: SettingsSectionId;
+
+  onNavigate?: () => void;
+}) {
+  const items = [
+    {
+      id: "general",
+      label: "General",
+      href: "/settings",
+      icon: GearSixIcon,
+      visible: true,
+    },
+    {
+      id: "teams",
+      label: "Teams",
+      href: "/settings?section=teams",
+      icon: UsersIcon,
+      visible: hasPermission(auth, "teams.view"),
+    },
+    {
+      id: "roles",
+      label: "Roles & Permissions",
+      href: "/settings?section=roles",
+      icon: KeyIcon,
+      visible: hasPermission(auth, "roles.view"),
+    },
+    {
+      id: "task-fields",
+      label: "Task Fields",
+      href: "/settings?section=task-fields",
+      icon: ListChecksIcon,
+      visible: hasPermission(auth, "task_fields.view"),
+    },
+    {
+      id: "task-appearance",
+      label: "Task Appearance",
+      href: "/settings?section=task-appearance",
+      icon: SquaresFourIcon,
+      visible: hasPermission(auth, "task_appearance.view"),
+    },
+  ] satisfies Array<{
+    id: SettingsSectionId;
+    label: string;
+    href: string;
+    icon: typeof GearSixIcon;
+    visible: boolean;
+  }>;
+
+  return (
+    <nav
+      className="flex-1 overflow-y-auto px-3 py-4"
+      onClick={(event) => {
+        if (!onNavigate) {
+          return;
+        }
+
+        if (event.target instanceof Element && event.target.closest("a")) {
+          onNavigate();
+        }
+      }}
+    >
+      <Link
+        to="/"
+        className="
+          flex h-8 items-center gap-2
+          rounded-md px-2
+          text-sm
+          text-sidebar-foreground
+          transition-colors
+          hover:bg-sidebar-accent
+          hover:text-sidebar-accent-foreground
+        "
+      >
+        <ArrowLeftIcon size={16} aria-hidden="true" />
+
+        <span>Back to workspace</span>
+      </Link>
+
+      <div className="mt-5">
+        <p className="mb-1 px-2 text-[10px] font-medium text-sidebar-foreground/40">Administration</p>
+
+        <div className="space-y-0.5">
+          {items
+            .filter((item) => item.visible)
+            .map((item) => {
+              const Icon = item.icon;
+
+              const active = activeSection === item.id;
+
+              return (
+                <Link
+                  key={item.id}
+                  to={item.href}
+                  className={cn(
+                    "flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors",
+                    "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+
+                    active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                  )}
+                >
+                  <Icon size={15} weight="regular" className="shrink-0" aria-hidden="true" />
+
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
 export function AppLayout({ auth }: { auth: AuthContext }) {
   const location = useLocation();
-
+  const settingsMode = location.pathname === "/settings";
+  const rawSettingsSection = new URLSearchParams(location.search).get("section");
+  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "teams" || rawSettingsSection === "roles" || rawSettingsSection === "task-fields" || rawSettingsSection === "task-appearance" ? rawSettingsSection : "general";
   const activeProjectId = getActiveProjectId(location.pathname);
   const canViewHome = hasPermission(auth, "dashboard.view");
   const canViewClients = hasPermission(auth, "clients.view");
@@ -479,6 +602,9 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   }
 
   function renderSidebarNavigation(onNavigate?: () => void) {
+    if (settingsMode) {
+      return <SettingsSidebarNavigation auth={auth} activeSection={activeSettingsSection} onNavigate={onNavigate} />;
+    }
     return (
       <nav
         className="flex-1 space-y-4 overflow-y-auto px-2 py-3"
@@ -560,7 +686,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
       <div className="flex min-h-[calc(100vh-3rem)]">
         <aside
-          aria-label="Primary navigation"
+          aria-label={settingsMode ? "Settings navigation" : "Primary navigation"}
           style={{
             width: sidebarHidden ? 0 : sidebarWidth,
           }}
@@ -606,7 +732,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
           <aside
             id="mobile-sidebar"
-            aria-label="Primary navigation"
+            aria-label={settingsMode ? "Settings navigation" : "Primary navigation"}
             inert={!mobileSidebarOpen}
             className={cn(
               "relative z-10 flex h-full w-[80vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl",
