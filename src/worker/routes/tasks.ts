@@ -1,11 +1,13 @@
 import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { Hono } from "hono";
 
-import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskAssigneeDto, type TaskDto } from "../../shared/contracts/tasks";
+import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskAssigneeDto, type TaskDto, type TaskLeadDto } from "../../shared/contracts/tasks";
 import { resolveProjectCode } from "../../shared/project-code";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
+import { createTaskResourceSchema, updateTaskResourceSchema, type TaskResourceDto } from "../../shared/contracts/task-resources";
+
 import { createDb } from "../db";
-import { projectMembers, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers } from "../db/schema";
+import { projectMembers, projectTaskStatuses, projects, taskAssignees, taskResources, tasks, users, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
@@ -23,6 +25,40 @@ type TasksEnv = {
 export const tasksRoutes = new Hono<TasksEnv>();
 
 type Db = ReturnType<typeof createDb>;
+
+async function findActiveAccessibleTask(db: Db, auth: AuthContext, taskId: string) {
+  const [task] = await db
+    .select({
+      id: tasks.id,
+      projectId: tasks.projectId,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(projects.workspaceId, auth.workspace.id),
+
+        isNull(projects.archivedAt),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!task) {
+    return null;
+  }
+
+  const access = await findAccessibleProject(db, auth, task.projectId);
+
+  if (!access) {
+    return null;
+  }
+
+  return task;
+}
 
 async function loadTaskWorkflow(db: Db, projectId: string): Promise<TaskWorkflowStatusDto[] | null> {
   const result = await db
@@ -101,6 +137,48 @@ async function loadTaskAssigneeMap(db: Db, taskIds: readonly string[]) {
   return result;
 }
 
+async function loadTaskLeadMap(db: Db, taskIds: readonly string[]) {
+  const result = new Map<string, TaskLeadDto>();
+
+  if (taskIds.length === 0) {
+    return result;
+  }
+
+  const rows = await db
+    .select({
+      taskId: tasks.id,
+
+      userId: users.id,
+
+      displayName: users.displayName,
+
+      avatarUrl: users.avatarUrl,
+    })
+    .from(tasks)
+    .innerJoin(
+      projectMembers,
+      and(
+        eq(projectMembers.projectId, tasks.projectId),
+
+        eq(projectMembers.userId, tasks.leadUserId),
+      ),
+    )
+    .innerJoin(users, eq(projectMembers.userId, users.id))
+    .where(inArray(tasks.id, [...taskIds]));
+
+  for (const row of rows) {
+    result.set(row.taskId, {
+      id: row.userId,
+
+      displayName: row.displayName,
+
+      avatarUrl: row.avatarUrl,
+    });
+  }
+
+  return result;
+}
+
 async function resolveAvailableAssignees(db: Db, auth: AuthContext, projectId: string, userIds: readonly string[]): Promise<TaskAssigneeDto[] | null> {
   if (userIds.length === 0) {
     return [];
@@ -154,7 +232,7 @@ async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
       status: tasks.status,
 
       priority: tasks.priority,
-
+      leadUserId: tasks.leadUserId,
       startDate: tasks.startDate,
 
       dueDate: tasks.dueDate,
@@ -177,6 +255,7 @@ async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
   }
 
   const assigneeMap = await loadTaskAssigneeMap(db, [task.id]);
+  const leadMap = await loadTaskLeadMap(db, [task.id]);
 
   return {
     id: task.id,
@@ -195,6 +274,7 @@ async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
 
     priority: task.priority,
 
+    lead: leadMap.get(task.id) ?? null,
     assignees: assigneeMap.get(task.id) ?? [],
 
     startDate: task.startDate,
@@ -252,7 +332,7 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
       status: tasks.status,
 
       priority: tasks.priority,
-
+      leadUserId: tasks.leadUserId,
       startDate: tasks.startDate,
 
       dueDate: tasks.dueDate,
@@ -274,7 +354,10 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
     db,
     result.map((task) => task.id),
   );
-
+  const leadMap = await loadTaskLeadMap(
+    db,
+    result.map((task) => task.id),
+  );
   const data: TaskDto[] = result.map((task) => ({
     id: task.id,
 
@@ -292,6 +375,7 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
 
     priority: task.priority,
 
+    lead: leadMap.get(task.id) ?? null,
     assignees: assigneeMap.get(task.id) ?? [],
 
     startDate: task.startDate,
@@ -415,18 +499,41 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
     );
   }
 
+  const leadUserId = input.leadUserId ?? null;
+
+  if (leadUserId && !hasPermission(auth, "tasks.assign")) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+
+          message: "You do not have permission to assign task leads",
+        },
+      },
+      403,
+    );
+  }
+
+  if (leadUserId) {
+    const leadMembers = await resolveAvailableAssignees(db, auth, projectId, [leadUserId]);
+
+    if (!leadMembers) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_LEAD_NOT_AVAILABLE",
+
+            message: "Task lead must be a project member",
+          },
+        },
+        400,
+      );
+    }
+  }
+
   const now = new Date();
 
-  /*
-   * UI sends the browser-local
-   * YYYY-MM-DD when Start Date
-   * is left unset.
-   *
-   * This fallback exists for
-   * non-UI callers.
-   */
   const startDate = input.startDate ?? now.toISOString().slice(0, 10);
-
   const dueDate = input.dueDate ?? null;
 
   if (dueDate && dueDate < startDate) {
@@ -449,83 +556,68 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   const priority = input.priority ?? null;
 
   const nowSeconds = Math.floor(now.getTime() / 1000);
-
-  /*
-   * Number allocation and task
-   * insertion happen in the
-   * same D1 transactional batch.
-   *
-   * task_number includes
-   * archived tasks, therefore
-   * numbers are never reused by
-   * normal runtime behavior.
-   */
   const taskInsert = c.env.flow_db
     .prepare(
       `
-          INSERT INTO tasks (
-            id,
-            project_id,
-            task_number,
-            title,
-            description,
-            status,
-            priority,
-            assignee_id,
-            start_date,
-            due_date,
-            sort_order,
-            discord_thread_url,
-            created_by,
-            created_at,
-            updated_at,
-            archived_at
-          )
-          VALUES (
-            ?,
-            ?,
+        INSERT INTO tasks (
+          id,
+          project_id,
+          task_number,
+          title,
+          description,
+          status,
+          priority,
+          assignee_id,
+          lead_user_id,
+          start_date,
+          due_date,
+          sort_order,
+          discord_thread_url,
+          created_by,
+          created_at,
+          updated_at,
+          archived_at
+        )
+        SELECT
+          ?,
+          ?,
+          sequence.next_number,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
 
+          COALESCE(
             (
               SELECT
-                COALESCE(
-                  MAX(task_number),
-                  0
-                ) + 1
-              FROM tasks
-              WHERE project_id = ?
+                MAX(existing.sort_order)
+              FROM tasks AS existing
+              WHERE
+                existing.project_id = ?
+                AND existing.status = ?
+                AND existing.archived_at IS NULL
             ),
+            0
+          ) + 100,
 
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
+          NULL,
+          ?,
+          ?,
+          ?,
+          NULL
 
-            (
-              SELECT
-                COALESCE(
-                  MAX(sort_order),
-                  0
-                ) + 100
-              FROM tasks
-              WHERE project_id = ?
-                AND status = ?
-                AND archived_at IS NULL
-            ),
+        FROM project_task_sequences AS sequence
 
-            NULL,
-            ?,
-            ?,
-            ?,
-            NULL
-          )
-        `,
+        WHERE
+          sequence.project_id = ?
+      `,
     )
     .bind(
       id,
-      projectId,
       projectId,
 
       input.title,
@@ -534,6 +626,8 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       priority,
 
       assigneeIds[0] ?? null,
+
+      leadUserId,
 
       startDate,
       dueDate,
@@ -544,9 +638,26 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       auth.user.id,
       nowSeconds,
       nowSeconds,
+
+      projectId,
     );
 
-  const statements: D1PreparedStatement[] = [taskInsert];
+  const sequenceAdvance = c.env.flow_db
+    .prepare(
+      `
+        UPDATE project_task_sequences
+
+        SET
+          next_number =
+            next_number + 1
+
+        WHERE
+          project_id = ?
+      `,
+    )
+    .bind(projectId);
+
+  const statements: D1PreparedStatement[] = [taskInsert, sequenceAdvance];
 
   for (const userId of assigneeIds) {
     statements.push(
@@ -832,7 +943,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       status: tasks.status,
 
       priority: tasks.priority,
-
+      leadUserId: tasks.leadUserId,
       assigneeId: tasks.assigneeId,
 
       startDate: tasks.startDate,
@@ -905,9 +1016,52 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
 
   const input = parsed.data;
 
+  if (input.leadUserId !== undefined && input.leadUserId !== null) {
+    const leadMembers = await resolveAvailableAssignees(db, auth, task.projectId, [input.leadUserId]);
+
+    if (!leadMembers) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_LEAD_NOT_AVAILABLE",
+
+            message: "Task lead must be a project member",
+          },
+        },
+        400,
+      );
+    }
+  }
+
   const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.startDate !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
 
-  const assignsTask = input.assigneeIds !== undefined;
+  const assignsTask = input.assigneeIds !== undefined || input.leadUserId !== undefined;
+
+  if (editsTask && !canEditTasks) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+
+          message: "You do not have permission to edit tasks",
+        },
+      },
+      403,
+    );
+  }
+
+  if (assignsTask && !canAssignTasks) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+
+          message: "You do not have permission to assign tasks",
+        },
+      },
+      403,
+    );
+  }
 
   if (editsTask && !canEditTasks) {
     return c.json(
@@ -986,6 +1140,22 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
     }
   }
 
+  if (input.leadUserId !== undefined && input.leadUserId !== null) {
+    const leadMembers = await resolveAvailableAssignees(db, auth, task.projectId, [input.leadUserId]);
+
+    if (!leadMembers) {
+      return c.json(
+        {
+          error: {
+            code: "TASK_LEAD_NOT_AVAILABLE",
+
+            message: "Task lead must be a project member",
+          },
+        },
+        400,
+      );
+    }
+  }
   const status = input.status ?? task.status;
 
   let sortOrder = task.sortOrder;
@@ -1035,6 +1205,7 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
   const discordThreadUrl = input.discordThreadUrl !== undefined ? input.discordThreadUrl : task.discordThreadUrl;
 
   const legacyAssigneeId = assigneeIds !== undefined ? (assigneeIds[0] ?? null) : task.assigneeId;
+  const leadUserId = input.leadUserId !== undefined ? input.leadUserId : task.leadUserId;
 
   const now = new Date();
 
@@ -1046,13 +1217,8 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       status,
       priority,
 
-      /*
-       * Temporary legacy mirror.
-       * task_assignees is the
-       * authoritative relation.
-       */
       assigneeId: legacyAssigneeId,
-
+      leadUserId,
       startDate,
       dueDate,
 
@@ -1112,7 +1278,468 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
   });
 });
 
-tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archive"), async (c) => {
+tasksRoutes.get("/tasks/:taskId/resources", requireAuth, requirePermission("tasks.view"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const task = await findActiveAccessibleTask(db, auth, taskId);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await db
+    .select({
+      id: taskResources.id,
+
+      taskId: taskResources.taskId,
+
+      type: taskResources.type,
+
+      title: taskResources.title,
+
+      url: taskResources.url,
+
+      content: taskResources.content,
+
+      position: taskResources.position,
+
+      createdBy: taskResources.createdBy,
+
+      createdAt: taskResources.createdAt,
+
+      updatedAt: taskResources.updatedAt,
+    })
+    .from(taskResources)
+    .where(eq(taskResources.taskId, task.id))
+    .orderBy(asc(taskResources.position));
+
+  const data: TaskResourceDto[] = result.map((resource) => ({
+    id: resource.id,
+
+    taskId: resource.taskId,
+
+    type: resource.type,
+
+    title: resource.title,
+
+    url: resource.url,
+
+    content: resource.content,
+
+    position: resource.position,
+
+    createdBy: resource.createdBy,
+
+    createdAt: resource.createdAt.toISOString(),
+
+    updatedAt: resource.updatedAt.toISOString(),
+  }));
+
+  return c.json({
+    data,
+  });
+});
+
+tasksRoutes.post("/tasks/:taskId/resources", requireAuth, requirePermission("tasks.edit"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const task = await findActiveAccessibleTask(db, auth, taskId);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = createTaskResourceSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+
+          message: "Invalid task resource",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const [lastResource] = await db
+    .select({
+      maxPosition: max(taskResources.position),
+    })
+    .from(taskResources)
+    .where(eq(taskResources.taskId, task.id));
+
+  const position = (lastResource?.maxPosition ?? -1) + 1;
+
+  const id = createId("res");
+
+  const now = new Date();
+
+  const resource =
+    input.type === "document_brief"
+      ? {
+          id,
+
+          taskId: task.id,
+
+          type: "document_brief" as const,
+
+          title: input.title ?? "Task Brief",
+
+          url: null,
+
+          content: input.content ?? "",
+
+          position,
+
+          createdBy: auth.user.id,
+
+          createdAt: now,
+
+          updatedAt: now,
+        }
+      : {
+          id,
+
+          taskId: task.id,
+
+          type: "link" as const,
+
+          title: input.title ?? new URL(input.url).hostname,
+
+          url: input.url,
+
+          content: null,
+
+          position,
+
+          createdBy: auth.user.id,
+
+          createdAt: now,
+
+          updatedAt: now,
+        };
+
+  await db.insert(taskResources).values(resource);
+
+  const data: TaskResourceDto = {
+    id: resource.id,
+
+    taskId: resource.taskId,
+
+    type: resource.type,
+
+    title: resource.title,
+
+    url: resource.url,
+
+    content: resource.content,
+
+    position: resource.position,
+
+    createdBy: resource.createdBy,
+
+    createdAt: resource.createdAt.toISOString(),
+
+    updatedAt: resource.updatedAt.toISOString(),
+  };
+
+  return c.json(
+    {
+      data,
+    },
+    201,
+  );
+});
+
+tasksRoutes.patch("/tasks/:taskId/resources/:resourceId", requireAuth, requirePermission("tasks.edit"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const resourceId = c.req.param("resourceId");
+
+  const db = createDb(c.env.flow_db);
+
+  const task = await findActiveAccessibleTask(db, auth, taskId);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [resource] = await db
+    .select({
+      id: taskResources.id,
+
+      taskId: taskResources.taskId,
+
+      type: taskResources.type,
+
+      title: taskResources.title,
+
+      url: taskResources.url,
+
+      content: taskResources.content,
+
+      position: taskResources.position,
+
+      createdBy: taskResources.createdBy,
+
+      createdAt: taskResources.createdAt,
+    })
+    .from(taskResources)
+    .where(
+      and(
+        eq(taskResources.id, resourceId),
+
+        eq(taskResources.taskId, task.id),
+      ),
+    )
+    .limit(1);
+
+  if (!resource) {
+    return c.json(
+      {
+        error: {
+          code: "RESOURCE_NOT_FOUND",
+
+          message: "Task resource not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const body = await c.req.json().catch(() => undefined);
+
+  const parsed = updateTaskResourceSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+
+          message: "Invalid task resource",
+        },
+      },
+      400,
+    );
+  }
+
+  const input = parsed.data;
+
+  const now = new Date();
+
+  let title: string;
+
+  let url: string | null;
+
+  let content: string | null;
+
+  if (resource.type === "document_brief") {
+    if (input.url !== undefined && input.url !== null) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+
+            message: "Document brief cannot contain an external URL",
+          },
+        },
+        400,
+      );
+    }
+
+    title = input.title === undefined ? (resource.title ?? "Task Brief") : (input.title ?? "Task Brief");
+
+    url = null;
+
+    content = input.content === undefined ? (resource.content ?? "") : (input.content ?? "");
+  } else {
+    if (input.content !== undefined && input.content !== null) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+
+            message: "Link resource cannot contain document content",
+          },
+        },
+        400,
+      );
+    }
+
+    url = input.url === undefined ? resource.url : input.url;
+
+    if (!url) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+
+            message: "Link resource requires a URL",
+          },
+        },
+        400,
+      );
+    }
+
+    title = input.title === undefined ? (resource.title ?? new URL(url).hostname) : (input.title ?? new URL(url).hostname);
+
+    content = null;
+  }
+
+  await db
+    .update(taskResources)
+    .set({
+      title,
+      url,
+      content,
+
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(taskResources.id, resource.id),
+
+        eq(taskResources.taskId, task.id),
+      ),
+    );
+
+  const data: TaskResourceDto = {
+    id: resource.id,
+
+    taskId: resource.taskId,
+
+    type: resource.type,
+
+    title,
+    url,
+    content,
+
+    position: resource.position,
+
+    createdBy: resource.createdBy,
+
+    createdAt: resource.createdAt.toISOString(),
+
+    updatedAt: now.toISOString(),
+  };
+
+  return c.json({
+    data,
+  });
+});
+
+tasksRoutes.delete("/tasks/:taskId/resources/:resourceId", requireAuth, requirePermission("tasks.edit"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const resourceId = c.req.param("resourceId");
+
+  const db = createDb(c.env.flow_db);
+
+  const task = await findActiveAccessibleTask(db, auth, taskId);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const [resource] = await db
+    .select({
+      id: taskResources.id,
+    })
+    .from(taskResources)
+    .where(
+      and(
+        eq(taskResources.id, resourceId),
+
+        eq(taskResources.taskId, task.id),
+      ),
+    )
+    .limit(1);
+
+  if (!resource) {
+    return c.json(
+      {
+        error: {
+          code: "RESOURCE_NOT_FOUND",
+
+          message: "Task resource not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(taskResources).where(
+    and(
+      eq(taskResources.id, resource.id),
+
+      eq(taskResources.taskId, task.id),
+    ),
+  );
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+tasksRoutes.post("/tasks/:taskId/archive", requireAuth, requirePermission("tasks.archive"), async (c) => {
   const auth = c.var.auth;
 
   const taskId = c.req.param("taskId");
@@ -1163,6 +1790,79 @@ tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.archi
       updatedAt: now,
     })
     .where(and(eq(tasks.id, task.id), eq(tasks.projectId, task.projectId), isNull(tasks.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+tasksRoutes.delete("/tasks/:taskId", requireAuth, requirePermission("tasks.delete"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const [task] = await db
+    .select({
+      id: tasks.id,
+
+      projectId: tasks.projectId,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(projects.workspaceId, auth.workspace.id),
+
+        isNull(projects.archivedAt),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const access = await findAccessibleProject(db, auth, task.projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  await db.delete(tasks).where(
+    and(
+      eq(tasks.id, task.id),
+
+      eq(tasks.projectId, task.projectId),
+
+      isNull(tasks.archivedAt),
+    ),
+  );
 
   return c.json({
     data: {

@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-import type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, ReorderTasksInput, ReorderTasksResponse, TaskResponse, TaskWorkflowResponse, UpdateTaskInput, UpdateTaskWorkflowInput } from "../types";
+import type { ArchiveTaskResponse, CreateTaskInput, ProjectTasksResponse, ReorderTasksInput, ReorderTasksResponse, TaskResponse, TaskWorkflowResponse, UpdateTaskInput, UpdateTaskWorkflowInput, DeleteTaskResponse } from "../types";
 
 export async function getProjectTaskWorkflow(projectId: string) {
   const response = await apiFetch<TaskWorkflowResponse>(`/api/projects/${projectId}/task-workflow`);
@@ -63,7 +63,12 @@ export async function updateTask(taskId: string, input: UpdateTaskInput) {
 }
 
 export async function archiveTask(taskId: string) {
-  return apiFetch<ArchiveTaskResponse>(`/api/tasks/${taskId}`, {
+  return apiFetch<ArchiveTaskResponse>(`/api/tasks/${taskId}/archive`, {
+    method: "POST",
+  });
+}
+export async function deleteTask(taskId: string) {
+  return apiFetch<DeleteTaskResponse>(`/api/tasks/${taskId}`, {
     method: "DELETE",
   });
 }

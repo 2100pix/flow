@@ -31,6 +31,7 @@ export const permissionKeys = [
   "tasks.create",
   "tasks.edit",
   "tasks.archive",
+  "tasks.delete",
   "tasks.assign",
 
   "settings.view",
@@ -186,6 +187,11 @@ export const permissionCatalog: Array<{
     key: "tasks.archive",
     group: "Tasks",
     label: "Archive tasks",
+  },
+  {
+    key: "tasks.delete",
+    group: "Tasks",
+    label: "Delete tasks permanently",
   },
   {
     key: "tasks.assign",

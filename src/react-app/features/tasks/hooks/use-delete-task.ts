@@ -1,22 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-import { archiveTask } from "../api/tasks";
+import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
+import { deleteTask } from "../api/tasks";
 import type { TaskDto } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
 import { taskQueryKey } from "./use-task";
-import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
 import { taskResourcesQueryKey } from "./use-task-resources";
 
-type ArchiveVariables = {
+type DeleteVariables = {
   taskId: string;
   projectId: string;
 };
 
-export function useArchiveTask() {
+export function useDeleteTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId }: ArchiveVariables) => archiveTask(taskId),
+    mutationFn: ({ taskId }: DeleteVariables) => deleteTask(taskId),
 
     onSuccess: async (_response, variables) => {
       queryClient.removeQueries({
@@ -26,6 +25,7 @@ export function useArchiveTask() {
         queryKey: taskResourcesQueryKey(variables.taskId),
       });
       queryClient.setQueryData<TaskDto[]>(projectTasksQueryKey(variables.projectId), (existing) => existing?.filter((task) => task.id !== variables.taskId));
+
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectTasksQueryKey(variables.projectId),

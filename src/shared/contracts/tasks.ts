@@ -16,17 +16,12 @@ const taskAssigneeIdsSchema = z.array(z.string().trim().min(1)).superRefine((val
 export const createTaskSchema = z
   .object({
     title: z.string().trim().min(1).max(240),
-
     description: z.string().trim().max(5000).nullable().optional(),
-
     status: taskStatusSchema.optional(),
-
     priority: taskPrioritySchema.nullable().optional(),
-
     assigneeIds: taskAssigneeIdsSchema.optional(),
-
+    leadUserId: z.string().trim().min(1).nullable().optional(),
     startDate: z.iso.date().optional(),
-
     dueDate: z.iso.date().nullable().optional(),
   })
   .superRefine((value, ctx) => {
@@ -53,19 +48,13 @@ export const taskDiscordThreadUrlSchema = z.url().refine(
 export const updateTaskSchema = z
   .object({
     title: z.string().trim().min(1).max(240).optional(),
-
     description: z.string().trim().max(5000).nullable().optional(),
-
     status: taskStatusSchema.optional(),
-
     priority: taskPrioritySchema.nullable().optional(),
-
     assigneeIds: taskAssigneeIdsSchema.optional(),
-
+    leadUserId: z.string().trim().min(1).nullable().optional(),
     startDate: z.iso.date().optional(),
-
     dueDate: z.iso.date().nullable().optional(),
-
     discordThreadUrl: taskDiscordThreadUrlSchema.nullable().optional(),
   })
   .superRefine((value, ctx) => {
@@ -87,11 +76,15 @@ export const updateTaskSchema = z
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
-export type ArchiveTaskResponse = {
+export type TaskActionResponse = {
   data: {
     success: true;
   };
 };
+
+export type ArchiveTaskResponse = TaskActionResponse;
+
+export type DeleteTaskResponse = TaskActionResponse;
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
@@ -100,6 +93,12 @@ export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
 export type TaskAssigneeDto = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type TaskLeadDto = {
   id: string;
   displayName: string;
   avatarUrl: string | null;
@@ -118,6 +117,7 @@ export type TaskDto = {
   status: TaskStatus;
   priority: TaskPriority | null;
 
+  lead: TaskLeadDto | null;
   assignees: TaskAssigneeDto[];
 
   startDate: string;
