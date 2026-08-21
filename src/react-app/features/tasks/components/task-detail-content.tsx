@@ -1,25 +1,20 @@
 import { useMemo, useState } from "react";
-
 import { CalendarBlankIcon, CheckIcon } from "@phosphor-icons/react";
+
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
+
+import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
 
 import { Calendar } from "@/components/ui/calendar";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
-
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
-
 import type { ProjectMemberDto } from "@/features/members/types";
-
 import { TaskResourcesSection } from "./task-resources-section";
-
 import { useTaskDetailAutosave } from "../hooks/use-task-detail-autosave";
 
 import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "../types";
@@ -28,6 +23,8 @@ type TaskDetailContentProps = {
   task: TaskDto;
 
   workflowStatuses: readonly TaskWorkflowStatusDto[];
+
+  presentation?: "sheet" | "page";
 };
 
 const NO_PRIORITY = "__flow_no_priority__";
@@ -105,6 +102,18 @@ function sortProjectMembers(projectMembers: readonly ProjectMemberDto[]) {
 
     return first.user.id.localeCompare(second.user.id);
   });
+}
+
+function getMemberInitials(displayName: string) {
+  return (
+    displayName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "?"
+  );
 }
 
 function TaskDateControl({
@@ -211,6 +220,8 @@ function TaskLeadControl({
 
   const selectedName = selectedMember?.user.displayName ?? currentTaskLead?.displayName ?? null;
 
+  const selectedAvatarUrl = selectedMember?.user.avatarUrl ?? currentTaskLead?.avatarUrl ?? null;
+
   return (
     <Select
       value={value ?? NO_LEAD}
@@ -231,7 +242,21 @@ function TaskLeadControl({
         onValueChange(member.user.id);
       }}
     >
-      <SelectTrigger className="h-8 w-auto min-w-0 rounded-lg px-2.5 text-xs">{selectedName ?? "Lead"}</SelectTrigger>
+      <SelectTrigger className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
+        {selectedName ? (
+          <>
+            <Avatar size="sm" className="size-5" aria-hidden="true">
+              {selectedAvatarUrl ? <AvatarImage src={selectedAvatarUrl} alt="" /> : null}
+
+              <AvatarFallback className="text-[9px]">{getMemberInitials(selectedName)}</AvatarFallback>
+            </Avatar>
+
+            <span className="max-w-32 truncate">{selectedName}</span>
+          </>
+        ) : (
+          "Lead"
+        )}
+      </SelectTrigger>
 
       <SelectContent align="start" alignItemWithTrigger={false}>
         <SelectGroup>
@@ -245,7 +270,13 @@ function TaskLeadControl({
 
           {members.map((member) => (
             <SelectItem key={member.user.id} value={member.user.id}>
-              {member.user.displayName}
+              <Avatar size="sm" className="size-5" aria-hidden="true">
+                {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+              </Avatar>
+
+              <span className="min-w-0 truncate">{member.user.displayName}</span>
             </SelectItem>
           ))}
         </SelectGroup>
@@ -255,11 +286,14 @@ function TaskLeadControl({
 }
 
 function TaskAssigneeControl({
+  task,
   members,
   value,
   disabled,
   onValueChange,
 }: {
+  task: TaskDto;
+
   members: readonly ProjectMemberDto[];
 
   value: string[];
@@ -272,12 +306,48 @@ function TaskAssigneeControl({
 
   const selectedSet = new Set(value);
 
-  const label = value.length === 0 ? "Assignees" : value.length === 1 ? "1 Assignee" : `${value.length} Assignees`;
+  const selectedAssignees = value.flatMap((userId) => {
+    const member = members.find((item) => item.user.id === userId);
+
+    if (member) {
+      return [
+        {
+          id: member.user.id,
+          displayName: member.user.displayName,
+          avatarUrl: member.user.avatarUrl,
+        },
+      ];
+    }
+
+    const currentAssignee = task.assignees.find((assignee) => assignee.id === userId);
+
+    return currentAssignee ? [currentAssignee] : [];
+  });
+
+  const visibleAssignees = selectedAssignees.slice(0, 3);
+
+  const hiddenAssigneeCount = Math.max(selectedAssignees.length - visibleAssignees.length, 0);
+
+  const assigneeLabel = selectedAssignees.length > 0 ? `Assignees: ${selectedAssignees.map((assignee) => assignee.displayName).join(", ")}` : "Assignees";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" className="h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal" />}>
-        {label}
+      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" aria-label={assigneeLabel} title={assigneeLabel} className="h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal" />}>
+        {selectedAssignees.length === 0 ? (
+          "Assignees"
+        ) : (
+          <AvatarGroup className="-space-x-2">
+            {visibleAssignees.map((assignee) => (
+              <Avatar key={assignee.id} size="sm" className="size-5" aria-hidden="true">
+                {assignee.avatarUrl ? <AvatarImage src={assignee.avatarUrl} alt="" /> : null}
+
+                <AvatarFallback className="text-[9px]">{getMemberInitials(assignee.displayName)}</AvatarFallback>
+              </Avatar>
+            ))}
+
+            {hiddenAssigneeCount > 0 ? <AvatarGroupCount className="size-5 text-[9px]">+{hiddenAssigneeCount}</AvatarGroupCount> : null}
+          </AvatarGroup>
+        )}
       </PopoverTrigger>
 
       <PopoverContent align="start" className="w-72 p-2">
@@ -299,8 +369,14 @@ function TaskAssigneeControl({
                   onClick={() => {
                     onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 >
+                  <Avatar size="sm" aria-hidden="true">
+                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                    <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                  </Avatar>
+
                   <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
 
                   {selected ? <CheckIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
@@ -314,8 +390,10 @@ function TaskAssigneeControl({
   );
 }
 
-export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentProps) {
+export function TaskDetailContent({ task, workflowStatuses, presentation = "sheet" }: TaskDetailContentProps) {
   const { data: auth } = useMe();
+
+  const isPage = presentation === "page";
 
   const canEdit = hasPermission(auth, "tasks.edit");
 
@@ -339,9 +417,15 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
   return (
     <div className="flex min-h-full flex-col">
       <div className="min-h-0 flex-1">
-        <div className="flex min-h-full flex-col px-6 py-6 md:px-7">
-          <div>
-            <p className="inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{task.taskCode}</p>
+        <div className={isPage ? "flex min-h-full flex-col pt-10" : "flex min-h-full flex-col px-6 py-6 md:px-7"}>
+          <div className={isPage ? "min-w-0 max-w-2xl" : undefined}>
+            {isPage ? (
+              <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
+                {task.taskCode}
+              </Badge>
+            ) : (
+              <p className="inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{task.taskCode}</p>
+            )}
 
             <label htmlFor={`task-title-${task.id}`} className="sr-only">
               Task title
@@ -358,7 +442,11 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
               onBlur={() => {
                 autosave.commitTitle();
               }}
-              className="mt-3 w-full border-0 bg-transparent p-0 text-xl font-semibold leading-tight tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100"
+              className={
+                isPage
+                  ? "mt-3 w-full border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100 md:text-3xl"
+                  : "mt-3 w-full border-0 bg-transparent p-0 text-xl font-semibold leading-tight tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100"
+              }
             />
 
             <label htmlFor={`task-description-${task.id}`} className="sr-only">
@@ -378,7 +466,11 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
               onBlur={() => {
                 autosave.commitDescription();
               }}
-              className="mt-3 min-h-10 w-full resize-none border-0 bg-transparent p-0 text-xs leading-5 text-muted-foreground outline-none placeholder:text-muted-foreground disabled:opacity-100"
+              className={
+                isPage
+                  ? "mt-4 min-h-10 w-full max-w-2xl resize-none border-0 bg-transparent p-0 text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground disabled:opacity-100"
+                  : "mt-3 min-h-10 w-full resize-none border-0 bg-transparent p-0 text-xs leading-5 text-muted-foreground outline-none placeholder:text-muted-foreground disabled:opacity-100"
+              }
             />
 
             <span className="sr-only" aria-live="polite">
@@ -386,8 +478,8 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
             </span>
           </div>
 
-          <div className="mt-24">
-            <p className="mb-2 text-xs text-muted-foreground">Properties</p>
+          <div className={isPage ? "mt-12 max-w-2xl" : "mt-24"}>
+            {isPage ? <h2 className="mb-5 text-base font-medium tracking-tight">Properties</h2> : <p className="mb-2 text-xs text-muted-foreground">Properties</p>}
 
             <div className="flex flex-wrap items-center gap-2">
               <Select
@@ -467,6 +559,7 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
               />
 
               <TaskAssigneeControl
+                task={task}
                 members={orderedMembers}
                 value={autosave.draft.assigneeIds}
                 disabled={!canAssign || membersPending || membersError}
@@ -502,7 +595,7 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
             </div>
           </div>
 
-          <div className="mt-6">
+          <div className={isPage ? "mt-8 max-w-2xl" : "mt-6"}>
             <p className="mb-2 text-xs text-muted-foreground">Labels</p>
 
             <Button type="button" variant="outline" size="xs" disabled title="Coming soon" className="font-normal">
@@ -510,9 +603,11 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
             </Button>
           </div>
 
-          <TaskResourcesSection taskId={task.id} canEdit={canEdit} />
+          <div className={isPage ? "max-w-2xl" : undefined}>
+            <TaskResourcesSection taskId={task.id} canEdit={canEdit} />
+          </div>
 
-          <div className="mt-auto flex justify-end pt-16">
+          <div className={isPage ? "flex justify-end pt-16" : "mt-auto flex justify-end pt-16"}>
             <div className="space-y-1 text-right text-[10px] text-muted-foreground">
               <p>Created on {formatTaskTimestamp(task.createdAt)}</p>
 
