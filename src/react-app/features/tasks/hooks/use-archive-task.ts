@@ -6,6 +6,7 @@ import { projectTasksQueryKey } from "./use-project-tasks";
 import { taskQueryKey } from "./use-task";
 import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
 import { taskResourcesQueryKey } from "./use-task-resources";
+import { projectQueryKey } from "@/features/projects/hooks/use-project";
 
 type ArchiveVariables = {
   taskId: string;
@@ -29,6 +30,10 @@ export function useArchiveTask() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectTasksQueryKey(variables.projectId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKey(variables.projectId),
         }),
 
         queryClient.invalidateQueries({

@@ -5,6 +5,7 @@ import type { TaskDto } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
 import { taskQueryKey } from "./use-task";
 import { taskResourcesQueryKey } from "./use-task-resources";
+import { projectQueryKey } from "@/features/projects/hooks/use-project";
 
 type DeleteVariables = {
   taskId: string;
@@ -29,6 +30,10 @@ export function useDeleteTask() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectTasksQueryKey(variables.projectId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKey(variables.projectId),
         }),
 
         queryClient.invalidateQueries({

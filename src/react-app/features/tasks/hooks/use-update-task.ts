@@ -5,6 +5,7 @@ import type { TaskDto, UpdateTaskInput } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
 import { taskQueryKey } from "./use-task";
 import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
+import { projectQueryKey } from "@/features/projects/hooks/use-project";
 
 type UpdateTaskVariables = {
   taskId: string;
@@ -17,7 +18,7 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ taskId, input }: UpdateTaskVariables) => updateTask(taskId, input),
 
-    onSuccess: async (task) => {
+    onSuccess: async (task, variables) => {
       queryClient.setQueryData(taskQueryKey(task.id), task);
 
       queryClient.setQueryData<TaskDto[]>(projectTasksQueryKey(task.projectId), (existing) => {
@@ -27,7 +28,11 @@ export function useUpdateTask() {
 
         return existing.map((item) => (item.id === task.id ? task : item));
       });
-
+      if (variables.input.dueDate !== undefined) {
+        await queryClient.invalidateQueries({
+          queryKey: projectQueryKey(task.projectId),
+        });
+      }
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: projectTasksQueryKey(task.projectId),
