@@ -18,6 +18,8 @@ import { useProjectMembers } from "@/features/members/hooks/use-project-members"
 
 import type { ProjectMemberDto } from "@/features/members/types";
 
+import { TaskResourcesSection } from "./task-resources-section";
+
 import { useTaskDetailAutosave } from "../hooks/use-task-detail-autosave";
 
 import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "../types";
@@ -499,6 +501,16 @@ export function TaskDetailContent({ task, workflowStatuses }: TaskDetailContentP
               />
             </div>
           </div>
+
+          <div className="mt-6">
+            <p className="mb-2 text-xs text-muted-foreground">Labels</p>
+
+            <Button type="button" variant="outline" size="xs" disabled title="Coming soon" className="font-normal">
+              + Add label
+            </Button>
+          </div>
+
+          <TaskResourcesSection taskId={task.id} canEdit={canEdit} />
 
           <div className="mt-auto flex justify-end pt-16">
             <div className="space-y-1 text-right text-[10px] text-muted-foreground">

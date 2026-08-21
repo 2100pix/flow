@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useProject } from "@/features/projects/hooks/use-project";
+
+import { TaskActionsMenu } from "@/features/tasks/components/task-actions-menu";
 
 import { TaskDetailContent } from "@/features/tasks/components/task-detail-content";
 
@@ -61,6 +63,8 @@ function TaskDetailPageSkeleton() {
 export function TaskDetailPage() {
   const { projectId, taskId } = useParams();
 
+  const navigate = useNavigate();
+
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
 
   const { data: task, isPending: taskPending, isError: taskError } = useTask(taskId);
@@ -87,49 +91,61 @@ export function TaskDetailPage() {
     );
   }
 
+  const taskListPath = `/projects/${project.id}/board?view=list`;
+
+  function returnToTaskList() {
+    void navigate(taskListPath, {
+      replace: true,
+    });
+  }
+
   return (
     <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
       <header className="shrink-0 px-6 pt-6 md:px-7 md:pt-8">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem className="min-w-0">
-              <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-40 truncate sm:max-w-56" title={project.name}>
-                {project.name}
-              </BreadcrumbLink>
-            </BreadcrumbItem>
+        <div className="flex min-w-0 items-center gap-1">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-40 truncate sm:max-w-56" title={project.name}>
+                  {project.name}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
 
-            <BreadcrumbSeparator />
+              <BreadcrumbSeparator />
 
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to={`/projects/${project.id}/board?view=list`} />}>Task List</BreadcrumbLink>
-            </BreadcrumbItem>
+              <BreadcrumbItem>
+                <BreadcrumbLink render={<Link to={`/projects/${project.id}/board?view=list`} />}>Task List</BreadcrumbLink>
+              </BreadcrumbItem>
 
-            <BreadcrumbSeparator />
+              <BreadcrumbSeparator />
 
-            <BreadcrumbItem className="min-w-0">
-              <span className="max-w-40 truncate text-muted-foreground sm:max-w-56" title={task.title}>
-                {task.title}
-              </span>
-            </BreadcrumbItem>
+              <BreadcrumbItem className="min-w-0">
+                <span className="max-w-40 truncate text-muted-foreground sm:max-w-56" title={task.title}>
+                  {task.title}
+                </span>
+              </BreadcrumbItem>
 
-            <BreadcrumbSeparator />
+              <BreadcrumbSeparator />
 
-            <BreadcrumbItem>
-              <BreadcrumbPage>Overview</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+              <BreadcrumbItem>
+                <BreadcrumbPage>Overview</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+
+          <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
+        </div>
 
         <nav aria-label="Task detail sections" className="mt-8 flex items-center gap-1.5">
           <Button type="button" variant="secondary" size="xs" aria-current="page">
             Overview
           </Button>
 
-          <Button type="button" variant="ghost" size="xs" disabled className="disabled:opacity-60">
+          <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
             Activity
           </Button>
 
-          <Button type="button" variant="ghost" size="xs" disabled className="disabled:opacity-60">
+          <Button type="button" variant="ghost" size="xs" disabled title="Coming soon" className="disabled:opacity-60">
             Updates
           </Button>
         </nav>
