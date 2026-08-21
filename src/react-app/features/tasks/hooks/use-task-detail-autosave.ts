@@ -76,30 +76,6 @@ export function useTaskDetailAutosave(task: TaskDto) {
     mutationRef.current = updateTask.mutateAsync;
   }, [updateTask.mutateAsync]);
 
-  useEffect(() => {
-    if (taskIdRef.current === task.id) {
-      return;
-    }
-
-    taskIdRef.current = task.id;
-
-    const nextDraft = createDraft(task);
-
-    savedRef.current = nextDraft;
-
-    pendingTextRef.current = {};
-
-    if (textTimerRef.current) {
-      clearTimeout(textTimerRef.current);
-
-      textTimerRef.current = null;
-    }
-
-    setDraft(nextDraft);
-
-    setSaveState("idle");
-  }, [task]);
-
   const enqueue = useCallback((input: UpdateTaskInput) => {
     const taskId = taskIdRef.current;
 
@@ -366,6 +342,8 @@ export function useTaskDetailAutosave(task: TaskDto) {
   }, [flushText]);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
 
