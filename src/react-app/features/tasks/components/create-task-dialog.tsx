@@ -159,20 +159,20 @@ function TaskStatusPicker({
         onValueChange(nextStatus.statusKey);
       }}
     >
-      <SelectTrigger aria-label={`Task status: ${current?.label ?? value}`} className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden">
+      <SelectTrigger aria-label={`Task status: ${current?.label ?? value}`} className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
         <TaskStatusIcon status={value} />
 
         <span>{current?.label ?? value}</span>
       </SelectTrigger>
 
-      <SelectContent align="start" alignItemWithTrigger={false} className="w-52 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
-        <SelectGroup className="p-0">
-          <SelectLabel className="px-2 py-1.5 text-sm font-medium text-popover-foreground">Status</SelectLabel>
+      <SelectContent align="start" alignItemWithTrigger={false}>
+        <SelectGroup>
+          <SelectLabel>Status</SelectLabel>
 
-          <SelectSeparator className="-mx-1 my-1" />
+          <SelectSeparator />
 
           {statuses.map((status) => (
-            <SelectItem key={status.statusKey} value={status.statusKey} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+            <SelectItem key={status.statusKey} value={status.statusKey}>
               <TaskStatusIcon status={status.statusKey} />
 
               {status.label}
@@ -241,25 +241,25 @@ function TaskPriorityPicker({
         }
       }}
     >
-      <SelectTrigger aria-label={`Task priority: ${value ? priorityLabels[value] : "None"}`} className="h-8 w-fit gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-muted-foreground shadow-xs [&>svg:last-child]:hidden">
+      <SelectTrigger aria-label={`Task priority: ${value ? priorityLabels[value] : "None"}`} className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
         <TaskPriorityIcon priority={value} />
 
-        <span>{value ? priorityLabels[value] : "Priority"}</span>
+        <span>{value ? priorityLabels[value] : "None"}</span>
       </SelectTrigger>
 
-      <SelectContent align="start" alignItemWithTrigger={false} className="w-52 rounded-lg border border-border bg-popover p-1 shadow-md ring-0 before:hidden">
-        <SelectGroup className="p-0">
-          <SelectLabel className="px-2 py-1.5 text-sm font-medium text-popover-foreground">Priority</SelectLabel>
+      <SelectContent align="start" alignItemWithTrigger={false}>
+        <SelectGroup>
+          <SelectLabel>Priority</SelectLabel>
 
-          <SelectSeparator className="-mx-1 my-1" />
+          <SelectSeparator />
 
-          <SelectItem value={NO_PRIORITY} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+          <SelectItem value={NO_PRIORITY}>
             <TaskPriorityIcon priority={null} />
             None
           </SelectItem>
 
           {(["urgent", "low", "medium", "high"] as const).map((priority) => (
-            <SelectItem key={priority} value={priority} className="h-8 gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm data-selected:bg-muted dark:data-selected:bg-[#3a3a3a]">
+            <SelectItem key={priority} value={priority}>
               <TaskPriorityIcon priority={priority} />
 
               {priorityLabels[priority]}
