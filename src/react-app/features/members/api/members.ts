@@ -1,11 +1,78 @@
 import { apiFetch } from "@/lib/api";
 
-import type { AddProjectMemberInput, MemberAccessRequestsResponse, MemberResponse, MembersResponse, ProjectMemberResponse, ProjectMembersResponse, RejectMemberAccessRequestResponse, RemoveProjectMemberResponse } from "../types";
+import type {
+  AddProjectMemberInput,
+  MemberAccessRequestsResponse,
+  MemberResponse,
+  MembersResponse,
+  ProjectMemberResponse,
+  ProjectMembersResponse,
+  RejectMemberAccessRequestResponse,
+  RemoveProjectMemberResponse,
+  RemoveWorkspaceMemberResponse,
+  UpdateWorkspaceMemberInput,
+  CreateWorkspaceExpertiseInput,
+  UpdateMemberExpertiseInput,
+  WorkspaceExpertiseItemResponse,
+  WorkspaceExpertiseResponse,
+} from "../types";
 
 export async function getMembers() {
   const response = await apiFetch<MembersResponse>("/api/members");
 
   return response.data;
+}
+
+export async function getWorkspaceExpertise() {
+  const response = await apiFetch<WorkspaceExpertiseResponse>("/api/members/expertise");
+
+  return response.data;
+}
+
+export async function createWorkspaceExpertise(input: CreateWorkspaceExpertiseInput) {
+  const response = await apiFetch<WorkspaceExpertiseItemResponse>("/api/members/expertise", {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(input),
+  });
+
+  return response.data;
+}
+
+export async function updateMemberExpertise(userId: string, input: UpdateMemberExpertiseInput) {
+  return apiFetch(`/api/members/${userId}/expertise`, {
+    method: "PUT",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateWorkspaceMember(userId: string, input: UpdateWorkspaceMemberInput) {
+  const response = await apiFetch<MemberResponse>(`/api/members/${userId}`, {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(input),
+  });
+
+  return response.data;
+}
+
+export async function removeWorkspaceMember(userId: string) {
+  return apiFetch<RemoveWorkspaceMemberResponse>(`/api/members/${userId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getProjectMembers(projectId: string) {

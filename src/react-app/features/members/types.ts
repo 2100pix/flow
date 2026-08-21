@@ -10,6 +10,13 @@ export type {
   ProjectMembersResponse,
   RejectMemberAccessRequestResponse,
   RemoveProjectMemberResponse,
+  RemoveWorkspaceMemberResponse,
+  UpdateWorkspaceMemberInput,
   UpdateWorkspaceMemberRoleInput,
   WorkspaceRole,
+  CreateWorkspaceExpertiseInput,
+  UpdateMemberExpertiseInput,
+  WorkspaceExpertiseDto,
+  WorkspaceExpertiseItemResponse,
+  WorkspaceExpertiseResponse,
 } from "../../../shared/contracts/members";
