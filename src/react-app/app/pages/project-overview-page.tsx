@@ -723,7 +723,6 @@ function EngagementField({
     </div>
   );
 }
-
 function CollaborationControls({
   project,
   projectMembers,
@@ -1045,6 +1044,15 @@ function CollaborationControls({
           <div className="mt-2">
             <Link to={`/projects/${project.id}/settings`} className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
               Go to Setting
+              <ArrowRightIcon size={14} aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Task List</p>
+          <div className="mt-2">
+            <Link to={`/projects/${project.id}/board`} className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+              Go to Task List
               <ArrowRightIcon size={14} aria-hidden="true" />
             </Link>
           </div>

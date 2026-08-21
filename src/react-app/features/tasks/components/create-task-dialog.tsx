@@ -12,7 +12,6 @@ import {
   CircleIcon,
   EyeIcon,
   SpinnerGapIcon,
-  UsersIcon,
   WarningCircleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";

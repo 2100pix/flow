@@ -1,15 +1,18 @@
 import { useState } from "react";
+
 import { useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
-import { useMe } from "@/features/auth/hooks/use-me";
 
-import { TeamsSettings } from "@/features/teams/components/teams-settings";
-import { RolesSettings } from "@/features/roles/components/roles-settings";
 import { hasPermission } from "@/features/auth/permissions";
 
+import { useMe } from "@/features/auth/hooks/use-me";
+
+import { RolesSettings } from "@/features/roles/components/roles-settings";
+
+import { TeamsSettings } from "@/features/teams/components/teams-settings";
+
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
-import { cn } from "@/lib/utils";
 
 const settingsSections = [
   {
@@ -40,173 +43,216 @@ function isSettingsSection(value: string | null): value is SettingsSection {
   return settingsSections.some((section) => section.id === value);
 }
 
-export function SettingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-
+function GeneralSettings() {
   const { data: auth } = useMe();
 
   const updateWorkspace = useUpdateWorkspace();
+
+  const [workspaceName, setWorkspaceName] = useState(() => auth?.workspace.name ?? "");
+
+  if (!auth) {
+    return null;
+  }
+
+  const canManageWorkspace = hasPermission(auth, "workspace.manage");
+
+  const normalizedName = workspaceName.trim();
+
+  const hasNameChange = normalizedName !== auth.workspace.name;
+
+  const workspaceInitial = auth.workspace.name.trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <div className="p-6 md:p-8">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">General</h1>
+
+        <div className="mt-10 max-w-xl space-y-12">
+          <section>
+            <p className="text-xs font-medium text-muted-foreground">Workspace</p>
+
+            <form
+              className="mt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                if (!canManageWorkspace || !normalizedName || !hasNameChange || updateWorkspace.isPending) {
+                  return;
+                }
+
+                updateWorkspace.mutate({
+                  name: normalizedName,
+                });
+              }}
+            >
+              <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
+                <div className="flex min-h-12 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <label htmlFor="workspace-name" className="text-xs font-medium">
+                    Workspace Name
+                  </label>
+
+                  <input
+                    id="workspace-name"
+                    value={workspaceName}
+                    maxLength={120}
+                    disabled={!canManageWorkspace || updateWorkspace.isPending}
+                    onChange={(event) => {
+                      setWorkspaceName(event.target.value);
+                    }}
+                    className="
+                      h-8 w-full
+                      rounded-md
+                      border border-input
+                      bg-background
+                      px-2.5
+                      text-sm
+                      outline-none
+                      transition-[border-color,box-shadow]
+                      sm:w-52
+                      focus-visible:border-ring
+                      focus-visible:ring-3
+                      focus-visible:ring-ring/50
+                      disabled:cursor-not-allowed
+                      disabled:opacity-60
+                    "
+                  />
+                </div>
+
+                <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-medium">Workspace Logo</p>
+
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
+                  </div>
+
+                  <div
+                    aria-label="Workspace logo placeholder"
+                    title="Workspace logo — coming soon"
+                    className="
+                      flex size-8 shrink-0
+                      items-center justify-center
+                      rounded-md
+                      border border-border
+                      bg-muted
+                      text-xs font-semibold
+                      text-muted-foreground
+                    "
+                  >
+                    {workspaceInitial}
+                  </div>
+                </div>
+              </div>
+
+              {updateWorkspace.isError ? <p className="mt-2 text-xs text-destructive">{updateWorkspace.error.message}</p> : null}
+
+              {updateWorkspace.isSuccess && !hasNameChange ? <p className="mt-2 text-xs text-muted-foreground">Workspace updated.</p> : null}
+
+              {canManageWorkspace && hasNameChange ? (
+                <div className="mt-3 flex justify-end">
+                  <Button type="submit" size="sm" disabled={!normalizedName || updateWorkspace.isPending}>
+                    {updateWorkspace.isPending ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
+              ) : null}
+            </form>
+          </section>
+
+          <section>
+            <p className="text-xs font-medium text-muted-foreground">Dangerzone</p>
+
+            <div className="mt-3 flex min-h-14 items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">Delete Workspace</p>
+
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
+              </div>
+
+              <Button type="button" variant="destructive" size="sm" disabled title="Coming soon" className="shrink-0">
+                Delete
+              </Button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaceholderSettings({ title }: { title: string }) {
+  return (
+    <div className="p-6 md:p-8">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+
+        <div className="mt-10 max-w-xl rounded-xl border border-dashed border-border p-6">
+          <p className="text-sm text-muted-foreground">No settings available here yet.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SettingsPage() {
+  const [searchParams] = useSearchParams();
+
+  const { data: auth } = useMe();
 
   const activeSectionValue = searchParams.get("section");
 
   const requestedSection: SettingsSection = isSettingsSection(activeSectionValue) ? activeSectionValue : "general";
 
-  const [workspaceName, setWorkspaceName] = useState(() => auth?.workspace.name ?? "");
-
-  const canViewSettings = hasPermission(auth, "settings.view");
-
-  const canManageWorkspace = hasPermission(auth, "workspace.manage");
-
-  const visibleSections = settingsSections.filter((section) => {
-    switch (section.id) {
-      case "general":
-        return true;
-
-      case "teams":
-        return hasPermission(auth, "teams.view");
-
-      case "roles":
-        return hasPermission(auth, "roles.view");
-
-      case "task-fields":
-        return hasPermission(auth, "task_fields.view");
-
-      case "task-appearance":
-        return hasPermission(auth, "task_appearance.view");
-    }
-  });
-
-  const activeSection = visibleSections.some((section) => section.id === requestedSection) ? requestedSection : "general";
-
-  const normalizedName = workspaceName.trim();
-
-  const hasNameChange = Boolean(auth) && normalizedName !== auth?.workspace.name;
-
-  function selectSection(section: SettingsSection) {
-    const next = new URLSearchParams();
-
-    if (section !== "general") {
-      next.set("section", section);
-    }
-
-    setSearchParams(next);
-  }
   if (!auth) {
     return (
-      <div className="p-8">
+      <div className="p-6 md:p-8">
         <p className="text-sm text-muted-foreground">Loading settings…</p>
       </div>
     );
   }
 
+  const canViewSettings = hasPermission(auth, "settings.view");
+
   if (!canViewSettings) {
     return (
-      <div className="p-8">
+      <div className="p-6 md:p-8">
         <p className="text-sm text-muted-foreground">You do not have access to workspace settings.</p>
       </div>
     );
   }
-  return (
-    <div className="p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Workspace Settings</h1>
 
-          <p className="mt-1 text-sm text-muted-foreground">Configure how this workspace operates.</p>
-        </div>
+  const activeSection =
+    requestedSection === "teams" && !hasPermission(auth, "teams.view")
+      ? "general"
+      : requestedSection === "roles" && !hasPermission(auth, "roles.view")
+        ? "general"
+        : requestedSection === "task-fields" && !hasPermission(auth, "task_fields.view")
+          ? "general"
+          : requestedSection === "task-appearance" && !hasPermission(auth, "task_appearance.view")
+            ? "general"
+            : requestedSection;
 
-        <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="space-y-1">
-            {visibleSections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                className={cn("flex h-9 w-full items-center rounded-md px-3 text-left text-sm transition-colors", "text-muted-foreground hover:bg-muted hover:text-foreground", activeSection === section.id && "bg-muted text-foreground")}
-                onClick={() => {
-                  selectSection(section.id);
-                }}
-              >
-                {section.label}
-              </button>
-            ))}
-          </nav>
+  if (activeSection === "general") {
+    return <GeneralSettings />;
+  }
 
-          <div className="min-w-0">
-            {activeSection === "general" && (
-              <section className="space-y-6">
-                <div>
-                  <h2 className="text-base font-semibold">General</h2>
-
-                  <p className="mt-1 text-sm text-muted-foreground">Basic workspace information.</p>
-                </div>
-
-                <div className="rounded-xl border border-border bg-card p-5 text-card-foreground">
-                  <form
-                    className="max-w-xl space-y-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-
-                      if (!canManageWorkspace || !normalizedName || !hasNameChange) {
-                        return;
-                      }
-
-                      updateWorkspace.mutate({
-                        name: normalizedName,
-                      });
-                    }}
-                  >
-                    <div className="space-y-1.5">
-                      <label htmlFor="workspace-name" className="text-sm font-medium">
-                        Workspace name
-                      </label>
-
-                      <input
-                        id="workspace-name"
-                        value={workspaceName}
-                        maxLength={120}
-                        disabled={!canManageWorkspace}
-                        onChange={(event) => {
-                          setWorkspaceName(event.target.value);
-                        }}
-                        className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-
-                      <p className="text-xs text-muted-foreground">This name is shown across the Flow workspace.</p>
-                    </div>
-
-                    {!canManageWorkspace && <p className="text-sm text-muted-foreground">You do not have permission to change this setting..</p>}
-
-                    {updateWorkspace.isError && <p className="text-sm text-destructive">{updateWorkspace.error.message}</p>}
-
-                    {updateWorkspace.isSuccess && !hasNameChange && <p className="text-sm text-muted-foreground">Workspace updated.</p>}
-
-                    {canManageWorkspace && (
-                      <Button type="submit" disabled={!normalizedName || !hasNameChange || updateWorkspace.isPending}>
-                        {updateWorkspace.isPending ? "Saving…" : "Save changes"}
-                      </Button>
-                    )}
-                  </form>
-                </div>
-              </section>
-            )}
-            {activeSection === "teams" && <TeamsSettings />}
-            {activeSection === "roles" && <RolesSettings />}
-            {activeSection !== "general" && activeSection !== "teams" && activeSection !== "roles" && (
-              <section>
-                <div>
-                  <h2 className="text-base font-semibold">{settingsSections.find((section) => section.id === activeSection)?.label}</h2>
-
-                  <p className="mt-1 text-sm text-muted-foreground">This section is prepared for the next workspace customization milestone.</p>
-                </div>
-
-                <div className="mt-6 rounded-xl border border-dashed border-border p-8">
-                  <p className="text-sm text-muted-foreground">No settings available here yet.</p>
-                </div>
-              </section>
-            )}
-          </div>
+  if (activeSection === "teams") {
+    return (
+      <div className="p-6 md:p-8">
+        <div className="mx-auto max-w-6xl">
+          <TeamsSettings />
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (activeSection === "roles") {
+    return (
+      <div className="p-6 md:p-8">
+        <div className="mx-auto max-w-6xl">
+          <RolesSettings />
+        </div>
+      </div>
+    );
+  }
+
+  return <PlaceholderSettings title={settingsSections.find((section) => section.id === activeSection)?.label ?? "Settings"} />;
 }
