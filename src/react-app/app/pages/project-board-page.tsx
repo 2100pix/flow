@@ -1,14 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { DotsSixVerticalIcon, PlusIcon } from "@phosphor-icons/react";
 import { move } from "@dnd-kit/helpers";
-import { DragDropProvider, useDroppable } from "@dnd-kit/react";
-import { useSortable } from "@dnd-kit/react/sortable";
+import { DragDropProvider } from "@dnd-kit/react";
 import { Link, useParams, useSearchParams } from "react-router";
 
-import { Button } from "@/components/ui/button";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { TaskListView } from "@/features/tasks/components/task-list-view";
+import { TaskWorkspaceToolbar, type TaskWorkspaceView } from "@/features/tasks/components/task-workspace-toolbar";
+import { TaskBoardView } from "@/features/tasks/components/task-board-view";
+import { CreateTaskDialog } from "@/features/tasks/components/create-task-dialog";
+
 import { useProject } from "@/features/projects/hooks/use-project";
 import { TaskDetailSheet } from "@/features/tasks/components/task-detail-sheet";
-import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useReorderTasks } from "@/features/tasks/hooks/use-reorder-tasks";
 import { useMe } from "@/features/auth/hooks/use-me";
@@ -55,247 +57,30 @@ function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | nul
   return null;
 }
 
-function QuickCreateTask({ projectId, status, disabled }: { projectId: string; status: TaskStatus; disabled: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const [title, setTitle] = useState("");
-
-  const createTask = useCreateTask();
-
-  function closeComposer() {
-    setTitle("");
-    createTask.reset();
-    setIsOpen(false);
-  }
-
-  if (!isOpen) {
-    return (
-      <div className="shrink-0 border-t p-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="w-full justify-start gap-1.5 text-muted-foreground"
-          onClick={() => {
-            createTask.reset();
-            setIsOpen(true);
-          }}
-        >
-          <PlusIcon size={14} />
-          Add task
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <form
-      className="shrink-0 border-t p-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-
-        const value = title.trim();
-
-        if (!value || disabled || createTask.isPending) {
-          return;
-        }
-
-        createTask.mutate(
-          {
-            projectId,
-
-            input: {
-              title: value,
-              status,
-            },
-          },
-          {
-            onSuccess: () => {
-              setTitle("");
-              setIsOpen(false);
-            },
-          },
-        );
-      }}
-    >
-      <input
-        autoFocus
-        value={title}
-        maxLength={240}
-        disabled={disabled || createTask.isPending}
-        placeholder="Task title"
-        onChange={(event) => {
-          setTitle(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape") {
-            return;
-          }
-
-          event.preventDefault();
-
-          closeComposer();
-        }}
-        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
-      />
-
-      {createTask.isError ? <p className="mt-2 text-xs text-destructive">{createTask.error.message}</p> : null}
-
-      <div className="mt-2 flex justify-end gap-1.5">
-        <Button type="button" variant="ghost" size="sm" disabled={createTask.isPending} onClick={closeComposer}>
-          Cancel
-        </Button>
-
-        <Button type="submit" size="sm" disabled={disabled || !title.trim() || createTask.isPending}>
-          {createTask.isPending ? "Adding…" : "Add"}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function TaskCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; dragDisabled: boolean; onOpen: () => void }) {
-  const primaryAssignee = task.assignees[0];
-
-  const additionalAssigneeCount = Math.max(task.assignees.length - 1, 0);
-  const { ref, handleRef, isDragSource } = useSortable({
-    id: task.id,
-    index,
-    group: status,
-
-    type: "task",
-    accept: "task",
-
-    disabled: dragDisabled,
-  });
-
-  return (
-    <div ref={ref} className={`rounded-lg border bg-background p-3 transition-opacity ${isDragSource ? "opacity-50" : ""}`}>
-      <div className="flex items-start gap-2">
-        <button type="button" aria-label={`Open ${task.title}`} onClick={onOpen} className="min-w-0 flex-1 text-left">
-          <p className="line-clamp-2 text-sm font-medium leading-5">{task.title}</p>
-          {task.priority || task.dueDate ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {task.priority ? <span className="rounded-md bg-muted px-1.5 py-0.5 capitalize">{task.priority}</span> : null}
-
-              {task.dueDate ? <span>Due {task.dueDate}</span> : null}
-            </div>
-          ) : null}
-          {primaryAssignee ? (
-            <div className="mt-3 flex items-center gap-2">
-              {primaryAssignee.avatarUrl ? <img src={primaryAssignee.avatarUrl} alt="" className="size-5 rounded-full" /> : null}
-
-              <span className="min-w-0 truncate text-xs text-muted-foreground">{primaryAssignee.displayName}</span>
-
-              {additionalAssigneeCount > 0 ? <span className="shrink-0 text-xs text-muted-foreground">+{additionalAssigneeCount}</span> : null}
-            </div>
-          ) : null}
-        </button>
-
-        <button
-          ref={handleRef}
-          type="button"
-          disabled={dragDisabled}
-          aria-label={`Drag ${task.title}`}
-          title={`Drag ${task.title}`}
-          className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30 active:cursor-grabbing"
-        >
-          <DotsSixVerticalIcon size={16} weight="bold" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TaskColumn({
-  projectId,
-  status,
-  label,
-  tasks,
-  dragDisabled,
-  canCreateTask,
-  onOpenTask,
-}: {
-  projectId: string;
-  status: TaskStatus;
-  label: string;
-  tasks: TaskDto[];
-  dragDisabled: boolean;
-  canCreateTask: boolean;
-
-  onOpenTask: (taskId: string) => void;
-}) {
-  const { ref, isDropTarget } = useDroppable({
-    id: status,
-    accept: "task",
-
-    collisionPriority: -1,
-
-    disabled: dragDisabled,
-  });
-
-  return (
-    <section ref={ref} className={`flex h-full min-h-0 w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 transition-[background-color,box-shadow] ${isDropTarget ? "bg-muted/40 ring-2 ring-ring/40" : ""}`}>
-      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
-        <h2 className="text-sm font-medium">{label}</h2>
-        <span className="text-xs text-muted-foreground">{tasks.length}</span>
-      </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
-        {tasks.length === 0 ? (
-          <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-border/60 px-3">
-            <p className="text-center text-xs text-muted-foreground">No tasks</p>
-          </div>
-        ) : (
-          tasks.map((task, index) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              index={index}
-              status={status}
-              dragDisabled={dragDisabled}
-              onOpen={() => {
-                onOpenTask(task.id);
-              }}
-            />
-          ))
-        )}
-      </div>
-      {canCreateTask && <QuickCreateTask projectId={projectId} status={status} disabled={false} />}
-    </section>
-  );
-}
-
 export function ProjectBoardPage() {
   const { projectId } = useParams();
-
   const [searchParams, setSearchParams] = useSearchParams();
-
+  const [createTaskStatus, setCreateTaskStatus] = useState<TaskStatus | null>(null);
   const activeTaskId = searchParams.get("task");
-
+  const view: TaskWorkspaceView = searchParams.get("view") === "board" ? "board" : "list";
+  const requestedStatus = searchParams.get("status") as TaskStatus | null;
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
-
   const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
   const { data: workflow, isPending: workflowPending, isError: workflowError } = useProjectTaskWorkflow(projectId);
-
   const reorderTasks = useReorderTasks();
-
   const serverBoard = useMemo(() => buildBoard(tasks), [tasks]);
-
+  const stableTaskCounts = useMemo(() => Object.fromEntries((Object.entries(serverBoard) as [TaskStatus, TaskDto[]][]).map(([status, statusTasks]) => [status, statusTasks.length])) as Record<TaskStatus, number>, [serverBoard]);
   const [dragBoard, setDragBoard] = useState<TaskBoardState | null>(null);
-
   const board = dragBoard ?? serverBoard;
-
   const boardRef = useRef<TaskBoardState | null>(null);
-
   const previousBoardRef = useRef<TaskBoardState | null>(null);
   const { data: auth } = useMe();
-
   const canCreateTask = hasPermission(auth, "tasks.create");
-
   const canEditTask = hasPermission(auth, "tasks.edit");
-
-  const columns = useMemo(() => workflow?.statuses.filter((status) => status.enabled) ?? [], [workflow]);
+  const canAssignTask = hasPermission(auth, "tasks.assign");
+  const columns = useMemo(() => (workflow?.statuses ?? []).filter((status) => status.enabled).sort((first, second) => first.position - second.position), [workflow]);
+  const activeStatus = requestedStatus && columns.some((column) => column.statusKey === requestedStatus) ? requestedStatus : null;
+  const visibleColumns = activeStatus ? columns.filter((column) => column.statusKey === activeStatus) : columns;
 
   if (!projectId) {
     return null;
@@ -334,6 +119,54 @@ export function ProjectBoardPage() {
     );
   }
 
+  function changeView(nextView: TaskWorkspaceView) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+
+        next.set("view", nextView);
+
+        return next;
+      },
+      {
+        replace: true,
+      },
+    );
+  }
+
+  function changeStatus(nextStatus: TaskStatus | null) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+
+        if (nextStatus) {
+          next.set("status", nextStatus);
+        } else {
+          next.delete("status");
+        }
+
+        return next;
+      },
+      {
+        replace: true,
+      },
+    );
+  }
+
+  function openCreateTask(requestedStatus?: TaskStatus | null) {
+    const nextStatus = requestedStatus ?? activeStatus ?? columns[0]?.statusKey ?? null;
+
+    if (!nextStatus) {
+      return;
+    }
+
+    setCreateTaskStatus(nextStatus);
+  }
+
+  function closeCreateTask() {
+    setCreateTaskStatus(null);
+  }
+
   if (projectPending || tasksPending || workflowPending) {
     return (
       <div className="flex h-[calc(100vh-3rem)] items-center justify-center">
@@ -355,12 +188,6 @@ export function ProjectBoardPage() {
       </div>
     );
   }
-
-  const totalActiveTasks = tasks.length;
-
-  const taskCountLabel = `${totalActiveTasks} active ${totalActiveTasks === 1 ? "task" : "tasks"}`;
-
-  const visibilityLabel = project.visibility === "private" ? "Private" : "Workspace";
 
   return (
     <DragDropProvider
@@ -448,54 +275,66 @@ export function ProjectBoardPage() {
       }}
     >
       <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
-        <div className="shrink-0 border-b px-6 py-4">
-          <Link to={`/projects/${project.id}`} className="text-sm text-muted-foreground hover:text-foreground">
-            Project overview
-          </Link>
+        <main className="flex min-h-0 flex-1 flex-col p-6 md:p-8">
+          <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
+            {" "}
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="min-w-0">
+                  <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
+                    {project.name}
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
 
-          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight">{project.name}</h1>
+                <BreadcrumbSeparator />
 
-              <p className="mt-1 truncate text-sm text-muted-foreground">{project.client?.name ?? "Not set"}</p>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-              <span>{taskCountLabel}</span>
-
-              <span aria-hidden="true" className="text-border">
-                ·
-              </span>
-
-              <span className="rounded-md border bg-muted/40 px-2 py-1">{visibilityLabel}</span>
-            </div>
-          </div>
-
-          {reorderTasks.isPending || reorderTasks.isError ? (
-            <div className="mt-2 text-sm" aria-live="polite">
-              {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
-
-              {reorderTasks.isError ? <p className="text-destructive">Unable to save task order. Previous order restored.</p> : null}
-            </div>
-          ) : null}
-        </div>
-        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain p-6">
-          <div className="flex h-full min-w-max gap-3">
-            {columns.map((column) => (
-              <TaskColumn
-                key={column.statusKey}
-                projectId={project.id}
-                status={column.statusKey}
-                label={column.label}
-                tasks={board[column.statusKey]}
-                dragDisabled={!canEditTask || reorderTasks.isPending}
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Task List</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="mt-8">
+              <TaskWorkspaceToolbar
+                view={view}
+                onCreateTask={() => {
+                  openCreateTask();
+                }}
+                status={activeStatus}
+                statuses={columns}
                 canCreateTask={canCreateTask}
-                onOpenTask={openTask}
+                onViewChange={changeView}
+                onStatusChange={changeStatus}
               />
-            ))}
+            </div>
+            {reorderTasks.isPending || reorderTasks.isError ? (
+              <div className="mt-2 text-sm" aria-live="polite">
+                {reorderTasks.isPending ? <p className="text-muted-foreground">Saving task order…</p> : null}
+
+                {reorderTasks.isError ? <p className="text-destructive">{reorderTasks.error.message}</p> : null}
+              </div>
+            ) : null}
+            <div className="mt-4 min-h-0 flex-1">
+              {view === "list" ? (
+                <div className="h-full overflow-y-auto overscroll-contain">
+                  <TaskListView
+                    projectId={project.id}
+                    statuses={visibleColumns}
+                    workflowStatuses={columns}
+                    board={board}
+                    dragDisabled={!canEditTask || reorderTasks.isPending}
+                    canEditTask={canEditTask}
+                    canAssignTask={canAssignTask}
+                    onOpenTask={openTask}
+                  />
+                </div>
+              ) : (
+                <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} onCreateTask={openCreateTask} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onOpenTask={openTask} />
+              )}
+            </div>
           </div>
-        </div>
-        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} workflowStatuses={workflow.statuses} /> : null}
+        </main>
+        {createTaskStatus ? <CreateTaskDialog open projectId={project.id} statuses={columns} initialStatus={createTaskStatus} onClose={closeCreateTask} /> : null}
+        {activeTaskId ? <TaskDetailSheet taskId={activeTaskId} onClose={closeTask} workflowStatuses={columns} /> : null}
       </div>
     </DragDropProvider>
   );
