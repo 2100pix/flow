@@ -5,7 +5,8 @@ import { DragOverlay, useDragOperation, useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 
-import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+import type { TaskDto, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
 type TaskBoardViewProps = {
@@ -20,12 +21,7 @@ type TaskBoardViewProps = {
 
   onCreateTask?: (status: TaskStatus) => void;
 };
-const priorityLabels: Record<TaskPriority, string> = {
-  low: "Low Priority",
-  medium: "Medium Priority",
-  high: "High Priority",
-  urgent: "Urgent",
-};
+
 function parseTaskDate(value: string | null) {
   if (!value) {
     return undefined;
@@ -102,7 +98,7 @@ function findBoardTask(board: TaskBoardState, taskId: string) {
 }
 
 function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: TaskDto; index: number; status: TaskStatus; dragDisabled: boolean; onOpen: () => void }) {
-  const { ref, handleRef, isDragSource } = useSortable({
+  const { ref, isDragSource } = useSortable({
     id: task.id,
     index,
     group: status,
@@ -120,54 +116,35 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
       ref={ref}
       data-board-card={task.id}
       data-drag-placeholder={isDragSource ? "true" : undefined}
-      className={["relative flex min-h-[111px] w-full shrink-0 flex-col justify-between overflow-hidden rounded-lg p-4", isDragSource ? "border border-border/60 bg-card/40 shadow-none" : "bg-card hover:bg-accent/70"].join(" ")}
+      className={[
+        "relative flex min-h-[111px] w-full shrink-0 cursor-grab flex-col overflow-hidden rounded-lg border p-4 outline-none",
+        "active:cursor-grabbing",
+        "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out",
+        isDragSource ? "scale-[0.985] border-border/60 bg-card/40 shadow-inner" : "scale-100 border-transparent bg-card shadow-none hover:bg-accent/70",
+        dragDisabled ? "cursor-default active:cursor-default" : "",
+      ].join(" ")}
     >
-      <button
-        ref={handleRef}
-        type="button"
-        disabled={dragDisabled}
-        aria-label={`Drag ${task.title}`}
-        className="
-      absolute
-      inset-0
-      z-0
-      cursor-grab
-      rounded-lg
-      outline-none
-      disabled:cursor-default
-      active:cursor-grabbing
-      focus-visible:ring-2
-      focus-visible:ring-ring
-    "
-      />
+      <div className={["relative z-10 flex min-h-0 flex-1 flex-col justify-between", "transition-[opacity,transform] duration-100 ease-out", isDragSource ? "pointer-events-none translate-y-0.5 opacity-0" : "translate-y-0 opacity-100"].join(" ")}>
+        <div>
+          <div className="flex min-w-0 items-start justify-between gap-4">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
 
-      <div className={isDragSource ? "invisible" : ""}>
-        <div className="flex min-w-0 items-start justify-between gap-4">
-          <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
+            <TaskCardAssignees task={task} />
+          </div>
 
-          <TaskCardAssignees task={task} />
+          <button type="button" onClick={onOpen} className="mt-1.5 block max-w-full rounded-sm text-left text-sm font-medium leading-5 outline-none hover:underline hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="line-clamp-2">{task.title}</span>
+          </button>
         </div>
 
-        <button
-          type="button"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={onOpen}
-          className="pointer-events-auto mt-1.5 block max-w-full rounded-sm text-left text-sm font-medium leading-5 outline-none hover:underline hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="line-clamp-2">{task.title}</span>
-        </button>
-      </div>
+        <div className="flex min-w-0 items-center gap-5 text-xs text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <CalendarBlankIcon aria-hidden="true" className="size-3.5 shrink-0" />
 
-      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-5 text-xs text-muted-foreground">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <CalendarBlankIcon aria-hidden="true" className="size-3.5 shrink-0" />
-
-          <span className="truncate">{dueDate ?? "Due date"}</span>
+            <span className="truncate">{dueDate ?? "Due date"}</span>
+          </div>
+          <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
         </div>
-
-        <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
       </div>
     </article>
   );
@@ -274,7 +251,7 @@ export function TaskBoardView({ statuses, board, dragDisabled, canCreateTask, ta
       overscroll-x-contain
     "
     >
-      <div className="flex h-full min-w-max items-start gap-3 pb-3">
+      <div className="flex h-full min-w-max items-start gap-3 px-6 pb-3 md:px-8">
         {statuses.map((status) => (
           <TaskBoardColumn
             key={status.statusKey}
@@ -294,16 +271,18 @@ export function TaskBoardView({ statuses, board, dragDisabled, canCreateTask, ta
               data-board-drag-overlay="true"
               className="
               flex
-              min-h-[111px]
+              min-h-[92px]
               w-[327px]
               flex-col
-              justify-between
               rounded-lg
               border
               border-border/70
               bg-muted
               p-4
               shadow-2xl
+              transition-[opacity,transform]
+              duration-150
+              ease-out
             "
             >
               <div>
@@ -314,16 +293,6 @@ export function TaskBoardView({ statuses, board, dragDisabled, canCreateTask, ta
                 </div>
 
                 <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5">{overlayTask.title}</p>
-              </div>
-
-              <div className="flex items-center gap-5 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <CalendarBlankIcon className="size-3.5" aria-hidden="true" />
-
-                  <span>{formatTaskDate(overlayTask.dueDate) ?? "Due date"}</span>
-                </div>
-
-                <span>{overlayTask.priority ? priorityLabels[overlayTask.priority] : "Priority"}</span>
               </div>
             </article>
           ) : null}

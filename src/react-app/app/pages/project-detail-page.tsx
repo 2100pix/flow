@@ -56,8 +56,6 @@ function getErrorMessage(error: unknown, fallback: string) {
 function ProjectSettingsSkeleton() {
   return (
     <div className="space-y-10">
-      <Skeleton className="h-4 w-52" />
-
       <Skeleton className="h-8 w-48" />
 
       <div className="space-y-5">
@@ -565,36 +563,47 @@ export function ProjectDetailPage() {
 
   return (
     <div className="p-6 md:p-8">
-      <main className="mx-auto max-w-6xl">
-        {isPending ? (
-          <ProjectSettingsSkeleton />
-        ) : isError || !project ? (
+      {isPending ? (
+        <>
+          <Skeleton className="h-4 w-52" />
+
+          <main className="mx-auto max-w-6xl">
+            <div className="mt-10">
+              <ProjectSettingsSkeleton />
+            </div>
+          </main>
+        </>
+      ) : isError || !project ? (
+        <main className="mx-auto max-w-6xl">
           <p className="text-sm text-destructive">Unable to load project.</p>
-        ) : (
-          <>
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="min-w-0">
-                  <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
-                    {project.name}
-                  </span>
-                </BreadcrumbItem>
+        </main>
+      ) : (
+        <>
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="min-w-0">
+                <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
+                  {project.name}
+                </span>
+              </BreadcrumbItem>
 
-                <BreadcrumbSeparator />
+              <BreadcrumbSeparator />
 
-                <BreadcrumbItem>
-                  <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />}>Overview</BreadcrumbLink>
-                </BreadcrumbItem>
+              <BreadcrumbItem>
+                <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />}>Overview</BreadcrumbLink>
+              </BreadcrumbItem>
 
-                <BreadcrumbSeparator />
+              <BreadcrumbSeparator />
 
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Project Settings</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+              <BreadcrumbItem>
+                <BreadcrumbPage>Project Settings</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
 
+          <main className="mx-auto max-w-6xl">
             <h1 className="mt-10 text-2xl font-semibold tracking-tight md:text-3xl">Project Settings</h1>
+
             <div className="mt-8">
               <ProjectSettingsContent
                 key={`${project.id}:${project.updatedAt}`}
@@ -608,9 +617,9 @@ export function ProjectDetailPage() {
                 canDelete={canDelete}
               />
             </div>
-          </>
-        )}
-      </main>
+          </main>
+        </>
+      )}
     </div>
   );
 }
