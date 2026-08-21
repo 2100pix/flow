@@ -18,10 +18,10 @@ import { useTask } from "@/features/tasks/hooks/use-task";
 
 function TaskDetailPageSkeleton() {
   return (
-    <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
-      <div className="shrink-0 px-6 pt-6 md:px-7 md:pt-8">
-        <Skeleton className="h-4 w-72" />
+    <div className="p-6 md:p-8">
+      <Skeleton className="h-4 w-72" />
 
+      <div className="mx-auto max-w-6xl">
         <div className="mt-8 flex items-center gap-2">
           <Skeleton className="h-6 w-16 rounded-lg" />
 
@@ -29,30 +29,32 @@ function TaskDetailPageSkeleton() {
 
           <Skeleton className="h-6 w-16 rounded-lg" />
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 px-6 py-6 md:px-7">
-        <Skeleton className="h-5 w-20 rounded-md" />
+        <div className="pt-10">
+          <div className="max-w-2xl">
+            <Skeleton className="h-6 w-20 rounded-md" />
 
-        <Skeleton className="mt-3 h-7 w-64" />
+            <Skeleton className="mt-3 h-9 w-80 max-w-full" />
 
-        <Skeleton className="mt-3 h-4 w-72" />
+            <Skeleton className="mt-4 h-5 w-full max-w-xl" />
+          </div>
 
-        <div className="mt-24">
-          <Skeleton className="h-4 w-20" />
+          <div className="mt-24 max-w-2xl">
+            <Skeleton className="h-4 w-20" />
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Skeleton className="h-8 w-20 rounded-lg" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Skeleton className="h-8 w-20 rounded-lg" />
 
-            <Skeleton className="h-8 w-24 rounded-lg" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
 
-            <Skeleton className="h-8 w-20 rounded-lg" />
+              <Skeleton className="h-8 w-20 rounded-lg" />
 
-            <Skeleton className="h-8 w-24 rounded-lg" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
 
-            <Skeleton className="h-8 w-24 rounded-lg" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
 
-            <Skeleton className="h-8 w-24 rounded-lg" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
+            </div>
           </div>
         </div>
       </div>
@@ -82,11 +84,13 @@ export function TaskDetailPage() {
   if (projectError || taskError || workflowError || !project || !task || !workflow || task.projectId !== project.id) {
     return (
       <div className="p-6 md:p-8">
-        <p className="text-sm text-destructive">Unable to load task.</p>
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm text-destructive">Unable to load task.</p>
 
-        <Link to={`/projects/${projectId}/board?view=list`} className="mt-2 inline-block text-sm text-muted-foreground hover:text-foreground">
-          Back to Task List
-        </Link>
+          <Link to={`/projects/${projectId}/board?view=list`} className="mt-2 inline-block text-sm text-muted-foreground hover:text-foreground">
+            Back to Task List
+          </Link>
+        </div>
       </div>
     );
   }
@@ -100,42 +104,42 @@ export function TaskDetailPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 px-6 pt-6 md:px-7 md:pt-8">
-        <div className="flex min-w-0 items-center gap-1">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem className="min-w-0">
-                <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-40 truncate sm:max-w-56" title={project.name}>
-                  {project.name}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
+    <div className="p-6 md:p-8">
+      <div className="flex min-w-0 items-center gap-1">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem className="min-w-0">
+              <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
+                {project.name}
+              </BreadcrumbLink>
+            </BreadcrumbItem>
 
-              <BreadcrumbSeparator />
+            <BreadcrumbSeparator />
 
-              <BreadcrumbItem>
-                <BreadcrumbLink render={<Link to={`/projects/${project.id}/board?view=list`} />}>Task List</BreadcrumbLink>
-              </BreadcrumbItem>
+            <BreadcrumbItem>
+              <BreadcrumbLink render={<Link to={`/projects/${project.id}/board?view=list`} />}>Task List</BreadcrumbLink>
+            </BreadcrumbItem>
 
-              <BreadcrumbSeparator />
+            <BreadcrumbSeparator />
 
-              <BreadcrumbItem className="min-w-0">
-                <span className="max-w-40 truncate text-muted-foreground sm:max-w-56" title={task.title}>
-                  {task.title}
-                </span>
-              </BreadcrumbItem>
+            <BreadcrumbItem className="min-w-0">
+              <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={task.title}>
+                {task.title}
+              </span>
+            </BreadcrumbItem>
 
-              <BreadcrumbSeparator />
+            <BreadcrumbSeparator />
 
-              <BreadcrumbItem>
-                <BreadcrumbPage>Overview</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Overview</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-          <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
-        </div>
+        <TaskActionsMenu task={task} align="start" onArchived={returnToTaskList} onDeleted={returnToTaskList} />
+      </div>
 
+      <div className="mx-auto max-w-6xl">
         <nav aria-label="Task detail sections" className="mt-8 flex items-center gap-1.5">
           <Button type="button" variant="secondary" size="xs" aria-current="page">
             Overview
@@ -149,11 +153,9 @@ export function TaskDetailPage() {
             Updates
           </Button>
         </nav>
-      </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} />
-      </main>
+        <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} presentation="page" />
+      </div>
     </div>
   );
 }

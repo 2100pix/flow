@@ -1,5 +1,19 @@
 import { useMemo, useState } from "react";
-import { CalendarBlankIcon, CheckIcon } from "@phosphor-icons/react";
+import {
+  CalendarBlankIcon,
+  CellSignalHighIcon,
+  CellSignalLowIcon,
+  CellSignalMediumIcon,
+  CellSignalNoneIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  CircleDashedIcon,
+  CircleIcon,
+  EyeIcon,
+  SpinnerGapIcon,
+  WarningCircleIcon,
+  XCircleIcon,
+} from "@phosphor-icons/react";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 
@@ -37,6 +51,51 @@ const priorityLabels: Record<TaskPriority, string> = {
   medium: "Medium Priority",
   high: "High Priority",
 };
+
+function TaskStatusIcon({ status }: { status: TaskStatus }) {
+  const className = "size-4 shrink-0";
+
+  switch (status) {
+    case "backlog":
+      return <CircleDashedIcon className={className} aria-hidden="true" />;
+
+    case "todo":
+      return <CircleIcon className={className} aria-hidden="true" />;
+
+    case "in_progress":
+      return <SpinnerGapIcon className={className} aria-hidden="true" />;
+
+    case "review":
+      return <EyeIcon className={className} aria-hidden="true" />;
+
+    case "done":
+      return <CheckCircleIcon weight="fill" className={className} aria-hidden="true" />;
+
+    case "cancelled":
+      return <XCircleIcon className={className} aria-hidden="true" />;
+  }
+}
+
+function TaskPriorityIcon({ priority }: { priority: TaskPriority | null }) {
+  const className = "size-4 shrink-0";
+
+  switch (priority) {
+    case null:
+      return <CellSignalNoneIcon className={className} aria-hidden="true" />;
+
+    case "urgent":
+      return <WarningCircleIcon className={className} aria-hidden="true" />;
+
+    case "low":
+      return <CellSignalLowIcon className={className} aria-hidden="true" />;
+
+    case "medium":
+      return <CellSignalMediumIcon className={className} aria-hidden="true" />;
+
+    case "high":
+      return <CellSignalHighIcon className={className} aria-hidden="true" />;
+  }
+}
 
 function parseTaskDate(value: string | null) {
   if (!value) {
@@ -332,7 +391,18 @@ function TaskAssigneeControl({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger disabled={disabled} render={<Button type="button" variant="outline" aria-label={assigneeLabel} title={assigneeLabel} className="h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal" />}>
+      <PopoverTrigger
+        disabled={disabled}
+        render={
+          <Button
+            type="button"
+            variant={selectedAssignees.length === 0 ? "outline" : "ghost"}
+            aria-label={assigneeLabel}
+            title={assigneeLabel}
+            className={selectedAssignees.length === 0 ? "h-8 w-auto justify-start gap-1.5 rounded-lg px-2.5 text-xs font-normal" : "h-8 w-auto justify-start border-0 bg-transparent p-0 shadow-none hover:bg-transparent focus-visible:bg-transparent"}
+          />
+        }
+      >
         {selectedAssignees.length === 0 ? (
           "Assignees"
         ) : (
@@ -478,8 +548,8 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
             </span>
           </div>
 
-          <div className={isPage ? "mt-12 max-w-2xl" : "mt-24"}>
-            {isPage ? <h2 className="mb-5 text-base font-medium tracking-tight">Properties</h2> : <p className="mb-2 text-xs text-muted-foreground">Properties</p>}
+          <div className={isPage ? "mt-24 max-w-2xl" : "mt-24"}>
+            <p className="mb-2 text-xs text-muted-foreground">Properties</p>
 
             <div className="flex flex-wrap items-center gap-2">
               <Select
@@ -495,7 +565,11 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   autosave.setStatus(nextStatus.statusKey as TaskStatus);
                 }}
               >
-                <SelectTrigger className="h-8 w-auto min-w-0 rounded-lg px-2.5 text-xs">{activeStatus?.label ?? "Status"}</SelectTrigger>
+                <SelectTrigger className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
+                  <TaskStatusIcon status={autosave.draft.status} />
+
+                  <span>{activeStatus?.label ?? "Status"}</span>
+                </SelectTrigger>
 
                 <SelectContent align="start" alignItemWithTrigger={false}>
                   <SelectGroup>
@@ -505,6 +579,8 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
 
                     {editableWorkflowStatuses.map((workflowStatus) => (
                       <SelectItem key={workflowStatus.statusKey} value={workflowStatus.statusKey}>
+                        <TaskStatusIcon status={workflowStatus.statusKey} />
+
                         {workflowStatus.label}
                       </SelectItem>
                     ))}
@@ -527,7 +603,11 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                   }
                 }}
               >
-                <SelectTrigger className="h-8 w-auto min-w-0 rounded-lg px-2.5 text-xs">{priorityLabel}</SelectTrigger>
+                <SelectTrigger className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
+                  <TaskPriorityIcon priority={autosave.draft.priority} />
+
+                  <span>{priorityLabel}</span>
+                </SelectTrigger>
 
                 <SelectContent align="start" alignItemWithTrigger={false}>
                   <SelectGroup>
@@ -535,15 +615,30 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
 
                     <SelectSeparator />
 
-                    <SelectItem value={NO_PRIORITY}>None</SelectItem>
+                    <SelectItem value={NO_PRIORITY}>
+                      <TaskPriorityIcon priority={null} />
+                      None
+                    </SelectItem>
 
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="urgent">
+                      <TaskPriorityIcon priority="urgent" />
+                      Urgent
+                    </SelectItem>
 
-                    <SelectItem value="low">Low Priority</SelectItem>
+                    <SelectItem value="low">
+                      <TaskPriorityIcon priority="low" />
+                      Low Priority
+                    </SelectItem>
 
-                    <SelectItem value="medium">Medium Priority</SelectItem>
+                    <SelectItem value="medium">
+                      <TaskPriorityIcon priority="medium" />
+                      Medium Priority
+                    </SelectItem>
 
-                    <SelectItem value="high">High Priority</SelectItem>
+                    <SelectItem value="high">
+                      <TaskPriorityIcon priority="high" />
+                      High Priority
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -595,9 +690,8 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
             </div>
           </div>
 
-          <div className={isPage ? "mt-8 max-w-2xl" : "mt-6"}>
+          <div className={isPage ? "mt-6 max-w-2xl" : "mt-6"}>
             <p className="mb-2 text-xs text-muted-foreground">Labels</p>
-
             <Button type="button" variant="outline" size="xs" disabled title="Coming soon" className="font-normal">
               + Add label
             </Button>
