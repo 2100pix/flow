@@ -124,7 +124,17 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
         dragDisabled ? "cursor-default active:cursor-default" : "",
       ].join(" ")}
     >
-      <div className={["relative z-10 flex min-h-0 flex-1 flex-col justify-between", "transition-[opacity,transform] duration-100 ease-out", isDragSource ? "pointer-events-none translate-y-0.5 opacity-0" : "translate-y-0 opacity-100"].join(" ")}>
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${task.title}`}
+        className={[
+          "relative z-10 flex min-h-0 flex-1 flex-col justify-between text-left outline-none",
+          "transition-[opacity,transform] duration-100 ease-out",
+          "focus-visible:ring-2 focus-visible:ring-ring",
+          isDragSource ? "pointer-events-none translate-y-0.5 opacity-0" : "translate-y-0 opacity-100",
+        ].join(" ")}
+      >
         <div>
           <div className="flex min-w-0 items-start justify-between gap-4">
             <span className="min-w-0 truncate text-xs text-muted-foreground">{task.taskCode}</span>
@@ -132,9 +142,7 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
             <TaskCardAssignees task={task} />
           </div>
 
-          <button type="button" onClick={onOpen} className="mt-1.5 block max-w-full rounded-sm text-left text-sm font-medium leading-5 outline-none hover:underline hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="line-clamp-2">{task.title}</span>
-          </button>
+          <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5">{task.title}</p>
         </div>
 
         <div className="flex min-w-0 items-center gap-5 text-xs text-muted-foreground">
@@ -143,9 +151,10 @@ function TaskBoardCard({ task, index, status, dragDisabled, onOpen }: { task: Ta
 
             <span className="truncate">{dueDate ?? "Due date"}</span>
           </div>
+
           <span className="truncate capitalize">{task.priority ?? "Priority"}</span>
         </div>
-      </div>
+      </button>
     </article>
   );
 }

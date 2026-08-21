@@ -76,7 +76,11 @@ function resolveProjectDueState(currentDueDate: string | null, currentDueDateMod
   };
 }
 
-async function resolveEffectiveProjectDueDate(db: ReturnType<typeof createDb>, projectId: string, storedDueDate: string | null) {
+async function resolveEffectiveProjectDueDate(db: ReturnType<typeof createDb>, projectId: string, storedDueDate: string | null, dueDateMode: ProjectDueDateMode) {
+  if (dueDateMode === "ongoing") {
+    return null;
+  }
+
   const [result] = await db
     .select({
       dueDate: max(tasks.dueDate),
@@ -613,8 +617,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     );
   }
 
-  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, project.dueDate);
-
+  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, project.dueDate, project.dueDateMode);
   const data: ProjectDetailDto = {
     id: project.id,
 
@@ -834,8 +837,7 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
     })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
 
-  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, dueDate);
-
+  const effectiveDueDate = await resolveEffectiveProjectDueDate(db, project.id, dueDate, dueDateMode);
   const data: ProjectDetailDto = {
     id: project.id,
 

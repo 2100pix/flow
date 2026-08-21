@@ -302,9 +302,9 @@ function TaskLeadControl({
         onValueChange(member.user.id);
       }}
     >
-      <SelectTrigger className="h-8 w-auto min-w-28 max-w-48 gap-1.5 rounded-lg px-2.5 text-xs">
+      <SelectTrigger className="h-8 w-auto min-w-28 max-w-48 rounded-lg px-2.5 text-xs">
         {selectedName ? (
-          <>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
             <Avatar size="sm" className="size-5" aria-hidden="true">
               {selectedAvatarUrl ? <AvatarImage src={selectedAvatarUrl} alt="" /> : null}
 
@@ -312,13 +312,13 @@ function TaskLeadControl({
             </Avatar>
 
             <span className="min-w-0 flex-1 truncate text-left">{selectedName}</span>
-          </>
+          </span>
         ) : (
-          <>
+          <span className="flex items-center gap-1.5">
             <UserCircleCheckIcon className="size-4 shrink-0" aria-hidden="true" />
 
             <span>Lead</span>
-          </>
+          </span>
         )}
       </SelectTrigger>
 
@@ -331,9 +331,10 @@ function TaskLeadControl({
 
           <SelectSeparator />
 
-          <SelectItem value={NO_LEAD}>
-            <UserCircleCheckIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-            No lead
+          <SelectItem value={NO_LEAD} className="h-8 gap-2 py-0 pr-8 pl-2">
+            <UserCircleCheckIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+
+            <span className="leading-none">No lead</span>
           </SelectItem>
 
           <SelectSeparator />
@@ -434,52 +435,58 @@ function TaskAssigneeControl({
         )}
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-56 p-1">
-        <div className="flex items-center gap-2 px-2 py-1.5 text-sm font-medium">
-          <UserCircleCheckIcon className="size-4" aria-hidden="true" />
-          Assignees
+      <PopoverContent align="start" className="w-56 p-0">
+        <div className="p-1">
+          <div className="px-1.5 py-1 text-xs text-muted-foreground">Assignees</div>
+
+          <div className="-mx-1 my-1 h-px bg-border" />
+
+          {members.length === 0 ? (
+            <p className="px-1.5 py-3 text-xs text-muted-foreground">No project members.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto">
+              {members.map((member) => {
+                const selected = selectedSet.has(member.user.id);
+
+                return (
+                  <button
+                    key={member.user.id}
+                    type="button"
+                    onClick={() => {
+                      onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
+                    }}
+                    className="
+                      relative
+                      flex h-8 w-full
+                      cursor-default
+                      items-center gap-1.5
+                      rounded-md
+                      py-1 pr-8 pl-1.5
+                      text-left text-sm
+                      outline-none
+                      hover:bg-foreground/10
+                      focus-visible:bg-foreground/10
+                    "
+                  >
+                    <Avatar size="sm" className="size-5" aria-hidden="true">
+                      {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
+
+                      <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                    </Avatar>
+
+                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+
+                    {selected ? (
+                      <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
+                        <CheckIcon className="size-4" aria-hidden="true" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        <div className="-mx-1 my-1 h-px bg-border" />
-
-        {members.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">No project members.</p>
-        ) : (
-          <div className="max-h-64 overflow-y-auto">
-            {members.map((member) => {
-              const selected = selectedSet.has(member.user.id);
-
-              return (
-                <button
-                  key={member.user.id}
-                  type="button"
-                  onClick={() => {
-                    onValueChange(selected ? value.filter((userId) => userId !== member.user.id) : [...value, member.user.id]);
-                  }}
-                  className="
-                    flex h-8 w-full
-                    items-center gap-2
-                    rounded-md px-2
-                    text-left text-sm
-                    outline-none
-                    hover:bg-muted
-                    focus-visible:bg-muted
-                  "
-                >
-                  <Avatar size="sm" className="size-5" aria-hidden="true">
-                    {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
-
-                    <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
-                  </Avatar>
-
-                  <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
-
-                  {selected ? <CheckIcon className="size-4 shrink-0" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </PopoverContent>
     </Popover>
   );

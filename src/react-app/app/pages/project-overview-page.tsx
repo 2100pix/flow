@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowRightIcon, ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ArrowSquareOutIcon, CalendarBlankIcon, CaretDownIcon, CopyIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Link, useParams } from "react-router";
 
@@ -318,8 +318,37 @@ function ProjectIdentityEditor({ projectId, name, description, projectCode, stat
           <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight md:text-3xl">{name}</h1>
         )}
 
-        <Badge variant="outline" className="font-mono text-[11px] tracking-wide text-muted-foreground">
+        <Badge
+          variant="outline"
+          render={
+            <button
+              type="button"
+              aria-label={`Copy project code ${projectCode}`}
+              title="Copy project code"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(projectCode)
+                  .then(() => {
+                    toast.success("Project code copied.");
+                  })
+                  .catch(() => {
+                    toast.error("Failed to copy project code.");
+                  });
+              }}
+            />
+          }
+          className="
+            cursor-copy
+            font-mono
+            text-[11px]
+            tracking-wide
+            text-muted-foreground
+            hover:bg-muted
+          "
+        >
           {projectCode}
+
+          <CopyIcon data-icon="inline-end" aria-hidden="true" />
         </Badge>
 
         <Badge variant="outline" className="lg:hidden" aria-label={`Project status: ${statusLabel}`}>
@@ -468,10 +497,9 @@ function DueDateField({ projectId, dueDate, dueDateMode, effectiveDueDate, canEd
 
   const effectiveSelected = parseProjectDate(effectiveDueDate);
 
-  const taskDerived = effectiveDueDate !== null && (dueDateMode !== "date" || effectiveDueDate !== dueDate);
+  const taskDerived = dueDateMode !== "ongoing" && effectiveDueDate !== null && (dueDateMode !== "date" || effectiveDueDate !== dueDate);
 
-  const label = effectiveDueDate ? formatProjectDate(effectiveDueDate) : dueDateMode === "ongoing" ? "Ongoing" : dueDateMode === "date" ? formatProjectDate(dueDate) : "Not set";
-
+  const label = dueDateMode === "ongoing" ? "Ongoing" : effectiveDueDate ? formatProjectDate(effectiveDueDate) : dueDateMode === "date" ? formatProjectDate(dueDate) : "Not set";
   function updateDueDate(nextDueDate: string | null, nextMode: ProjectDto["dueDateMode"]) {
     if (nextDueDate === dueDate && nextMode === dueDateMode) {
       setOpen(false);

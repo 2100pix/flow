@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { move } from "@dnd-kit/helpers";
 import { PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider } from "@dnd-kit/react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
@@ -61,6 +61,7 @@ function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | nul
 
 export function ProjectBoardPage() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [createTaskStatus, setCreateTaskStatus] = useState<TaskStatus | null>(null);
   const activeTaskId = searchParams.get("task");
@@ -105,7 +106,13 @@ export function ProjectBoardPage() {
       return next;
     });
   }
+  function openTaskFullscreen(taskId: string) {
+    if (!projectId) {
+      return;
+    }
 
+    void navigate(`/projects/${projectId}/tasks/${taskId}`);
+  }
   function closeTask() {
     setSearchParams(
       (current) => {
@@ -373,7 +380,7 @@ export function ProjectBoardPage() {
               </div>
             ) : (
               <div className="h-full min-w-0 pb-6 md:pb-8">
-                <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onCreateTask={openCreateTask} onOpenTask={openTask} />
+                <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onCreateTask={openCreateTask} onOpenTask={openTaskFullscreen} />
               </div>
             )}
           </div>
