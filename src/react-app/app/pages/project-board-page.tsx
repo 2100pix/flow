@@ -324,43 +324,41 @@ export function ProjectBoardPage() {
       <div className="flex h-[calc(100vh-3rem)] min-w-0 flex-col overflow-hidden">
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 px-6 pt-6 md:px-8 md:pt-8">
-            <div className="mx-auto w-full max-w-6xl">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className="min-w-0">
-                    <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
-                      {project.name}
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="min-w-0">
+                  <BreadcrumbLink render={<Link to={`/projects/${project.id}`} />} className="max-w-56 truncate sm:max-w-80" title={project.name}>
+                    {project.name}
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
 
-                  <BreadcrumbSeparator />
+                <BreadcrumbSeparator />
 
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Task List</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{view === "board" ? "Task Board" : "Task List"}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
 
-              <div className="mt-8">
-                <TaskWorkspaceToolbar
-                  view={view}
-                  status={activeStatus}
-                  statuses={columns}
-                  canCreateTask={canCreateTask}
-                  onCreateTask={() => {
-                    openCreateTask();
-                  }}
-                  onViewChange={changeView}
-                  onStatusChange={changeStatus}
-                />
-              </div>
+            <div className="mt-8">
+              <TaskWorkspaceToolbar
+                view={view}
+                status={activeStatus}
+                statuses={columns}
+                canCreateTask={canCreateTask}
+                onCreateTask={() => {
+                  openCreateTask();
+                }}
+                onViewChange={changeView}
+                onStatusChange={changeStatus}
+              />
             </div>
           </div>
 
           <div className="mt-4 min-h-0 flex-1">
             {view === "list" ? (
               <div className="h-full px-6 pb-6 md:px-8 md:pb-8">
-                <div className="mx-auto h-full w-full max-w-6xl overflow-y-auto overscroll-contain">
+                <div className="h-full w-full overflow-y-auto overscroll-contain">
                   <TaskListView
                     projectId={project.id}
                     statuses={visibleColumns}
@@ -374,7 +372,7 @@ export function ProjectBoardPage() {
                 </div>
               </div>
             ) : (
-              <div className="h-full min-w-0 pl-6 pb-6 md:pl-8 md:pb-8">
+              <div className="h-full min-w-0 pb-6 md:pb-8">
                 <TaskBoardView taskCounts={stableTaskCounts} statuses={visibleColumns} board={board} dragDisabled={!canEditTask || reorderTasks.isPending} canCreateTask={canCreateTask} onCreateTask={openCreateTask} onOpenTask={openTask} />
               </div>
             )}

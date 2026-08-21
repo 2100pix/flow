@@ -114,9 +114,9 @@ function getProjectMemberRoleLabel(member: ProjectMemberDto) {
 function OverviewSkeleton() {
   return (
     <div className="p-6 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-4 w-32" />
 
+      <div className="mx-auto max-w-6xl">
         <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
           <div className="min-w-0 max-w-2xl">
             <div className="flex items-center gap-3">
@@ -1144,22 +1144,23 @@ export function ProjectOverviewPage() {
 
   return (
     <div className="p-6 md:p-8">
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem className="min-w-0">
+            <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
+              {project.name}
+            </span>
+          </BreadcrumbItem>
+
+          <BreadcrumbSeparator />
+
+          <BreadcrumbItem>
+            <BreadcrumbPage>Overview</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       <div className="mx-auto max-w-6xl">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem className="min-w-0">
-              <span className="max-w-56 truncate text-muted-foreground sm:max-w-80" title={project.name}>
-                {project.name}
-              </span>
-            </BreadcrumbItem>
-
-            <BreadcrumbSeparator />
-
-            <BreadcrumbItem>
-              <BreadcrumbPage>Overview</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
         <section className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-20">
           <div className="min-w-0 max-w-2xl">
             <ProjectIdentityEditor
