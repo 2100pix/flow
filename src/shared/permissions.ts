@@ -21,6 +21,7 @@ export const permissionKeys = [
   "projects.view",
   "projects.create",
   "projects.edit",
+  "projects.assign",
   "projects.archive",
   "projects.delete",
   "projects.private.create",
@@ -141,6 +142,11 @@ export const permissionCatalog: Array<{
     key: "projects.edit",
     group: "Projects",
     label: "Edit projects",
+  },
+  {
+    key: "projects.assign",
+    group: "Projects",
+    label: "Assign projects",
   },
   {
     key: "projects.archive",

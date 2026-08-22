@@ -24,7 +24,27 @@ export const administratorPermissionGroups: readonly PermissionGroup[] = [
 
     label: "Manage workspace",
 
-    permissions: ["workspace.manage"],
+    permissions: [
+      "workspace.manage",
+
+      "settings.view",
+      "settings.manage",
+
+      "members.view",
+      "members.manage",
+
+      "teams.view",
+      "teams.manage",
+
+      "roles.view",
+      "roles.manage",
+
+      "task_fields.view",
+      "task_fields.manage",
+
+      "task_appearance.view",
+      "task_appearance.manage",
+    ],
   },
 
   {
@@ -52,14 +72,6 @@ export const administratorPermissionGroups: readonly PermissionGroup[] = [
   },
 
   {
-    id: "manage-settings",
-
-    label: "Manage settings",
-
-    permissions: ["settings.view", "settings.manage", "task_fields.view", "task_fields.manage", "task_appearance.view", "task_appearance.manage"],
-  },
-
-  {
     id: "manage-clients",
 
     label: "Manage clients",
@@ -72,7 +84,7 @@ export const administratorPermissionGroups: readonly PermissionGroup[] = [
 
     label: "Manage projects",
 
-    permissions: ["projects.view", "projects.create", "projects.edit", "projects.archive", "projects.delete", "projects.private.create", "projects.private.manage", "projects.private.view_all"],
+    permissions: ["projects.view", "projects.create", "projects.edit", "projects.assign", "projects.archive", "projects.delete", "projects.private.create", "projects.private.manage", "projects.private.view_all"],
   },
 
   {
@@ -125,6 +137,13 @@ export const projectPermissionGroups: readonly PermissionGroup[] = [
     label: "Edit projects",
 
     permissions: ["projects.edit"],
+  },
+  {
+    id: "assign-projects",
+
+    label: "Assign projects",
+
+    permissions: ["projects.assign"],
   },
 
   {

@@ -2,8 +2,8 @@ import { and, asc, eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { createRoleSchema, updateRoleSchema, type RoleDto } from "../../shared/contracts/roles";
-import { builtInRoleDefinitions, isReservedRoleName } from "../../shared/roles";
+import { createRoleSchema, reorderRolesSchema, updateRoleSchema, type RoleDto } from "../../shared/contracts/roles";
+import { builtInRoleDefinitions, getPermissionWeight, hasFullControl, isReservedRoleName } from "../../shared/roles";
 import { createDb } from "../db";
 import { workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
@@ -65,6 +65,7 @@ rolesRoutes.get("/", requireAuth, requirePermission("roles.view"), async (c) => 
     kind: "built_in",
     systemKey: role.key,
     permissions: [...role.permissions],
+    position: null,
     createdAt: null,
     updatedAt: null,
   }));
@@ -94,15 +95,43 @@ rolesRoutes.get("/", requireAuth, requirePermission("roles.view"), async (c) => 
       kind: "custom",
       systemKey: null,
       permissions: parsedPermissions,
-
+      position: role.position,
       createdAt: role.createdAt.toISOString(),
 
       updatedAt: role.updatedAt.toISOString(),
     });
   }
 
+  const manualOrderActive = customRoles.some((role) => role.position !== null);
+
+  const sortCustomRoles = (first: RoleDto, second: RoleDto) => {
+    if (manualOrderActive) {
+      const firstPosition = first.position ?? Number.MAX_SAFE_INTEGER;
+
+      const secondPosition = second.position ?? Number.MAX_SAFE_INTEGER;
+
+      if (firstPosition !== secondPosition) {
+        return firstPosition - secondPosition;
+      }
+    }
+
+    const weightDifference = getPermissionWeight(second.permissions) - getPermissionWeight(first.permissions);
+
+    if (weightDifference !== 0) {
+      return weightDifference;
+    }
+
+    return first.name.localeCompare(second.name);
+  };
+
+  const fullControlRoles = customRoles.filter((role) => hasFullControl(role.permissions)).sort(sortCustomRoles);
+  const regularRoles = customRoles.filter((role) => !hasFullControl(role.permissions)).sort(sortCustomRoles);
+  const ownerRole = builtInRoles.find((role) => role.systemKey === "owner");
+  const adminRole = builtInRoles.find((role) => role.systemKey === "admin");
+  const memberRole = builtInRoles.find((role) => role.systemKey === "member");
+
   return c.json({
-    data: [...builtInRoles, ...customRoles],
+    data: [...(ownerRole ? [ownerRole] : []), ...fullControlRoles, ...(adminRole ? [adminRole] : []), ...regularRoles, ...(memberRole ? [memberRole] : [])],
   });
 });
 
@@ -208,6 +237,7 @@ rolesRoutes.post(
       kind: "custom",
       systemKey: null,
       permissions: input.permissions,
+      position: null,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
@@ -218,6 +248,94 @@ rolesRoutes.post(
       },
       201,
     );
+  },
+);
+
+rolesRoutes.put(
+  "/reorder",
+
+  requireAuth,
+
+  requirePermission("roles.manage"),
+
+  zValidator(
+    "json",
+
+    reorderRolesSchema,
+
+    (result, c) => {
+      if (!result.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+
+              message: "Invalid role order",
+            },
+          },
+          400,
+        );
+      }
+    },
+  ),
+
+  async (c) => {
+    const auth = c.var.auth;
+
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const roles = await db
+      .select({
+        id: workspaceRoles.id,
+      })
+      .from(workspaceRoles)
+      .where(eq(workspaceRoles.workspaceId, auth.workspace.id));
+
+    const existingIds = new Set(roles.map((role) => role.id));
+
+    if (input.roleIds.length !== roles.length || input.roleIds.some((id) => !existingIds.has(id))) {
+      return c.json(
+        {
+          error: {
+            code: "ROLE_ORDER_MISMATCH",
+
+            message: "Role order must contain every custom role exactly once",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+
+    if (input.roleIds.length > 0) {
+      await db.batch(
+        input.roleIds.map((roleId, position) =>
+          db
+            .update(workspaceRoles)
+            .set({
+              position,
+
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(workspaceRoles.id, roleId),
+
+                eq(workspaceRoles.workspaceId, auth.workspace.id),
+              ),
+            ),
+        ),
+      );
+    }
+
+    return c.json({
+      data: {
+        success: true as const,
+      },
+    });
   },
 );
 
@@ -347,6 +465,7 @@ rolesRoutes.patch(
       name: input.name,
       kind: "custom",
       systemKey: null,
+      position: null,
       permissions: input.permissions,
       createdAt: role.createdAt.toISOString(),
       updatedAt: now.toISOString(),

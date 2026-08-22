@@ -24,7 +24,7 @@ const settingsSections = [
   },
   {
     id: "roles",
-    label: "Roles & Permissions",
+    label: "Roles",
   },
   {
     id: "task-fields",
@@ -241,13 +241,7 @@ export function SettingsPage() {
     return <MembersSettings />;
   }
   if (activeSection === "roles") {
-    return (
-      <div className="p-6 md:p-8">
-        <div className="mx-auto max-w-6xl">
-          <RolesSettings />
-        </div>
-      </div>
-    );
+    return <RolesSettings />;
   }
 
   return <PlaceholderSettings title={settingsSections.find((section) => section.id === activeSection)?.label ?? "Settings"} />;
