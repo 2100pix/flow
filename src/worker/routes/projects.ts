@@ -939,7 +939,7 @@ projectsRoutes.delete("/:id", requireAuth, requirePermission("projects.delete"),
   });
 });
 
-projectsRoutes.put("/:id/leads", requireAuth, requirePermission("projects.edit"), async (c) => {
+projectsRoutes.put("/:id/leads", requireAuth, requirePermission("projects.assign"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
 
@@ -1095,7 +1095,7 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
   });
 });
 
-projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edit"), async (c) => {
+projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.assign"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
   const db = createDb(c.env.flow_db);
@@ -1228,7 +1228,7 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.edi
   });
 });
 
-projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("projects.edit"), async (c) => {
+projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("projects.assign"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
   const userId = c.req.param("userId");

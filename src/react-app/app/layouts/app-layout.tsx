@@ -321,7 +321,7 @@ function SettingsSidebarNavigation({
     },
     {
       id: "roles",
-      label: "Roles & Permissions",
+      label: "Roles",
       href: "/settings?section=roles",
       icon: KeyIcon,
       visible: hasPermission(auth, "roles.view"),

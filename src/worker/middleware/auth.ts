@@ -97,7 +97,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     name: string;
   } | null = null;
 
-  if (result.role === "member" && result.customRoleId) {
+  if (result.customRoleId) {
     const roleRows = await db
       .select({
         id: workspaceRoles.id,
@@ -134,7 +134,9 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       );
     }
 
-    permissions = parsedPermissions;
+    if (result.role === "member") {
+      permissions = parsedPermissions;
+    }
   }
 
   c.set("auth", {

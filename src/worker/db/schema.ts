@@ -79,7 +79,7 @@ export const workspaceMembers = sqliteTable(
     check("workspace_members_role_check", sql`${table.role} in ('owner', 'admin', 'member')`),
 
     index("workspace_members_custom_role_id_idx").on(table.customRoleId),
-    check("workspace_members_custom_role_check", sql`${table.role} = 'member' or ${table.customRoleId} is null`),
+    check("workspace_members_custom_role_check", sql`${table.role} != 'admin' or ${table.customRoleId} is null`),
   ],
 );
 
@@ -255,7 +255,7 @@ export const workspaceRoles = sqliteTable(
       }),
 
     name: text("name").notNull(),
-
+    position: integer("position"),
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
@@ -264,7 +264,11 @@ export const workspaceRoles = sqliteTable(
       mode: "timestamp",
     }).notNull(),
   },
-  (table) => [index("workspace_roles_workspace_id_idx").on(table.workspaceId), uniqueIndex("workspace_roles_workspace_name_unique").on(table.workspaceId, table.name)],
+  (table) => [
+    index("workspace_roles_workspace_id_idx").on(table.workspaceId),
+    index("workspace_roles_workspace_position_idx").on(table.workspaceId, table.position),
+    uniqueIndex("workspace_roles_workspace_name_unique").on(table.workspaceId, table.name),
+  ],
 );
 
 export const workspaceRolePermissions = sqliteTable(

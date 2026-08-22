@@ -11,7 +11,9 @@ export type BuiltInRoleDefinition = {
 };
 
 export const viewOnlyWorkspacePermissions = ["dashboard.view", "members.view", "teams.view", "clients.view", "projects.view", "tasks.view"] as const satisfies readonly PermissionKey[];
-
+export function getPermissionWeight(permissions: readonly PermissionKey[]) {
+  return permissions.length;
+}
 export const adminPermissions = [
   "dashboard.view",
 
@@ -38,6 +40,7 @@ export const adminPermissions = [
   "projects.view",
   "projects.create",
   "projects.edit",
+  "projects.assign",
   "projects.archive",
   "projects.delete",
   "projects.private.create",

@@ -87,7 +87,7 @@ export function canManageProjectVisibility(permissions: readonly PermissionKey[]
  * checked separately with canViewProject().
  */
 export function canManageProjectMembers(permissions: readonly PermissionKey[], visibility: ProjectVisibility) {
-  if (!hasPermission(permissions, "projects.edit")) {
+  if (!hasPermission(permissions, "projects.assign")) {
     return false;
   }
 

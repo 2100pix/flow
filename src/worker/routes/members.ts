@@ -30,6 +30,18 @@ import { builtInRoleDefinitions } from "../../shared/roles";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
+async function isWorkspaceCreator(db: ReturnType<typeof createDb>, env: AppBindings, userId: string) {
+  const [user] = await db
+    .select({
+      discordUserId: users.discordUserId,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return user?.discordUserId === env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID;
+}
+
 type MembersEnv = {
   Bindings: AppBindings;
 
@@ -653,10 +665,24 @@ membersRoutes.delete(
 
   async (c) => {
     const auth = c.var.auth;
-
     const userId = c.req.param("userId");
-
     const db = createDb(c.env.flow_db);
+
+    const callerIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, auth.user.id);
+    const targetIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, userId);
+
+    if (targetIsWorkspaceCreator) {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_PROTECTED",
+
+            message: "The workspace creator cannot be removed",
+          },
+        },
+        409,
+      );
+    }
 
     if (userId === auth.user.id) {
       return c.json(
@@ -713,7 +739,7 @@ membersRoutes.delete(
       );
     }
 
-    if (target.role === "owner" && auth.workspace.role !== "owner") {
+    if (target.role === "owner" && !callerIsWorkspaceCreator) {
       return c.json(
         {
           error: {
@@ -899,8 +925,45 @@ membersRoutes.patch(
     const userId = c.req.param("userId");
     const input = c.req.valid("json");
     const db = createDb(c.env.flow_db);
-    const isSystemOwner = auth.workspace.role === "owner";
-    const isSystemAdministrator = isSystemOwner || auth.workspace.role === "admin";
+    const callerIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, auth.user.id);
+    const targetIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, userId);
+
+    if (targetIsWorkspaceCreator && input.kind === "built_in" && input.role !== "owner") {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_OWNER_PROTECTED",
+
+            message: "The workspace creator must remain an Owner",
+          },
+        },
+        409,
+      );
+    }
+    if (targetMember.role === "owner" && input.kind === "built_in" && input.role !== "owner" && !callerIsWorkspaceCreator) {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_REQUIRED",
+
+            message: "Only the workspace creator can remove Owner access",
+          },
+        },
+        403,
+      );
+    }
+    if (input.kind === "built_in" && input.role === "owner" && !callerIsWorkspaceCreator) {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_REQUIRED",
+
+            message: "Only the workspace creator can assign Owner",
+          },
+        },
+        403,
+      );
+    }
 
     const [targetMember] = await db
       .select({
@@ -1093,7 +1156,7 @@ membersRoutes.patch(
         }
       }
 
-      nextRole = "member";
+      nextRole = targetMember.role === "owner" ? "owner" : "member";
 
       nextCustomRoleId = customRole.id;
 
