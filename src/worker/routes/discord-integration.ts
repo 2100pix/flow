@@ -41,8 +41,7 @@ type DiscordGuildChannel = {
 const DISCORD_GUILD_CATEGORY_TYPE = 4;
 const DISCORD_CHAT_INPUT_COMMAND_TYPE = 1;
 
-const DISCORD_STRING_OPTION_TYPE = 3;
-
+const DISCORD_USER_OPTION_TYPE = 6;
 function formatDiscordChoiceName(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
@@ -142,11 +141,139 @@ discordIntegrationRoutes.post("/commands/register", requireAuth, requirePermissi
 
           required: true,
 
-          choices: taskPrioritySchema.options.map((value) => ({
-            name: formatDiscordChoiceName(value),
+          choices: [
+            {
+              name: "None",
+              value: "none",
+            },
 
-            value,
-          })),
+            ...taskPrioritySchema.options.map((value) => ({
+              name: formatDiscordChoiceName(value),
+
+              value,
+            })),
+          ],
+        },
+      ],
+    },
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setlead",
+
+      description: "Update the Flow Task lead",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "action",
+
+          description: "Set or clear the Task lead",
+
+          required: true,
+
+          choices: [
+            {
+              name: "Set",
+              value: "set",
+            },
+            {
+              name: "Clear",
+              value: "clear",
+            },
+          ],
+        },
+
+        {
+          type: DISCORD_USER_OPTION_TYPE,
+
+          name: "user",
+
+          description: "Discord user mapped to the Flow member",
+
+          required: false,
+        },
+      ],
+    },
+
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setassign",
+
+      description: "Add or remove a Flow Task assignee",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "action",
+
+          description: "Add or remove an assignee",
+
+          required: true,
+
+          choices: [
+            {
+              name: "Add",
+              value: "add",
+            },
+            {
+              name: "Remove",
+              value: "remove",
+            },
+          ],
+        },
+
+        {
+          type: DISCORD_USER_OPTION_TYPE,
+
+          name: "user",
+
+          description: "Discord user mapped to the Flow member",
+
+          required: true,
+        },
+      ],
+    },
+
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setstartdate",
+
+      description: "Update the Flow Task start date",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "date",
+
+          description: "Date in YYYY-MM-DD format",
+
+          required: true,
+        },
+      ],
+    },
+
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setduedate",
+
+      description: "Update or clear the Flow Task due date",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "date",
+
+          description: "YYYY-MM-DD or clear",
+
+          required: true,
         },
       ],
     },

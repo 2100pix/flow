@@ -1,8 +1,8 @@
 import * as z from "zod";
 
 export const taskStatusSchema = z.enum(["backlog", "todo", "in_progress", "review", "done", "cancelled"]);
-
 export const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
+export const taskDateSchema = z.iso.date();
 
 const taskAssigneeIdsSchema = z.array(z.string().trim().min(1)).superRefine((value, ctx) => {
   if (new Set(value).size !== value.length) {
@@ -21,8 +21,8 @@ export const createTaskSchema = z
     priority: taskPrioritySchema.nullable().optional(),
     assigneeIds: taskAssigneeIdsSchema.optional(),
     leadUserId: z.string().trim().min(1).nullable().optional(),
-    startDate: z.iso.date().optional(),
-    dueDate: z.iso.date().nullable().optional(),
+    startDate: taskDateSchema.optional(),
+    dueDate: taskDateSchema.nullable().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.startDate && value.dueDate && value.dueDate < value.startDate) {
@@ -53,8 +53,8 @@ export const updateTaskSchema = z
     priority: taskPrioritySchema.nullable().optional(),
     assigneeIds: taskAssigneeIdsSchema.optional(),
     leadUserId: z.string().trim().min(1).nullable().optional(),
-    startDate: z.iso.date().optional(),
-    dueDate: z.iso.date().nullable().optional(),
+    startDate: taskDateSchema.optional(),
+    dueDate: taskDateSchema.nullable().optional(),
     discordThreadUrl: taskDiscordThreadUrlSchema.nullable().optional(),
   })
   .superRefine((value, ctx) => {
