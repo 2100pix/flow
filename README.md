@@ -2,7 +2,7 @@
 
 Flow is a project and task management application for teams.
 
-**Current release:** `v0.1.0`
+**Current release:** `v0.2`
 
 Flow is currently being validated in a real workspace before broader product development.
 
@@ -101,8 +101,8 @@ Production migrations should only be applied after reviewing the pending migrati
 
 `v0.1.0` represents the first production-verified MVP baseline.
 
-Development after `v0.1.0` may introduce new product features, interface changes, and architecture changes without modifying the original MVP checkpoint.
+`v0.2` represents the expanded production release covering the redesigned project and task workspace, workspace administration, members, teams, expertise, roles and permissions, private project access, and role ordering.
 
 ## Status
 
-**MVP v0.1.0 — Production Verified**
+**Flow v0.2 — Production Verified**
