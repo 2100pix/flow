@@ -42,6 +42,69 @@ export const users = sqliteTable("users", {
   }),
 });
 
+export const workspaceDiscordIntegrations = sqliteTable(
+  "workspace_discord_integrations",
+  {
+    workspaceId: text("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    enabled: integer("enabled", {
+      mode: "boolean",
+    })
+      .default(false)
+      .notNull(),
+
+    guildId: text("guild_id"),
+
+    guildName: text("guild_name"),
+
+    projectCategoryId: text("project_category_id"),
+
+    connectedByUserId: text("connected_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
+    connectedAt: integer("connected_at", {
+      mode: "timestamp",
+    }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+
+  (table) => [
+    uniqueIndex("workspace_discord_integrations_guild_id_unique").on(table.guildId),
+
+    index("workspace_discord_integrations_connected_by_user_id_idx").on(table.connectedByUserId),
+
+    check(
+      "workspace_discord_integrations_enabled_requires_guild_check",
+      sql`
+          ${table.enabled} = 0
+          or
+          ${table.guildId} is not null
+        `,
+    ),
+
+    check(
+      "workspace_discord_integrations_category_requires_guild_check",
+      sql`
+          ${table.projectCategoryId} is null
+          or
+          ${table.guildId} is not null
+        `,
+    ),
+  ],
+);
+
 export const workspaceMembers = sqliteTable(
   "workspace_members",
   {

@@ -6,6 +6,7 @@ import { useMe } from "@/features/auth/hooks/use-me";
 import { RolesSettings } from "@/features/roles/components/roles-settings";
 import { TeamsSettings } from "@/features/teams/components/teams-settings";
 import { MembersSettings } from "@/features/members/components/members-settings";
+import { DiscordIntegrationSettings } from "@/features/integrations/discord/components/discord-integration-settings";
 
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 
@@ -25,6 +26,10 @@ const settingsSections = [
   {
     id: "roles",
     label: "Roles",
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
   },
 ] as const;
 
@@ -216,6 +221,10 @@ export function SettingsPage() {
   }
   if (activeSection === "roles") {
     return <RolesSettings />;
+  }
+
+  if (activeSection === "integrations") {
+    return <DiscordIntegrationSettings />;
   }
 
   return <GeneralSettings />;

@@ -284,7 +284,7 @@ function WorkspaceNavigation({ canViewClients, canViewProjects, expanded, onTogg
   );
 }
 
-type SettingsSectionId = "general" | "teams" | "members" | "roles";
+type SettingsSectionId = "general" | "teams" | "members" | "roles" | "integrations";
 
 function SettingsSidebarNavigation({
   auth,
@@ -325,6 +325,13 @@ function SettingsSidebarNavigation({
       href: "/settings?section=roles",
       icon: KeyIcon,
       visible: hasPermission(auth, "roles.view"),
+    },
+    {
+      id: "integrations",
+      label: "Integrations",
+      href: "/settings?section=integrations",
+      icon: SquaresFourIcon,
+      visible: hasPermission(auth, "settings.view"),
     },
   ] satisfies Array<{
     id: SettingsSectionId;
@@ -402,7 +409,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const location = useLocation();
   const settingsMode = location.pathname === "/settings";
   const rawSettingsSection = new URLSearchParams(location.search).get("section");
-  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "teams" || rawSettingsSection === "members" || rawSettingsSection === "roles" ? rawSettingsSection : "general";
+  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "teams" || rawSettingsSection === "members" || rawSettingsSection === "roles" || rawSettingsSection === "integrations" ? rawSettingsSection : "general";
   const activeProjectId = getActiveProjectId(location.pathname);
   const canViewHome = hasPermission(auth, "dashboard.view");
   const canViewClients = hasPermission(auth, "clients.view");
