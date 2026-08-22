@@ -12,6 +12,10 @@ import { teamsRoutes } from "./routes/teams";
 import { rolesRoutes } from "./routes/roles";
 import { discordIntegrationRoutes } from "./routes/discord-integration";
 
+import { createDb } from "./db";
+
+import { dispatchAllPendingDiscordOutboxEvents } from "./lib/discord-outbox";
+
 import { consumeDiscordOutboxBatch } from "./lib/discord-queue-consumer";
 import type { DiscordOutboxQueueMessage } from "./types/discord-queue";
 
@@ -92,5 +96,23 @@ export default {
 
   async queue(batch, env) {
     await consumeDiscordOutboxBatch(batch, env);
+  },
+
+  async scheduled(_controller, env) {
+    const db = createDb(env.flow_db);
+
+    const results = await dispatchAllPendingDiscordOutboxEvents(db, env.FLOW_DISCORD_QUEUE);
+
+    const failed = results.filter((result) => result.status === "error");
+
+    if (failed.length > 0) {
+      console.error("Scheduled Discord outbox dispatch completed with failures", {
+        selected: results.length,
+
+        failed: failed.length,
+
+        results: failed,
+      });
+    }
   },
 } satisfies ExportedHandler<AppBindings, DiscordOutboxQueueMessage>;

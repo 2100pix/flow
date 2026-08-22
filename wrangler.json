@@ -41,6 +41,9 @@
         "retry_delay": 30
       }
     ]
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   }
   /**
    * Smart Placement

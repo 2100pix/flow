@@ -33,6 +33,7 @@ import {
   workspaceRoles,
 } from "../db/schema";
 import { createId } from "../lib/id";
+import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
 import { provisionProjectDiscordForum } from "../lib/project-discord-forum";
 
@@ -361,6 +362,7 @@ projectsRoutes.post(
       projectId: id,
       nextNumber: 1,
     });
+    let discordOutboxEventId: string | null = null;
 
     if (discordIntegration?.enabled && discordIntegration.guildId) {
       const discordForumInsert = db.insert(projectDiscordForums).values({
@@ -383,8 +385,10 @@ projectsRoutes.post(
         updatedAt: now,
       });
 
+      discordOutboxEventId = createId("obx");
+
       const discordOutboxInsert = db.insert(discordOutboxEvents).values({
-        id: createId("obx"),
+        id: discordOutboxEventId,
 
         workspaceId: auth.workspace.id,
 
@@ -410,6 +414,39 @@ projectsRoutes.post(
       await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert, discordForumInsert, discordOutboxInsert]);
     } else {
       await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert]);
+    }
+
+    if (discordOutboxEventId) {
+      c.executionCtx.waitUntil(
+        dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, discordOutboxEventId)
+          .then((result) => {
+            if (result.status === "error") {
+              console.error("Immediate Discord outbox dispatch failed", {
+                projectId: id,
+
+                outboxEventId: discordOutboxEventId,
+
+                result,
+              });
+            }
+          })
+          .catch((error) => {
+            /*
+             * Project creation already committed.
+             *
+             * Do not invalidate the Flow mutation.
+             * The durable pending outbox event will
+             * be recovered by the scheduled sweeper.
+             */
+            console.error("Immediate Discord outbox dispatch crashed", {
+              projectId: id,
+
+              outboxEventId: discordOutboxEventId,
+
+              error,
+            });
+          }),
+      );
     }
 
     const data: ProjectDto = {

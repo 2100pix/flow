@@ -1,8 +1,7 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { createDb } from "../db";
 
-import { discordOutboxEvents } from "../db/schema";
-
+import { discordOutboxEvents, workspaceDiscordIntegrations } from "../db/schema";
 import type { DiscordOutboxQueueMessage } from "../types/discord-queue";
 
 type Db = ReturnType<typeof createDb>;
@@ -232,6 +231,44 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
 
   return results;
 }
+
+export async function dispatchAllPendingDiscordOutboxEvents(db: Db, queue: Queue<DiscordOutboxQueueMessage>, limit = 100) {
+  /*
+   * Automatic recovery only processes
+   * workspaces whose Discord integration
+   * is currently active.
+   *
+   * This prevents a disabled integration
+   * from generating Queue churn every time
+   * the scheduled sweeper runs.
+   */
+  const events = await db
+    .select({
+      id: discordOutboxEvents.id,
+    })
+    .from(discordOutboxEvents)
+    .innerJoin(workspaceDiscordIntegrations, eq(workspaceDiscordIntegrations.workspaceId, discordOutboxEvents.workspaceId))
+    .where(
+      and(
+        eq(discordOutboxEvents.status, "pending"),
+
+        eq(workspaceDiscordIntegrations.enabled, true),
+
+        isNotNull(workspaceDiscordIntegrations.guildId),
+      ),
+    )
+    .orderBy(asc(discordOutboxEvents.createdAt))
+    .limit(limit);
+
+  const results: DispatchDiscordOutboxResult[] = [];
+
+  for (const event of events) {
+    results.push(await dispatchDiscordOutboxEvent(db, queue, event.id));
+  }
+
+  return results;
+}
+
 export async function markDiscordOutboxEventDispatched(db: Db, eventId: string, dispatchAttemptCount: number) {
   const now = new Date();
 
