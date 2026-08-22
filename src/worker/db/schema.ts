@@ -947,3 +947,85 @@ export const discordOutboxEvents = sqliteTable(
     ),
   ],
 );
+
+export const taskDiscordThreads = sqliteTable(
+  "task_discord_threads",
+  {
+    taskId: text("task_id")
+      .primaryKey()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    guildId: text("guild_id").notNull(),
+
+    forumChannelId: text("forum_channel_id").notNull(),
+
+    threadId: text("thread_id").unique(),
+
+    initialMessageId: text("initial_message_id").unique(),
+
+    provisioningStatus: text("provisioning_status", {
+      enum: ["pending", "ready", "error"],
+    })
+      .default("pending")
+      .notNull(),
+
+    attemptCount: integer("attempt_count").default(0).notNull(),
+
+    lastError: text("last_error"),
+
+    lastAttemptAt: integer("last_attempt_at", {
+      mode: "timestamp",
+    }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+
+  (table) => [
+    index("task_discord_threads_guild_id_idx").on(table.guildId),
+
+    index("task_discord_threads_forum_channel_id_idx").on(table.forumChannelId),
+
+    index("task_discord_threads_provisioning_status_idx").on(table.provisioningStatus),
+
+    check(
+      "task_discord_threads_provisioning_status_check",
+      sql`
+          ${table.provisioningStatus}
+          in (
+            'pending',
+            'ready',
+            'error'
+          )
+        `,
+    ),
+
+    check(
+      "task_discord_threads_ready_requires_ids_check",
+      sql`
+        ${table.provisioningStatus} <> 'ready'
+        or (
+          ${table.forumChannelId} is not null
+          and
+          ${table.threadId} is not null
+          and
+          ${table.initialMessageId} is not null
+        )
+      `,
+    ),
+
+    check(
+      "task_discord_threads_attempt_count_check",
+      sql`
+          ${table.attemptCount} >= 0
+        `,
+    ),
+  ],
+);

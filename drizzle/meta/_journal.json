@@ -148,6 +148,20 @@
       "when": 1787399384487,
       "tag": "0020_silky_robin_chapel",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1787409042768,
+      "tag": "0021_blue_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1787409305308,
+      "tag": "0022_silly_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }
