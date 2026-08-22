@@ -328,8 +328,7 @@ export async function dispatchAllPendingDiscordOutboxEvents(db: Db, queue: Queue
       and(
         eq(discordOutboxEvents.status, "pending"),
 
-        eq(discordOutboxEvents.eventType, "project_forum.provision"),
-
+        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision"]),
         eq(workspaceDiscordIntegrations.enabled, true),
 
         isNotNull(workspaceDiscordIntegrations.guildId),

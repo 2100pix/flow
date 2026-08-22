@@ -9,6 +9,7 @@ import { createTaskResourceSchema, updateTaskResourceSchema, type TaskResourceDt
 import { createDb } from "../db";
 import { projectDiscordForums, projectMembers, projectTaskStatuses, projects, taskAssignees, taskResources, tasks, users, workspaceDiscordIntegrations, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
+import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
 import { provisionTaskDiscordThread } from "../lib/task-discord-thread";
@@ -781,6 +782,41 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
   }
 
   await c.env.flow_db.batch(statements);
+
+  /*
+   * D1 is authoritative.
+   *
+   * The Task, Discord mapping, and durable
+   * outbox intent are already committed.
+   *
+   * Queue dispatch below is only a latency
+   * optimization. Scheduled recovery remains
+   * responsible for closing any D1 → Queue
+   * crash gap.
+   */
+  if (discordOutboxEventId) {
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, discordOutboxEventId)
+        .then((result) => {
+          if (result.status === "error") {
+            console.error("Immediate Discord Task outbox dispatch failed", {
+              taskId: id,
+              projectId,
+              outboxEventId: discordOutboxEventId,
+              result,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("Immediate Discord Task outbox dispatch crashed", {
+            taskId: id,
+            projectId,
+            outboxEventId: discordOutboxEventId,
+            error,
+          });
+        }),
+    );
+  }
 
   const data = await loadTaskDto(db, id);
 
