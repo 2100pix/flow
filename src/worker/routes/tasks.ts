@@ -7,10 +7,12 @@ import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflo
 import { createTaskResourceSchema, updateTaskResourceSchema, type TaskResourceDto } from "../../shared/contracts/task-resources";
 
 import { createDb } from "../db";
-import { projectMembers, projectTaskStatuses, projects, taskAssignees, taskResources, tasks, users, workspaceMembers } from "../db/schema";
+import { projectDiscordForums, projectMembers, projectTaskStatuses, projects, taskAssignees, taskResources, tasks, users, workspaceDiscordIntegrations, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
+import { provisionTaskDiscordThread } from "../lib/task-discord-thread";
+
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
 
@@ -549,10 +551,40 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
     );
   }
 
+  const [discordIntegration] = await db
+    .select({
+      enabled: workspaceDiscordIntegrations.enabled,
+
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+    .limit(1);
+
+  let projectDiscordForum: {
+    guildId: string;
+    forumChannelId: string | null;
+  } | null = null;
+
+  if (discordIntegration?.enabled && discordIntegration.guildId) {
+    const [mapping] = await db
+      .select({
+        guildId: projectDiscordForums.guildId,
+
+        forumChannelId: projectDiscordForums.forumChannelId,
+      })
+      .from(projectDiscordForums)
+      .where(eq(projectDiscordForums.projectId, projectId))
+      .limit(1);
+
+    projectDiscordForum = mapping ?? null;
+  }
+
   const id = createId("tsk");
 
-  const description = input.description ? input.description : null;
+  const discordOutboxEventId = projectDiscordForum ? createId("obx") : null;
 
+  const description = input.description ? input.description : null;
   const priority = input.priority ?? null;
 
   const nowSeconds = Math.floor(now.getTime() / 1000);
@@ -659,6 +691,78 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
 
   const statements: D1PreparedStatement[] = [taskInsert, sequenceAdvance];
 
+  if (projectDiscordForum && discordOutboxEventId) {
+    statements.push(
+      c.env.flow_db
+        .prepare(
+          `
+          INSERT INTO task_discord_threads (
+            task_id,
+            guild_id,
+            forum_channel_id,
+            thread_id,
+            initial_message_id,
+            provisioning_status,
+            attempt_count,
+            last_error,
+            last_attempt_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            NULL,
+            NULL,
+            'pending',
+            0,
+            NULL,
+            NULL,
+            ?,
+            ?
+          )
+        `,
+        )
+        .bind(id, projectDiscordForum.guildId, projectDiscordForum.forumChannelId, nowSeconds, nowSeconds),
+    );
+
+    statements.push(
+      c.env.flow_db
+        .prepare(
+          `
+          INSERT INTO discord_outbox_events (
+            id,
+            workspace_id,
+            aggregate_type,
+            aggregate_id,
+            event_type,
+            status,
+            dispatch_attempt_count,
+            last_dispatch_error,
+            dispatched_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            'task_thread',
+            ?,
+            'task_thread.provision',
+            'pending',
+            0,
+            NULL,
+            NULL,
+            ?,
+            ?
+          )
+        `,
+        )
+        .bind(discordOutboxEventId, auth.workspace.id, id, nowSeconds, nowSeconds),
+    );
+  }
+
   for (const userId of assigneeIds) {
     statements.push(
       c.env.flow_db
@@ -698,6 +802,116 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
       data,
     },
     201,
+  );
+});
+
+tasksRoutes.post("/projects/:projectId/tasks/:taskId/discord-thread/provision", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const projectId = c.req.param("projectId");
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const [task] = await db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(projects.id, tasks.projectId))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(tasks.projectId, projectId),
+
+        eq(projects.workspaceId, auth.workspace.id),
+
+        isNull(projects.archivedAt),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await provisionTaskDiscordThread(db, c.env.DISCORD_BOT_TOKEN, taskId);
+
+  if (result.status === "ready") {
+    return c.json({
+      data: result,
+    });
+  }
+
+  if (result.status === "busy") {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_TASK_THREAD_PROVISIONING_BUSY",
+
+          message: "Discord Task thread provisioning is already in progress",
+        },
+      },
+      409,
+    );
+  }
+
+  if (result.status === "error") {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_TASK_THREAD_PROVISION_FAILED",
+
+          message: result.message,
+        },
+      },
+      502,
+    );
+  }
+
+  const error =
+    result.reason === "mapping_missing"
+      ? {
+          code: "DISCORD_TASK_THREAD_MAPPING_MISSING",
+
+          message: "This Task does not have a Discord thread provisioning mapping",
+        }
+      : result.reason === "integration_disabled"
+        ? {
+            code: "DISCORD_INTEGRATION_DISABLED",
+
+            message: "Discord integration is disabled",
+          }
+        : result.reason === "integration_not_connected"
+          ? {
+              code: "DISCORD_NOT_CONNECTED",
+
+              message: "Discord integration is not connected",
+            }
+          : {
+              code: "DISCORD_PROJECT_FORUM_NOT_READY",
+
+              message: "The Project Discord Forum is not ready",
+            };
+
+  return c.json(
+    {
+      error,
+    },
+    409,
   );
 });
 

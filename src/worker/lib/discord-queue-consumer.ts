@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { createDb } from "../db";
 
 import { discordOutboxEvents } from "../db/schema";
+import { provisionTaskDiscordThread } from "./task-discord-thread";
 
 import type { AppBindings } from "../types/app-env";
 
@@ -19,9 +20,9 @@ type ProcessDiscordQueueResult =
 
       eventId: string;
 
-      projectId: string;
+      aggregateType: "project_forum" | "task_thread";
 
-      forumChannelId: string;
+      aggregateId: string;
     }
   | {
       status: "deferred";
@@ -92,14 +93,100 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     };
   }
   if (event.aggregateType === "task_thread" && event.eventType === "task_thread.provision") {
-    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Task Discord thread provisioning is not active yet");
+    /*
+     * Receiving this Queue message proves that
+     * queue.send() succeeded.
+     *
+     * Persist that fact before performing the
+     * external Discord side effect.
+     */
+    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
 
+    const result = await provisionTaskDiscordThread(db, botToken, event.aggregateId);
+
+    if (result.status === "ready") {
+      await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+      return {
+        status: "processed",
+
+        eventId,
+
+        aggregateType: "task_thread",
+
+        aggregateId: result.taskId,
+      };
+    }
+
+    if (result.status === "busy") {
+      return {
+        status: "retry",
+
+        eventId,
+
+        reason: "task_thread_provisioning_busy",
+      };
+    }
+
+    if (result.status === "error") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Task thread provisioning failed: ${result.message}`);
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: result.message,
+      };
+    }
+
+    if (result.reason === "integration_disabled") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is disabled");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "integration_disabled",
+      };
+    }
+
+    if (result.reason === "integration_not_connected") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is not connected");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "integration_not_connected",
+      };
+    }
+
+    if (result.reason === "project_forum_not_ready") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because the Project Discord Forum is not ready");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "project_forum_not_ready",
+      };
+    }
+
+    /*
+     * mapping_missing is stale/non-provisionable
+     * state. The Queue delivery itself was valid,
+     * so keep the outbox dispatched and ACK it.
+     */
     return {
-      status: "deferred",
+      status: "ignored",
 
       eventId,
 
-      reason: "task_thread_provisioning_not_active",
+      reason: "mapping_missing",
     };
   }
 
@@ -133,9 +220,9 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       eventId,
 
-      projectId: result.projectId,
+      aggregateType: "project_forum",
 
-      forumChannelId: result.forumChannelId,
+      aggregateId: result.projectId,
     };
   }
 

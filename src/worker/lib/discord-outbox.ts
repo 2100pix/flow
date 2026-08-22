@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { createDb } from "../db";
 
 import { discordOutboxEvents, workspaceDiscordIntegrations } from "../db/schema";
@@ -286,13 +286,14 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
         eq(discordOutboxEvents.status, "pending"),
 
         /*
-         * Phase 3B creates durable Task intents
-         * before the Task Discord provisioner
-         * exists.
+         * Workspace-scoped manual dispatch may
+         * execute all Discord event types whose
+         * consumers are implemented.
          *
-         * Do not deliver those events yet.
+         * Global scheduled automation remains
+         * separately gated until Phase 3C.3.
          */
-        eq(discordOutboxEvents.eventType, "project_forum.provision"),
+        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision"]),
       ),
     )
     .orderBy(asc(discordOutboxEvents.createdAt))

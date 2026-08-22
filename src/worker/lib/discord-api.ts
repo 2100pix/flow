@@ -3,6 +3,7 @@ const DISCORD_API_BASE = "https://discord.com/api/v10";
 export const DISCORD_GUILD_CATEGORY_TYPE = 4;
 
 export const DISCORD_GUILD_FORUM_TYPE = 15;
+export const DISCORD_PUBLIC_THREAD_TYPE = 11;
 
 type DiscordErrorResponse = {
   code?: number;
@@ -15,6 +16,28 @@ export type DiscordGuildChannel = {
   type: number;
   topic?: string | null;
   parent_id?: string | null;
+};
+
+export type DiscordMessage = {
+  id: string;
+
+  channel_id: string;
+
+  content: string;
+};
+
+type DiscordActiveThreadsResponse = {
+  threads: DiscordGuildChannel[];
+};
+
+type DiscordArchivedThreadsResponse = {
+  threads: DiscordGuildChannel[];
+
+  has_more: boolean;
+};
+
+export type DiscordForumThread = DiscordGuildChannel & {
+  message: DiscordMessage;
 };
 
 export class DiscordApiError extends Error {
@@ -105,5 +128,63 @@ export function createDiscordForumChannel(botToken: string, input: CreateDiscord
     },
 
     body: JSON.stringify(body),
+  });
+}
+
+export function listActiveDiscordGuildThreads(botToken: string, guildId: string) {
+  return discordFetch<DiscordActiveThreadsResponse>(botToken, `/guilds/${encodeURIComponent(guildId)}/threads/active`);
+}
+
+export function listArchivedDiscordPublicThreads(botToken: string, forumChannelId: string) {
+  return discordFetch<DiscordArchivedThreadsResponse>(botToken, `/channels/${encodeURIComponent(forumChannelId)}/threads/archived/public?limit=100`);
+}
+
+export function getDiscordMessage(botToken: string, channelId: string, messageId: string) {
+  return discordFetch<DiscordMessage>(botToken, `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`);
+}
+
+type CreateDiscordForumThreadInput = {
+  forumChannelId: string;
+
+  name: string;
+
+  content: string;
+
+  allowedUserIds: readonly string[];
+
+  auditReason: string;
+};
+
+export function createDiscordForumThread(botToken: string, input: CreateDiscordForumThreadInput) {
+  return discordFetch<DiscordForumThread>(botToken, `/channels/${encodeURIComponent(input.forumChannelId)}/threads`, {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json",
+
+      "X-Audit-Log-Reason": encodeURIComponent(input.auditReason),
+    },
+
+    body: JSON.stringify({
+      name: input.name,
+
+      message: {
+        content: input.content,
+
+        /*
+         * User-generated task text must not
+         * be able to trigger @everyone,
+         * @here, or arbitrary mentions.
+         *
+         * Only explicit Flow assignee/lead
+         * Discord identities are allowed.
+         */
+        allowed_mentions: {
+          parse: [],
+
+          users: input.allowedUserIds,
+        },
+      },
+    }),
   });
 }
