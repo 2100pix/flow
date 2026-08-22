@@ -25,8 +25,6 @@ export function MyProjectsPage() {
 
         <div className="rounded-lg border border-dashed p-8">
           <p className="text-sm font-medium">My Projects</p>
-
-          <p className="mt-1 text-sm text-muted-foreground">This view will be implemented in a later milestone.</p>
         </div>
       </div>
     </div>

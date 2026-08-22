@@ -62,15 +62,11 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const [result] = await db
     .select({
       userId: users.id,
-
+      discordUserId: users.discordUserId,
       displayName: users.displayName,
-
       avatarUrl: users.avatarUrl,
-
       role: workspaceMembers.role,
-
       customRoleId: workspaceMembers.customRoleId,
-
       workspaceName: workspaces.name,
     })
     .from(sessions)
@@ -150,13 +146,10 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
 
     workspace: {
       id: workspaceId,
-
       name: result.workspaceName,
-
       role: result.role,
-
+      isCreator: result.discordUserId === c.env.FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID,
       customRole,
-
       permissions,
     },
   });

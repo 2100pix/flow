@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createRole, deleteRole, reorderRoles, updateRole } from "../api/roles";
+import type { ReorderRolesInput } from "../types";
 
-import { createRole, deleteRole, updateRole } from "../api/roles";
 import type { PermissionKey } from "../../../../shared/permissions";
 import { rolesQueryKey } from "./use-roles";
 
@@ -17,7 +18,19 @@ export function useCreateRole() {
     },
   });
 }
+export function useReorderRoles() {
+  const queryClient = useQueryClient();
 
+  return useMutation({
+    mutationFn: (input: ReorderRolesInput) => reorderRoles(input),
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: rolesQueryKey,
+      });
+    },
+  });
+}
 export function useUpdateRole() {
   const queryClient = useQueryClient();
 
