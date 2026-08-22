@@ -24,7 +24,24 @@
       "database_id": "bde92fb3-7da3-4384-b0c3-c942ee9b8d41",
       "migrations_dir": "drizzle"
     }
-  ]
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "FLOW_DISCORD_QUEUE",
+        "queue": "flow-discord"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "flow-discord",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 30
+      }
+    ]
+  }
   /**
    * Smart Placement
    * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

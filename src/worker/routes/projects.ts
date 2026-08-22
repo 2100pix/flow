@@ -15,9 +15,27 @@ import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflo
 import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
-import { clients, projectLeads, projectMembers, projectResources, projectTaskStatuses, projects, taskAssignees, tasks, users, workspaceMembers, workspaceRoles, projectTaskSequences } from "../db/schema";
+import {
+  clients,
+  discordOutboxEvents,
+  projectDiscordForums,
+  projectLeads,
+  projectMembers,
+  projectResources,
+  projectTaskSequences,
+  projectTaskStatuses,
+  projects,
+  taskAssignees,
+  tasks,
+  users,
+  workspaceDiscordIntegrations,
+  workspaceMembers,
+  workspaceRoles,
+} from "../db/schema";
 import { createId } from "../lib/id";
 import { filterAccessibleProjects, findAccessibleProject } from "../lib/project-access";
+import { provisionProjectDiscordForum } from "../lib/project-discord-forum";
+
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -274,6 +292,16 @@ projectsRoutes.post(
 
     const description = input.description || null;
 
+    const [discordIntegration] = await db
+      .select({
+        enabled: workspaceDiscordIntegrations.enabled,
+
+        guildId: workspaceDiscordIntegrations.guildId,
+      })
+      .from(workspaceDiscordIntegrations)
+      .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+      .limit(1);
+
     const projectInsert = db.insert(projects).values({
       id,
       workspaceId: auth.workspace.id,
@@ -334,7 +362,55 @@ projectsRoutes.post(
       nextNumber: 1,
     });
 
-    await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert]);
+    if (discordIntegration?.enabled && discordIntegration.guildId) {
+      const discordForumInsert = db.insert(projectDiscordForums).values({
+        projectId: id,
+
+        guildId: discordIntegration.guildId,
+
+        forumChannelId: null,
+
+        provisioningStatus: "pending",
+
+        attemptCount: 0,
+
+        lastError: null,
+
+        lastAttemptAt: null,
+
+        createdAt: now,
+
+        updatedAt: now,
+      });
+
+      const discordOutboxInsert = db.insert(discordOutboxEvents).values({
+        id: createId("obx"),
+
+        workspaceId: auth.workspace.id,
+
+        aggregateType: "project_forum",
+
+        aggregateId: id,
+
+        eventType: "project_forum.provision",
+
+        status: "pending",
+
+        dispatchAttemptCount: 0,
+
+        lastDispatchError: null,
+
+        dispatchedAt: null,
+
+        createdAt: now,
+
+        updatedAt: now,
+      });
+
+      await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert, discordForumInsert, discordOutboxInsert]);
+    } else {
+      await db.batch([projectInsert, memberInsert, leadInsert, workflowInsert, taskSequenceInsert]);
+    }
 
     const data: ProjectDto = {
       id,
@@ -374,6 +450,95 @@ projectsRoutes.post(
     );
   },
 );
+
+projectsRoutes.post("/:id/discord-forum/provision", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const projectId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [project] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
+    .limit(1);
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: "PROJECT_NOT_FOUND",
+
+          message: "Project not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await provisionProjectDiscordForum(db, c.env.DISCORD_BOT_TOKEN, projectId);
+
+  if (result.status === "ready") {
+    return c.json({
+      data: result,
+    });
+  }
+
+  if (result.status === "busy") {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_FORUM_PROVISIONING_BUSY",
+
+          message: "Discord Forum provisioning is already in progress",
+        },
+      },
+      409,
+    );
+  }
+
+  if (result.status === "error") {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_FORUM_PROVISION_FAILED",
+
+          message: result.message,
+        },
+      },
+      502,
+    );
+  }
+
+  const error =
+    result.reason === "mapping_missing"
+      ? {
+          code: "DISCORD_FORUM_MAPPING_MISSING",
+
+          message: "This project does not have a Discord Forum provisioning mapping",
+        }
+      : result.reason === "integration_disabled"
+        ? {
+            code: "DISCORD_INTEGRATION_DISABLED",
+
+            message: "Discord integration is disabled",
+          }
+        : {
+            code: "DISCORD_NOT_CONNECTED",
+
+            message: "Discord integration is not connected",
+          };
+
+  return c.json(
+    {
+      error,
+    },
+    409,
+  );
+});
 
 projectsRoutes.get("/:id/task-workflow", requireAuth, requirePermission("tasks.view"), async (c) => {
   const auth = c.var.auth;

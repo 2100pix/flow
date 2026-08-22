@@ -6,6 +6,7 @@ import { createDb } from "../db";
 import { workspaceDiscordIntegrations } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { zValidator } from "@hono/zod-validator";
+import { dispatchPendingDiscordOutboxEvents } from "../lib/discord-outbox";
 
 import type { AppBindings } from "../types/app-env";
 import type { AuthContext } from "../types/auth";
@@ -574,6 +575,34 @@ discordIntegrationRoutes.patch(
     return c.json(response);
   },
 );
+
+discordIntegrationRoutes.post("/outbox/dispatch", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const db = createDb(c.env.flow_db);
+
+  const results = await dispatchPendingDiscordOutboxEvents(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id);
+
+  const data = {
+    selected: results.length,
+
+    dispatched: results.filter((result) => result.status === "dispatched").length,
+
+    alreadyDispatched: results.filter((result) => result.status === "already_dispatched").length,
+
+    busy: results.filter((result) => result.status === "busy").length,
+
+    missing: results.filter((result) => result.status === "missing").length,
+
+    failed: results.filter((result) => result.status === "error").length,
+
+    results,
+  };
+
+  return c.json({
+    data,
+  });
+});
 
 discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"), async (c) => {
   const auth = c.var.auth;

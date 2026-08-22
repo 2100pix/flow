@@ -876,3 +876,74 @@ export const taskResources = sqliteTable(
     ),
   ],
 );
+
+export const discordOutboxEvents = sqliteTable(
+  "discord_outbox_events",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    aggregateType: text("aggregate_type", {
+      enum: ["project_forum"],
+    }).notNull(),
+
+    aggregateId: text("aggregate_id").notNull(),
+
+    eventType: text("event_type", {
+      enum: ["project_forum.provision"],
+    }).notNull(),
+
+    status: text("status", {
+      enum: ["pending", "dispatched"],
+    })
+      .default("pending")
+      .notNull(),
+
+    dispatchAttemptCount: integer("dispatch_attempt_count").default(0).notNull(),
+
+    lastDispatchError: text("last_dispatch_error"),
+
+    dispatchedAt: integer("dispatched_at", {
+      mode: "timestamp",
+    }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+
+  (table) => [
+    uniqueIndex("discord_outbox_events_event_aggregate_unique").on(table.eventType, table.aggregateId),
+
+    index("discord_outbox_events_status_idx").on(table.status),
+
+    index("discord_outbox_events_workspace_id_idx").on(table.workspaceId),
+
+    check(
+      "discord_outbox_events_status_check",
+      sql`
+          ${table.status}
+          in (
+            'pending',
+            'dispatched'
+          )
+        `,
+    ),
+
+    check(
+      "discord_outbox_events_dispatch_attempt_count_check",
+      sql`
+          ${table.dispatchAttemptCount} >= 0
+        `,
+    ),
+  ],
+);

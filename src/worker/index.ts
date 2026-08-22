@@ -11,6 +11,10 @@ import { workspaceRoutes } from "./routes/workspace";
 import { teamsRoutes } from "./routes/teams";
 import { rolesRoutes } from "./routes/roles";
 import { discordIntegrationRoutes } from "./routes/discord-integration";
+
+import { consumeDiscordOutboxBatch } from "./lib/discord-queue-consumer";
+import type { DiscordOutboxQueueMessage } from "./types/discord-queue";
+
 import { HTTPException } from "hono/http-exception";
 
 import type { AppBindings } from "./types/app-env";
@@ -81,4 +85,12 @@ app.onError((error, c) => {
   );
 });
 
-export default app;
+export default {
+  fetch(request, env, ctx) {
+    return app.fetch(request, env, ctx);
+  },
+
+  async queue(batch, env) {
+    await consumeDiscordOutboxBatch(batch, env);
+  },
+} satisfies ExportedHandler<AppBindings, DiscordOutboxQueueMessage>;
