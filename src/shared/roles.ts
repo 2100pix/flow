@@ -4,29 +4,77 @@ export type BuiltInRoleKey = "owner" | "admin" | "member";
 
 export type BuiltInRoleDefinition = {
   key: BuiltInRoleKey;
+
   name: string;
+
   permissions: readonly PermissionKey[];
 };
 
-const memberPermissions = ["members.view", "dashboard.view", "teams.view", "clients.view", "projects.view", "tasks.view", "tasks.create", "tasks.edit", "tasks.archive", "tasks.assign"] as const satisfies readonly PermissionKey[];
+export const viewOnlyWorkspacePermissions = ["dashboard.view", "members.view", "teams.view", "clients.view", "projects.view", "tasks.view"] as const satisfies readonly PermissionKey[];
+
+export const adminPermissions = [
+  "dashboard.view",
+
+  // Admin boleh masuk Settings untuk
+  // mengelola Members dan Teams,
+  // tetapi tidak Manage Settings.
+  "settings.view",
+
+  // Dibutuhkan untuk membaca pilihan
+  // role saat Edit Member.
+  "roles.view",
+
+  "members.view",
+  "members.manage",
+
+  "teams.view",
+  "teams.manage",
+
+  "clients.view",
+  "clients.create",
+  "clients.edit",
+  "clients.archive",
+
+  "projects.view",
+  "projects.create",
+  "projects.edit",
+  "projects.archive",
+  "projects.delete",
+  "projects.private.create",
+  "projects.private.manage",
+  "projects.private.view_all",
+
+  "tasks.view",
+  "tasks.create",
+  "tasks.edit",
+  "tasks.archive",
+  "tasks.delete",
+  "tasks.assign",
+] as const satisfies readonly PermissionKey[];
 
 export const builtInRoleDefinitions: readonly BuiltInRoleDefinition[] = [
   {
     key: "owner",
+
     name: "Owner",
+
     permissions: permissionKeys,
   },
 
   {
     key: "admin",
+
     name: "Admin",
-    permissions: permissionKeys,
+
+    permissions: adminPermissions,
   },
 
   {
     key: "member",
+
     name: "Member",
-    permissions: memberPermissions,
+
+    permissions: viewOnlyWorkspacePermissions,
   },
 ];
 
