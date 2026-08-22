@@ -1,29 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-
-import { CheckIcon, DotsThreeIcon, MagnifyingGlassIcon, PlusIcon, TrashIcon, UsersThreeIcon, XIcon } from "@phosphor-icons/react";
-
+import { useMemo, useState } from "react";
+import { CheckIcon, DotsThreeIcon, MagnifyingGlassIcon, PlusIcon, UsersThreeIcon, XIcon } from "@phosphor-icons/react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
 import { Button } from "@/components/ui/button";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { useMembers } from "@/features/members/hooks/use-members";
-
 import { useAddTeamMember, useCreateTeam, useDeleteTeam, useRemoveTeamMember, useUpdateTeam } from "@/features/teams/hooks/use-team-mutations";
-
 import { useTeams } from "@/features/teams/hooks/use-teams";
 
 import type { TeamDto } from "@/features/teams/types";
@@ -213,21 +201,11 @@ function ManageTeamDialog({
 
   const removeMember = useRemoveTeamMember();
 
-  const [name, setName] = useState(team.name);
+  const [name, setName] = useState(() => team.name);
 
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
 
   const [selectedUserId, setSelectedUserId] = useState("");
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setName(team.name);
-
-    setSelectedUserId("");
-  }, [open, team.name]);
 
   const assignedIds = useMemo(() => new Set(team.members.map((member) => member.user.id)), [team.members]);
 
@@ -516,8 +494,7 @@ function TeamRow({
         <p className="text-muted-foreground">{formatCreatedAt(team.createdAt)}</p>
       </div>
 
-      <ManageTeamDialog team={team} open={manageOpen} onOpenChange={setManageOpen} />
-
+      {manageOpen ? <ManageTeamDialog key={team.id} team={team} open onOpenChange={setManageOpen} /> : null}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
