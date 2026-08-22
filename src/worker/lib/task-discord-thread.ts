@@ -96,23 +96,28 @@ async function buildCanonicalTaskMessage(
     updatedAt: Date;
   },
 ) {
-  let leadDiscordUserId: string | null = null;
+  let lead: {
+    discordUserId: string | null;
+    displayName: string;
+  } | null = null;
 
   if (task.leadUserId) {
-    const [lead] = await db
+    const [resolvedLead] = await db
       .select({
         discordUserId: users.discordUserId,
+        displayName: users.displayName,
       })
       .from(users)
       .where(eq(users.id, task.leadUserId))
       .limit(1);
 
-    leadDiscordUserId = lead?.discordUserId ?? null;
+    lead = resolvedLead ?? null;
   }
 
   const assignees = await db
     .select({
       discordUserId: users.discordUserId,
+      displayName: users.displayName,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -155,12 +160,12 @@ async function buildCanonicalTaskMessage(
     lines.push(`Due Date: ${task.dueDate}`);
   }
 
-  if (leadDiscordUserId) {
-    lines.push(`Lead: <@${leadDiscordUserId}>`);
+  if (lead) {
+    lines.push(`Lead: ${lead.discordUserId ? `<@${lead.discordUserId}>` : lead.displayName}`);
   }
 
   if (assignees.length > 0) {
-    lines.push(`Assigned: ${assignees.map((assignee) => `<@${assignee.discordUserId}>`).join(", ")}`);
+    lines.push(`Assigned: ${assignees.map((assignee) => (assignee.discordUserId ? `<@${assignee.discordUserId}>` : assignee.displayName)).join(", ")}`);
   }
 
   if (resources.length > 0) {
@@ -193,8 +198,7 @@ async function buildCanonicalTaskMessage(
     safePrefix = `${safePrefix.slice(0, Math.max(0, available - 1)).trimEnd()}…`;
   }
 
-  const allowedUserIds = [leadDiscordUserId, ...assignees.map((assignee) => assignee.discordUserId)].filter((value): value is string => Boolean(value));
-
+  const allowedUserIds = [lead?.discordUserId ?? null, ...assignees.map((assignee) => assignee.discordUserId)].filter((value): value is string => Boolean(value));
   return {
     content: safePrefix ? `${safePrefix}\n${suffix}` : suffix,
 
