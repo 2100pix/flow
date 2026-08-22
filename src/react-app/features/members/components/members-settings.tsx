@@ -1,47 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useMemo, useState } from "react";
 import { DotsThreeIcon, MagnifyingGlassIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
-
-import { useRoles } from "@/features/roles/hooks/use-roles";
-
-import { useCreateWorkspaceExpertise, useUpdateMemberExpertise, useWorkspaceExpertise } from "@/features/members/hooks/use-workspace-expertise";
-
 import { toast } from "sonner";
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
 import { Badge } from "@/components/ui/badge";
-
 import { Button } from "@/components/ui/button";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
+import { useRoles } from "@/features/roles/hooks/use-roles";
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { useApproveMemberAccessRequest } from "@/features/members/hooks/use-approve-member-access-request";
-
 import { useMemberAccessRequests } from "@/features/members/hooks/use-member-access-requests";
-
 import { useMembers } from "@/features/members/hooks/use-members";
-
 import { useRejectMemberAccessRequest } from "@/features/members/hooks/use-reject-member-access-request";
-
 import { useUpdateMemberRole } from "@/features/members/hooks/use-update-member-role";
 import { useAddTeamMember, useRemoveTeamMember } from "@/features/teams/hooks/use-team-mutations";
 import { useRemoveWorkspaceMember, useUpdateWorkspaceMember } from "@/features/members/hooks/use-workspace-member-mutations";
+import { useTeams } from "@/features/teams/hooks/use-teams";
+import { useCreateWorkspaceExpertise, useUpdateMemberExpertise, useWorkspaceExpertise } from "@/features/members/hooks/use-workspace-expertise";
 
 import type { MemberAccessRequestDto, MemberDto } from "@/features/members/types";
 import type { TeamDto } from "@/features/teams/types";
-import { useTeams } from "@/features/teams/hooks/use-teams";
 
 function getInitials(displayName: string) {
   return (
@@ -87,6 +72,32 @@ function getRoleLabel(member: MemberDto) {
   }
 
   return "Member";
+}
+
+function haveSameIds(first: readonly string[], second: readonly string[]) {
+  if (first.length !== second.length) {
+    return false;
+  }
+
+  const secondSet = new Set(second);
+
+  return first.every((id) => secondSet.has(id));
+}
+
+function getMemberRoleRank(member: MemberDto, customRoleOrder: ReadonlyMap<string, number>) {
+  if (member.role === "admin") {
+    return 0;
+  }
+
+  if (member.role === "owner") {
+    return 1;
+  }
+
+  if (member.customRole) {
+    return 10 + (customRoleOrder.get(member.customRole.id) ?? 999);
+  }
+
+  return 10_000;
 }
 
 function PendingMembersDialog({
@@ -167,7 +178,7 @@ function EditMemberDialog({
   open,
   onOpenChange,
 }: {
-  member: MemberDto | null;
+  member: MemberDto;
 
   teams: TeamDto[];
 
@@ -177,59 +188,178 @@ function EditMemberDialog({
 }) {
   const updateMember = useUpdateWorkspaceMember();
 
-  const [displayName, setDisplayName] = useState("");
-  const { data: roles = [] } = useRoles();
-  const { data: expertise = [] } = useWorkspaceExpertise();
   const updateRole = useUpdateMemberRole();
+
   const updateExpertise = useUpdateMemberExpertise();
+
   const createExpertise = useCreateWorkspaceExpertise();
-  const [roleValue, setRoleValue] = useState("");
-  const [teamIds, setTeamIds] = useState<string[]>([]);
-  const [expertiseIds, setExpertiseIds] = useState<string[]>([]);
-  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
-  const [creatingExpertise, setCreatingExpertise] = useState(false);
-  const [expertiseName, setExpertiseName] = useState("");
+
   const addTeamMember = useAddTeamMember();
+
   const removeTeamMember = useRemoveTeamMember();
-  const originalTeamIds = teams.filter((team) => team.members.some((teamMember) => teamMember.user.id === member.id)).map((team) => team.id);
-  const teamIdsToAdd = teamIds.filter((id) => !originalTeamIds.includes(id));
-  const teamIdsToRemove = originalTeamIds.filter((id) => !teamIds.includes(id));
-  const roleInput = roleValue.startsWith("custom:")
-    ? {
-        kind: "custom" as const,
 
-        roleId: roleValue.slice("custom:".length),
+  const { data: roles = [] } = useRoles();
+
+  const { data: expertise = [] } = useWorkspaceExpertise();
+
+  const initialRoleValue = member.customRole ? `custom:${member.customRole.id}` : `built_in:${member.role}`;
+
+  const initialTeamIds = teams.filter((team) => team.members.some((teamMember) => teamMember.user.id === member.id)).map((team) => team.id);
+
+  const initialExpertiseIds = (member.expertise ?? []).map((item) => item.id);
+
+  const [displayName, setDisplayName] = useState(() => member.displayName);
+
+  const [roleValue, setRoleValue] = useState(() => initialRoleValue);
+
+  const [teamIds, setTeamIds] = useState<string[]>(() => initialTeamIds);
+
+  const [expertiseIds, setExpertiseIds] = useState<string[]>(() => initialExpertiseIds);
+
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
+
+  const [creatingExpertise, setCreatingExpertise] = useState(false);
+
+  const [expertiseName, setExpertiseName] = useState("");
+  function createNewExpertise() {
+    const name = expertiseName.trim();
+
+    if (!name || createExpertise.isPending) {
+      if (!name) {
+        setCreatingExpertise(false);
       }
-    : {
-        kind: "built_in" as const,
 
-        role: roleValue.slice("built_in:".length) as "owner" | "admin" | "member",
-      };
-
-  useEffect(() => {
-    if (!open || !member) {
       return;
     }
 
-    setDisplayName(member.displayName);
-    setRoleValue(member.customRole ? `custom:${member.customRole.id}` : `built_in:${member.role}`);
+    createExpertise.mutate(
+      {
+        name,
+      },
+      {
+        onSuccess: (created) => {
+          setExpertiseIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
 
-    setTeamIds(teams.filter((team) => team.members.some((teamMember) => teamMember.user.id === member.id)).map((team) => team.id));
+          setExpertiseName("");
 
-    setExpertiseIds(member.expertise.map((item) => item.id));
+          setCreatingExpertise(false);
+        },
 
-    setCreatingExpertise(false);
-
-    setExpertiseName("");
-  }, [member, open, teams]);
-
-  if (!member) {
-    return null;
+        onError: () => {},
+      },
+    );
   }
+  const normalizedName = displayName.trim();
 
-  const normalized = displayName.trim();
+  const displayNameChanged = normalizedName !== member.displayName;
 
-  const changed = normalized !== member.displayName && Boolean(normalized);
+  const roleChanged = roleValue !== initialRoleValue;
+
+  const teamChanged = !haveSameIds(teamIds, initialTeamIds);
+
+  const expertiseChanged = !haveSameIds(expertiseIds, initialExpertiseIds);
+
+  const teamIdsToAdd = teamIds.filter((teamId) => !initialTeamIds.includes(teamId));
+
+  const teamIdsToRemove = initialTeamIds.filter((teamId) => !teamIds.includes(teamId));
+
+  const hasChanges = Boolean(normalizedName) && (displayNameChanged || roleChanged || teamChanged || expertiseChanged);
+
+  const isSaving = updateMember.isPending || updateRole.isPending || updateExpertise.isPending || addTeamMember.isPending || removeTeamMember.isPending;
+
+  async function saveMember() {
+    if (!normalizedName || !hasChanges || isSaving) {
+      return;
+    }
+
+    try {
+      const operations: Promise<unknown>[] = [];
+
+      if (displayNameChanged) {
+        operations.push(
+          updateMember.mutateAsync({
+            userId: member.id,
+
+            input: {
+              displayName: normalizedName,
+            },
+          }),
+        );
+      }
+
+      if (roleChanged) {
+        if (roleValue.startsWith("custom:")) {
+          operations.push(
+            updateRole.mutateAsync({
+              userId: member.id,
+
+              input: {
+                kind: "custom",
+
+                roleId: roleValue.slice("custom:".length),
+              },
+            }),
+          );
+        } else {
+          const role = roleValue.slice("built_in:".length);
+
+          if (role !== "owner" && role !== "admin" && role !== "member") {
+            throw new Error("Invalid member role.");
+          }
+
+          operations.push(
+            updateRole.mutateAsync({
+              userId: member.id,
+
+              input: {
+                kind: "built_in",
+
+                role,
+              },
+            }),
+          );
+        }
+      }
+
+      if (expertiseChanged) {
+        operations.push(
+          updateExpertise.mutateAsync({
+            userId: member.id,
+
+            expertiseIds,
+          }),
+        );
+      }
+
+      for (const teamId of teamIdsToAdd) {
+        operations.push(
+          addTeamMember.mutateAsync({
+            teamId,
+
+            userId: member.id,
+          }),
+        );
+      }
+
+      for (const teamId of teamIdsToRemove) {
+        operations.push(
+          removeTeamMember.mutateAsync({
+            teamId,
+
+            userId: member.id,
+          }),
+        );
+      }
+
+      await Promise.all(operations);
+
+      toast.success("Member updated.");
+
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : "Failed to update member.");
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -247,15 +377,40 @@ function EditMemberDialog({
           <DialogTitle>Edit member</DialogTitle>
         </DialogHeader>
 
-        <div>
-          <label htmlFor="edit-member-display-name" className="text-sm text-muted-foreground">
-            Display name
-          </label>
+        <div className="space-y-6">
+          <div>
+            <label htmlFor="edit-member-display-name" className="text-sm text-muted-foreground">
+              Display name
+            </label>
+
+            <input
+              id="edit-member-display-name"
+              value={displayName}
+              maxLength={120}
+              disabled={isSaving}
+              onChange={(event) => {
+                setDisplayName(event.target.value);
+              }}
+              className="
+                mt-3 h-9 w-full
+                rounded-lg border
+                border-input
+                bg-background
+                px-3 text-sm
+                outline-none
+                focus-visible:border-ring
+                focus-visible:ring-3
+                focus-visible:ring-ring/50
+              "
+            />
+          </div>
+
           <div>
             <p className="text-sm text-muted-foreground">Role</p>
 
             <Select
               value={roleValue}
+              disabled={isSaving}
               onValueChange={(value) => {
                 setRoleValue(String(value));
               }}
@@ -285,11 +440,12 @@ function EditMemberDialog({
               </SelectContent>
             </Select>
           </div>
+
           <div>
             <p className="text-sm text-muted-foreground">Team</p>
 
             <Popover open={teamPickerOpen} onOpenChange={setTeamPickerOpen}>
-              <PopoverTrigger render={<Button type="button" variant="outline" className="mt-3 h-8 w-auto min-w-32 justify-start rounded-lg px-2.5 text-xs font-normal" />}>
+              <PopoverTrigger render={<Button type="button" variant="outline" disabled={isSaving} className="mt-3 h-8 w-auto min-w-32 justify-start rounded-lg px-2.5 text-xs font-normal" />}>
                 {teamIds.length === 0 ? "No team" : teamIds.length === 1 ? (teams.find((team) => team.id === teamIds[0])?.name ?? "1 team") : `${teamIds.length} teams`}
               </PopoverTrigger>
 
@@ -310,16 +466,16 @@ function EditMemberDialog({
                           setTeamIds(selected ? teamIds.filter((id) => id !== team.id) : [...teamIds, team.id]);
                         }}
                         className="
-                relative
-                flex h-8 w-full
-                items-center
-                rounded-md
-                py-1 pr-8 pl-1.5
-                text-left text-sm
-                outline-none
-                hover:bg-foreground/10
-                focus-visible:bg-foreground/10
-              "
+                            relative
+                            flex h-8 w-full
+                            items-center
+                            rounded-md
+                            py-1 pr-8 pl-1.5
+                            text-left text-sm
+                            outline-none
+                            hover:bg-foreground/10
+                            focus-visible:bg-foreground/10
+                          "
                       >
                         <span className="min-w-0 flex-1 truncate">{team.name}</span>
 
@@ -331,146 +487,115 @@ function EditMemberDialog({
               </PopoverContent>
             </Popover>
           </div>
-          <input
-            id="edit-member-display-name"
-            value={displayName}
-            maxLength={120}
-            disabled={updateMember.isPending}
-            onChange={(event) => {
-              setDisplayName(event.target.value);
-            }}
-            className="
-              mt-3 h-9 w-full
-              rounded-lg border
-              border-input
-              bg-background
-              px-3 text-sm
-              outline-none
-              focus-visible:border-ring
-              focus-visible:ring-3
-              focus-visible:ring-ring/50
-            "
-          />
-        </div>
 
-        <div>
-          <p className="text-sm text-muted-foreground">Expertise</p>
+          <div>
+            <p className="text-sm text-muted-foreground">Expertise</p>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {expertise.map((item) => {
-              const selected = expertiseIds.includes(item.id);
+            <div className="mt-3 flex flex-wrap gap-2">
+              {expertise.map((item) => {
+                const selected = expertiseIds.includes(item.id);
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setExpertiseIds(selected ? expertiseIds.filter((id) => id !== item.id) : [...expertiseIds, item.id]);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => {
+                      setExpertiseIds(selected ? expertiseIds.filter((id) => id !== item.id) : [...expertiseIds, item.id]);
+                    }}
+                    className="
+                        inline-flex h-7
+                        items-center gap-1.5
+                        rounded-full
+                        border border-border
+                        px-2.5 text-xs
+                        transition-colors
+                        hover:bg-muted
+                        disabled:opacity-50
+                      "
+                  >
+                    {item.name}
+
+                    {selected ? <CheckIcon className="size-3.5" aria-hidden="true" /> : null}
+                  </button>
+                );
+              })}
+
+              {creatingExpertise ? (
+                <form
+                  className="inline-flex"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+
+                    createNewExpertise();
                   }}
-                  className="
-            inline-flex h-7
-            items-center gap-1.5
-            rounded-full
-            border border-border
-            px-2.5
-            text-xs
-            transition-colors
-            hover:bg-muted
-          "
                 >
-                  {item.name}
-
-                  {selected ? <CheckIcon className="size-3.5" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-
-            {creatingExpertise ? (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-
-                  const name = expertiseName.trim();
-
-                  if (!name) {
-                    return;
-                  }
-
-                  createExpertise.mutate(
-                    {
-                      name,
-                    },
-                    {
-                      onSuccess: (created) => {
-                        setExpertiseIds((current) => [...current, created.id]);
-
-                        setExpertiseName("");
-
-                        setCreatingExpertise(false);
-                      },
-                    },
-                  );
-                }}
-              >
-                <input
-                  autoFocus
-                  value={expertiseName}
-                  maxLength={80}
-                  placeholder="Expertise name"
-                  disabled={createExpertise.isPending}
-                  onChange={(event) => {
-                    setExpertiseName(event.target.value);
-                  }}
-                  onBlur={() => {
-                    if (!expertiseName.trim()) {
-                      setCreatingExpertise(false);
-                    }
+                  <input
+                    autoFocus
+                    value={expertiseName}
+                    maxLength={80}
+                    placeholder="Create new"
+                    disabled={createExpertise.isPending}
+                    onChange={(event) => {
+                      setExpertiseName(event.target.value);
+                    }}
+                    onBlur={() => {
+                      createNewExpertise();
+                    }}
+                    className="
+                    h-7
+                    w-auto
+                    min-w-[92px]
+                    max-w-[220px]
+                    [field-sizing:content]
+                    rounded-full
+                    border border-input
+                    bg-background
+                    px-2.5
+                    text-xs
+                    outline-none
+                    placeholder:text-muted-foreground
+                    focus-visible:border-ring
+                    focus-visible:ring-2
+                    focus-visible:ring-ring/40
+                    disabled:opacity-50
+                  "
+                  />
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => {
+                    setCreatingExpertise(true);
                   }}
                   className="
-            h-7 w-36
-            rounded-full
-            border border-input
-            bg-background
-            px-2.5
-            text-xs
-            outline-none
-            focus-visible:border-ring
-            focus-visible:ring-2
-            focus-visible:ring-ring/40
-          "
-                />
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setCreatingExpertise(true);
-                }}
-                className="
-          inline-flex h-7
-          items-center gap-1
-          rounded-full
-          border border-border
-          px-2.5
-          text-xs
-          text-muted-foreground
-          transition-colors
-          hover:bg-muted
-          hover:text-foreground
-        "
-              >
-                <PlusIcon className="size-3.5" aria-hidden="true" />
-                Create new
-              </button>
-            )}
+                    inline-flex h-7
+                    items-center gap-1
+                    rounded-full
+                    border border-border
+                    px-2.5 text-xs
+                    text-muted-foreground
+                    transition-colors
+                    hover:bg-muted
+                    hover:text-foreground
+                  "
+                >
+                  <PlusIcon className="size-3.5" aria-hidden="true" />
+                  Create new
+                </button>
+              )}
+            </div>
+
+            {createExpertise.isError ? <p className="mt-2 text-xs text-destructive">{createExpertise.error.message}</p> : null}
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-6">
+        <div className="flex justify-end gap-2 pt-4">
           <Button
             type="button"
             variant="secondary"
-            disabled={updateMember.isPending}
+            disabled={isSaving}
             onClick={() => {
               onOpenChange(false);
             }}
@@ -480,31 +605,12 @@ function EditMemberDialog({
 
           <Button
             type="button"
-            disabled={!changed || updateMember.isPending}
+            disabled={!hasChanges || isSaving}
             onClick={() => {
-              updateMember.mutate(
-                {
-                  userId: member.id,
-
-                  input: {
-                    displayName: normalized,
-                  },
-                },
-                {
-                  onSuccess: () => {
-                    toast.success("Member updated.");
-
-                    onOpenChange(false);
-                  },
-
-                  onError: (error) => {
-                    toast.error(error instanceof Error && error.message ? error.message : "Failed to update member.");
-                  },
-                },
-              );
+              void saveMember();
             }}
           >
-            {updateMember.isPending ? "Saving…" : "Save member"}
+            {isSaving ? "Saving…" : "Save member"}
           </Button>
         </div>
       </DialogContent>
@@ -539,17 +645,20 @@ function MemberRow({
 
   const [removeOpen, setRemoveOpen] = useState(false);
 
-  const canSetAdmin = canManage && member.role !== "admin" && member.role !== "owner";
+  const canChangeBuiltInRole = canManage && member.role !== "owner";
+
+  const nextBuiltInRole = member.role === "admin" ? "member" : "admin";
+
+  const nextBuiltInRoleLabel = member.role === "admin" ? "Set member" : "Set admin";
 
   const canRemove = canManage && member.id !== currentUserId && (member.role !== "owner" || currentWorkspaceRole === "owner");
-
   return (
     <>
       <div
         className="
           group/member
           grid min-h-12
-          grid-cols-[minmax(220px,1.4fr)_40px_minmax(140px,0.9fr)_130px_minmax(160px,1fr)_80px]
+grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
           items-center
           border-b border-border/60
           text-sm
@@ -603,7 +712,7 @@ function MemberRow({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
-                  disabled={!canSetAdmin || updateRole.isPending}
+                  disabled={!canChangeBuiltInRole || updateRole.isPending}
                   onClick={() => {
                     updateRole.mutate(
                       {
@@ -612,12 +721,12 @@ function MemberRow({
                         input: {
                           kind: "built_in",
 
-                          role: "admin",
+                          role: nextBuiltInRole,
                         },
                       },
                       {
                         onSuccess: () => {
-                          toast.success("Member set as admin.");
+                          toast.success(nextBuiltInRole === "admin" ? "Member set as admin." : "Admin set as member.");
                         },
 
                         onError: (error) => {
@@ -627,7 +736,7 @@ function MemberRow({
                     );
                   }}
                 >
-                  Set admin
+                  {nextBuiltInRoleLabel}
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />
@@ -646,19 +755,41 @@ function MemberRow({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-          {member.expertise.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
+        <div className="flex min-w-0 items-center gap-1.5 overflow-visible">
+          {(member.expertise?.length ?? 0) === 0 ? null : (
             <>
               <Badge variant="outline" className="max-w-36 shrink-0 truncate font-normal">
-                {member.expertise[0].name}
+                {member.expertise?.[0]?.name}
               </Badge>
 
-              {member.expertise.length > 1 ? (
-                <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
-                  +{member.expertise.length - 1}
-                </Badge>
+              {(member.expertise?.length ?? 0) > 1 ? (
+                <HoverCard>
+                  <HoverCardTrigger
+                    render={
+                      <Badge
+                        variant="outline"
+                        className="
+                        shrink-0
+                        cursor-default
+                        text-[10px]
+                        font-normal
+                      "
+                      />
+                    }
+                  >
+                    +{(member.expertise?.length ?? 1) - 1}
+                  </HoverCardTrigger>
+
+                  <HoverCardContent align="start" side="top" className="w-auto max-w-72 p-2">
+                    <div className="flex max-w-64 flex-wrap gap-1.5">
+                      {member.expertise?.slice(1).map((expertise) => (
+                        <Badge key={expertise.id} variant="outline" className="font-normal">
+                          {expertise.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               ) : null}
             </>
           )}
@@ -666,9 +797,7 @@ function MemberRow({
         <p className="truncate text-muted-foreground">{getRoleLabel(member)}</p>
 
         <div className="min-w-0">
-          {teamNames.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
+          {teamNames.length === 0 ? null : (
             <div className="flex min-w-0 items-center gap-1.5">
               <span className="truncate">{teamNames[0]}</span>
 
@@ -683,8 +812,7 @@ function MemberRow({
 
         <p className="text-muted-foreground">{formatJoinedAt(member.joinedAt)}</p>
       </div>
-
-      <EditMemberDialog member={member} teams={teams} open={editOpen} onOpenChange={setEditOpen} />
+      {editOpen ? <EditMemberDialog key={member.id} member={member} teams={teams} open onOpenChange={setEditOpen} /> : null}
       <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -767,32 +895,20 @@ export function MembersSettings() {
 
     return map;
   }, [roles]);
-  function getMemberRoleRank(member: MemberDto) {
-    if (member.role === "admin") {
-      return 0;
-    }
 
-    if (member.role === "owner") {
-      return 1;
-    }
-
-    if (member.customRole) {
-      return 10 + (customRoleOrder.get(member.customRole.id) ?? 999);
-    }
-
-    return 10_000;
-  }
   const filteredMembers = useMemo(() => {
     const filtered = normalizedQuery
       ? members.filter((member) => {
           const teamNames = teamsByUserId.get(member.id) ?? [];
 
-          return [member.displayName, getRoleLabel(member), ...teamNames, ...member.expertise.map((item) => item.name)].some((value) => value.toLowerCase().includes(normalizedQuery));
+          const expertiseNames = (member.expertise ?? []).map((item) => item.name);
+
+          return [member.displayName, getRoleLabel(member), ...teamNames, ...expertiseNames].some((value) => value.toLowerCase().includes(normalizedQuery));
         })
       : [...members];
 
     return filtered.sort((first, second) => {
-      const roleDifference = getMemberRoleRank(first) - getMemberRoleRank(second);
+      const roleDifference = getMemberRoleRank(first, customRoleOrder) - getMemberRoleRank(second, customRoleOrder);
 
       if (roleDifference !== 0) {
         return roleDifference;
@@ -876,8 +992,7 @@ export function MembersSettings() {
             <div
               className="
                 grid h-8
-                grid-cols-[minmax(220px,1.4fr)_40px_minmax(140px,0.9fr)_130px_minmax(160px,1fr)_80px]
-                items-center
+grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]                items-center
                 border-b border-border
                 text-[11px]
                 text-muted-foreground

@@ -4,6 +4,7 @@ import { Hono } from "hono";
 
 import { updateWorkspaceMemberRoleSchema, updateWorkspaceMemberSchema, createWorkspaceExpertiseSchema, updateMemberExpertiseSchema, type WorkspaceExpertiseDto, type MemberAccessRequestDto, type MemberDto } from "../../shared/contracts/members";
 import { createDb } from "../db";
+import { createId } from "../lib/id";
 import {
   projectLeads,
   projectMembers,

@@ -64,7 +64,7 @@ export type MemberDto = {
     name: string;
   } | null;
 
-  expertise: WorkspaceExpertiseDto[];
+  expertise?: WorkspaceExpertiseDto[];
 
   joinedAt?: string;
 };
