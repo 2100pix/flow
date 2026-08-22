@@ -1,45 +1,86 @@
-import * as z from "zod";
+import { permissionKeys, type PermissionKey } from "./permissions";
 
-import { permissionKeyListSchema, type PermissionKey } from "../permissions";
-import type { BuiltInRoleKey } from "../roles";
+export type BuiltInRoleKey = "owner" | "admin" | "member";
 
-export const createRoleSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+export type BuiltInRoleDefinition = {
+  key: BuiltInRoleKey;
 
-  permissions: permissionKeyListSchema,
-});
-
-export const updateRoleSchema = createRoleSchema;
-
-export type CreateRoleInput = z.infer<typeof createRoleSchema>;
-
-export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
-
-export type RoleDto = {
-  id: string;
   name: string;
 
-  kind: "built_in" | "custom";
-
-  systemKey: BuiltInRoleKey | null;
-
-  permissions: PermissionKey[];
-
-  createdAt: string | null;
-
-  updatedAt: string | null;
+  permissions: readonly PermissionKey[];
 };
 
-export type RolesResponse = {
-  data: RoleDto[];
-};
+export const viewOnlyWorkspacePermissions = ["dashboard.view", "members.view", "teams.view", "clients.view", "projects.view", "tasks.view"] as const satisfies readonly PermissionKey[];
 
-export type RoleResponse = {
-  data: RoleDto;
-};
+export const adminPermissions = [
+  "dashboard.view",
 
-export type DeleteRoleResponse = {
-  data: {
-    success: true;
-  };
-};
+  // Required to enter workspace
+  // Settings shell.
+  "settings.view",
+
+  "members.view",
+  "members.manage",
+
+  "teams.view",
+  "teams.manage",
+
+  "clients.view",
+  "clients.create",
+  "clients.edit",
+  "clients.archive",
+
+  "projects.view",
+  "projects.create",
+  "projects.edit",
+  "projects.archive",
+  "projects.delete",
+  "projects.private.create",
+  "projects.private.manage",
+  "projects.private.view_all",
+
+  "tasks.view",
+  "tasks.create",
+  "tasks.edit",
+  "tasks.archive",
+  "tasks.delete",
+  "tasks.assign",
+] as const satisfies readonly PermissionKey[];
+
+export const builtInRoleDefinitions: readonly BuiltInRoleDefinition[] = [
+  {
+    key: "owner",
+
+    name: "Owner",
+
+    permissions: permissionKeys,
+  },
+
+  {
+    key: "admin",
+
+    name: "Admin",
+
+    permissions: adminPermissions,
+  },
+
+  {
+    key: "member",
+
+    name: "Member",
+
+    permissions: viewOnlyWorkspacePermissions,
+  },
+];
+
+export function isReservedRoleName(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  return builtInRoleDefinitions.some((role) => role.name.toLowerCase() === normalized);
+}
+
+export function hasFullControl(permissions: readonly PermissionKey[]) {
+  const selected = new Set(permissions);
+
+  return permissionKeys.every((permission) => selected.has(permission));
+}

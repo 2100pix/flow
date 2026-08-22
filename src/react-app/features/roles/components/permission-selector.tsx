@@ -1,67 +1,133 @@
-import { permissionCatalog, permissionKeys, type PermissionKey } from "../../../../shared/permissions";
+import { CheckIcon } from "@phosphor-icons/react";
 
-const permissionGroups = Array.from(new Set(permissionCatalog.map((permission) => permission.group)));
+import type { PermissionKey } from "../../../../shared/permissions";
 
-export function PermissionSelector({ value, onChange, disabled = false }: { value: PermissionKey[]; onChange: (permissions: PermissionKey[]) => void; disabled?: boolean }) {
+import { administratorPermissionGroups, clientPermissionGroups, projectPermissionGroups, taskPermissionGroups, viewOnlyPermissionGroups, type PermissionGroup } from "../../../../shared/role-permission-groups";
+
+import { cn } from "@/lib/utils";
+
+function hasAllPermissions(value: readonly PermissionKey[], group: readonly PermissionKey[]) {
   const selected = new Set(value);
 
-  const fullControl = permissionKeys.every((permission) => selected.has(permission));
+  return group.every((permission) => selected.has(permission));
+}
 
-  function togglePermission(permission: PermissionKey) {
-    const next = new Set(value);
+function PermissionChip({
+  group,
+  value,
+  onChange,
+  disabled,
+}: {
+  group: PermissionGroup;
 
-    if (next.has(permission)) {
-      next.delete(permission);
-    } else {
-      next.add(permission);
+  value: PermissionKey[];
+
+  onChange: (permissions: PermissionKey[]) => void;
+
+  disabled: boolean;
+}) {
+  const selected = hasAllPermissions(value, group.permissions);
+
+  function toggle() {
+    if (disabled) {
+      return;
     }
 
-    onChange(permissionKeys.filter((key) => next.has(key)));
+    const next = new Set(value);
+
+    if (selected) {
+      for (const permission of group.permissions) {
+        next.delete(permission);
+      }
+    } else {
+      for (const permission of group.permissions) {
+        next.add(permission);
+      }
+    }
+
+    onChange([...next]);
   }
 
   return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={toggle}
+      className={cn(
+        `
+          inline-flex h-7
+          items-center gap-1.5
+          rounded-full
+          border border-border
+          px-2.5
+          text-xs
+          transition-colors
+        `,
+
+        selected ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+
+        disabled && "cursor-default opacity-60",
+      )}
+    >
+      {group.label}
+
+      {selected ? <CheckIcon className="size-3.5" aria-hidden="true" /> : null}
+    </button>
+  );
+}
+
+function PermissionSection({
+  title,
+  groups,
+  value,
+  onChange,
+  disabled,
+}: {
+  title: string;
+
+  groups: readonly PermissionGroup[];
+
+  value: PermissionKey[];
+
+  onChange: (permissions: PermissionKey[]) => void;
+
+  disabled: boolean;
+}) {
+  return (
+    <section>
+      <p className="text-sm text-muted-foreground">{title}</p>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {groups.map((group) => (
+          <PermissionChip key={group.id} group={group} value={value} onChange={onChange} disabled={disabled} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function PermissionSelector({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: PermissionKey[];
+
+  onChange: (permissions: PermissionKey[]) => void;
+
+  disabled?: boolean;
+}) {
+  return (
     <div className="space-y-5">
-      <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
-        <input
-          type="checkbox"
-          checked={fullControl}
-          disabled={disabled}
-          onChange={(event) => {
-            onChange(event.target.checked ? [...permissionKeys] : []);
-          }}
-        />
+      <PermissionSection title="Administrator" groups={administratorPermissionGroups} value={value} onChange={onChange} disabled={disabled} />
 
-        <div>
-          <p className="text-sm font-medium">Full control</p>
+      <PermissionSection title="Clients" groups={clientPermissionGroups} value={value} onChange={onChange} disabled={disabled} />
 
-          <p className="text-xs text-muted-foreground">Enable every Flow permission for this role.</p>
-        </div>
-      </label>
+      <PermissionSection title="Projects" groups={projectPermissionGroups} value={value} onChange={onChange} disabled={disabled} />
 
-      {permissionGroups.map((group) => (
-        <div key={group} className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">{group}</p>
+      <PermissionSection title="Tasks" groups={taskPermissionGroups} value={value} onChange={onChange} disabled={disabled} />
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            {permissionCatalog
-              .filter((permission) => permission.group === group)
-              .map((permission) => (
-                <label key={permission.key} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    disabled={disabled}
-                    checked={selected.has(permission.key)}
-                    onChange={() => {
-                      togglePermission(permission.key);
-                    }}
-                  />
-
-                  <span>{permission.label}</span>
-                </label>
-              ))}
-          </div>
-        </div>
-      ))}
+      <PermissionSection title="View only" groups={viewOnlyPermissionGroups} value={value} onChange={onChange} disabled={disabled} />
     </div>
   );
 }
