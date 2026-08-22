@@ -46,7 +46,7 @@ type ProcessDiscordQueueResult =
     };
 
 async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: DiscordOutboxQueueMessage): Promise<ProcessDiscordQueueResult> {
-  if (!body || typeof body.outboxEventId !== "string" || !body.outboxEventId) {
+  if (!body || typeof body.outboxEventId !== "string" || !body.outboxEventId || typeof body.dispatchAttemptCount !== "number" || !Number.isInteger(body.dispatchAttemptCount) || body.dispatchAttemptCount < 1) {
     return {
       status: "ignored",
 
@@ -67,6 +67,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       aggregateId: discordOutboxEvents.aggregateId,
 
       eventType: discordOutboxEvents.eventType,
+      dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
     })
     .from(discordOutboxEvents)
     .where(eq(discordOutboxEvents.id, eventId))
@@ -81,10 +82,17 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       reason: "event_missing",
     };
   }
+  if (event.dispatchAttemptCount !== body.dispatchAttemptCount) {
+    return {
+      status: "ignored",
 
+      eventId,
+
+      reason: "stale_dispatch_attempt",
+    };
+  }
   if (event.aggregateType !== "project_forum" || event.eventType !== "project_forum.provision") {
-    await markDiscordOutboxEventDispatched(db, eventId);
-
+    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
     return {
       status: "ignored",
 
@@ -102,13 +110,11 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
    * producer did not manage to persist its
    * dispatched state before this consumer ran.
    */
-  await markDiscordOutboxEventDispatched(db, eventId);
-
+  await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
   const result = await provisionProjectDiscordForum(db, botToken, event.aggregateId);
 
   if (result.status === "ready") {
-    await reconcileDiscordOutboxEventDispatched(db, eventId);
-
+    await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
     return {
       status: "processed",
 
@@ -131,8 +137,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   }
 
   if (result.status === "error") {
-    await returnDiscordOutboxEventToPending(db, eventId, `Forum provisioning failed: ${result.message}`);
-
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Forum provisioning failed: ${result.message}`);
     return {
       status: "deferred",
 
@@ -143,8 +148,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   }
 
   if (result.reason === "integration_disabled") {
-    await returnDiscordOutboxEventToPending(db, eventId, "Deferred because Discord integration is disabled");
-
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is disabled");
     return {
       status: "deferred",
 
@@ -155,8 +159,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   }
 
   if (result.reason === "integration_not_connected") {
-    await returnDiscordOutboxEventToPending(db, eventId, "Deferred because Discord integration is not connected");
-
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is not connected");
     return {
       status: "deferred",
 

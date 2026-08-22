@@ -1,5 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
-
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { createDb } from "../db";
 
 import { discordOutboxEvents } from "../db/schema";
@@ -147,6 +146,8 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   try {
     await queue.send({
       outboxEventId: eventId,
+
+      dispatchAttemptCount: claimed.attemptCount,
     });
   } catch (error) {
     const message = resolveDispatchError(error);
@@ -158,8 +159,26 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
 
         updatedAt: new Date(),
       })
-      .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending"), eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount)));
+      .where(
+        and(
+          eq(discordOutboxEvents.id, eventId),
 
+          eq(discordOutboxEvents.status, "pending"),
+
+          eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount),
+
+          /*
+           * Consumer may already have processed
+           * this Queue message and intentionally
+           * returned the event to pending with an
+           * error/defer reason.
+           *
+           * Never overwrite that durable retry
+           * state with "dispatched".
+           */
+          isNull(discordOutboxEvents.lastDispatchError),
+        ),
+      );
     return {
       status: "error",
 
@@ -213,7 +232,7 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
 
   return results;
 }
-export async function markDiscordOutboxEventDispatched(db: Db, eventId: string) {
+export async function markDiscordOutboxEventDispatched(db: Db, eventId: string, dispatchAttemptCount: number) {
   const now = new Date();
 
   await db
@@ -227,9 +246,18 @@ export async function markDiscordOutboxEventDispatched(db: Db, eventId: string) 
 
       updatedAt: now,
     })
-    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending")));
+    .where(
+      and(
+        eq(discordOutboxEvents.id, eventId),
+
+        eq(discordOutboxEvents.status, "pending"),
+
+        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
+      ),
+    );
 }
-export async function returnDiscordOutboxEventToPending(db: Db, eventId: string, reason: string) {
+
+export async function returnDiscordOutboxEventToPending(db: Db, eventId: string, dispatchAttemptCount: number, reason: string) {
   const now = new Date();
 
   await db
@@ -243,10 +271,16 @@ export async function returnDiscordOutboxEventToPending(db: Db, eventId: string,
 
       updatedAt: now,
     })
-    .where(eq(discordOutboxEvents.id, eventId));
+    .where(
+      and(
+        eq(discordOutboxEvents.id, eventId),
+
+        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
+      ),
+    );
 }
 
-export async function reconcileDiscordOutboxEventDispatched(db: Db, eventId: string) {
+export async function reconcileDiscordOutboxEventDispatched(db: Db, eventId: string, dispatchAttemptCount: number) {
   const now = new Date();
 
   await db
@@ -260,5 +294,11 @@ export async function reconcileDiscordOutboxEventDispatched(db: Db, eventId: str
 
       updatedAt: now,
     })
-    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending")));
+    .where(
+      and(
+        eq(discordOutboxEvents.id, eventId),
+
+        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
+      ),
+    );
 }
