@@ -1,1 +1,1 @@
-export type { CreateRoleInput, DeleteRoleResponse, RoleDto, RoleResponse, RolesResponse, UpdateRoleInput } from "../../../shared/contracts/roles";
+export type { CreateRoleInput, DeleteRoleResponse, ReorderRolesInput, ReorderRolesResponse, RoleDto, RoleResponse, RolesResponse, UpdateRoleInput } from "../../../shared/contracts/roles";

@@ -44,10 +44,10 @@ const clientsNavigationItem: NavigationItem = {
   icon: BuildingsIcon,
 };
 
-const membersNavigationItem: NavigationItem = {
-  label: "Members",
-  href: "/members",
-  icon: UsersIcon,
+const projectsNavigationItem: NavigationItem = {
+  label: "Projects",
+  href: "/projects",
+  icon: FolderIcon,
 };
 
 function getActiveProjectId(pathname: string) {
@@ -254,15 +254,15 @@ function SpaceNavigation({
   );
 }
 
-function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle }: { canViewClients: boolean; canViewMembers: boolean; expanded: boolean; onToggle: () => void }) {
+function WorkspaceNavigation({ canViewClients, canViewProjects, expanded, onToggle }: { canViewClients: boolean; canViewProjects: boolean; expanded: boolean; onToggle: () => void }) {
   const items: NavigationItem[] = [];
 
   if (canViewClients) {
     items.push(clientsNavigationItem);
   }
 
-  if (canViewMembers) {
-    items.push(membersNavigationItem);
+  if (canViewProjects) {
+    items.push(projectsNavigationItem);
   }
 
   if (items.length === 0) {
@@ -271,7 +271,7 @@ function DatabaseNavigation({ canViewClients, canViewMembers, expanded, onToggle
 
   return (
     <div>
-      <SectionHeader label="Database" expanded={expanded} onToggle={onToggle} />
+      <SectionHeader label="Workspace" expanded={expanded} onToggle={onToggle} />
 
       <CollapsibleRegion open={expanded}>
         <div className="space-y-1">
@@ -423,7 +423,6 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const canViewClients = hasPermission(auth, "clients.view");
   const canViewProjects = hasPermission(auth, "projects.view");
   const canCreateProjects = hasPermission(auth, "projects.create");
-  const canViewMembers = hasPermission(auth, "members.view");
   const canViewSettings = hasPermission(auth, "settings.view");
   const canEditProjects = hasPermission(auth, "projects.edit");
 
@@ -562,7 +561,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [spaceExpanded, setSpaceExpanded] = useState(true);
-  const [databaseExpanded, setDatabaseExpanded] = useState(true);
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(true);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => (activeProjectId ? new Set([activeProjectId]) : new Set()));
 
   useEffect(() => {
@@ -631,7 +630,14 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
 
           {canViewProjects && <NavigationLink item={myProjectsNavigationItem} />}
         </div>
-
+        <WorkspaceNavigation
+          canViewClients={canViewClients}
+          canViewProjects={canViewProjects}
+          expanded={workspaceExpanded}
+          onToggle={() => {
+            setWorkspaceExpanded((current) => !current);
+          }}
+        />
         <SpaceNavigation
           projects={projects}
           canViewProjects={canViewProjects}
@@ -645,15 +651,6 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           onToggleProject={toggleProject}
           canEditProjects={canEditProjects}
           canArchiveProjects={canArchiveProjects}
-        />
-
-        <DatabaseNavigation
-          canViewClients={canViewClients}
-          canViewMembers={canViewMembers}
-          expanded={databaseExpanded}
-          onToggle={() => {
-            setDatabaseExpanded((current) => !current);
-          }}
         />
       </nav>
     );

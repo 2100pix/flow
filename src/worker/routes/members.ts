@@ -983,7 +983,7 @@ membersRoutes.patch(
      * Only the workspace creator may
      * grant system Owner.
      */
-    if (input.kind === "built_in" && input.role === "owner" && !callerIsWorkspaceCreator) {
+    if (input.kind === "built_in" && input.role === "owner" && targetMember.role !== "owner" && !callerIsWorkspaceCreator) {
       return c.json(
         {
           error: {

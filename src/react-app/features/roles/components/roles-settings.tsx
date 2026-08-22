@@ -1,35 +1,26 @@
-import { useState } from "react";
-
-import { CheckIcon, MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { move } from "@dnd-kit/helpers";
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
+import { CheckIcon, DotsSixVerticalIcon, MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Badge } from "@/components/ui/badge";
-
 import { Button } from "@/components/ui/button";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
-import { useCreateRole, useDeleteRole, useUpdateRole } from "@/features/roles/hooks/use-role-mutations";
-
+import { useCreateRole, useDeleteRole, useReorderRoles, useUpdateRole } from "@/features/roles/hooks/use-role-mutations";
 import { useRoles } from "@/features/roles/hooks/use-roles";
-
 import type { RoleDto } from "@/features/roles/types";
 
-import { cn } from "@/lib/utils";
-
 import { permissionCatalog, permissionKeys, type PermissionKey } from "../../../../shared/permissions";
-
 import { administratorPermissionGroups, builtInPermissionPresets, clientPermissionGroups, projectPermissionGroups, taskPermissionGroups, viewOnlyPermissionGroups, type PermissionGroup } from "../../../../shared/role-permission-groups";
-
-import { viewOnlyWorkspacePermissions } from "../../../../shared/roles";
-
+import { hasFullControl, viewOnlyWorkspacePermissions } from "../../../../shared/roles";
 import { PermissionSelector } from "./permission-selector";
 
 function samePermissions(first: readonly PermissionKey[], second: readonly PermissionKey[]) {
@@ -118,6 +109,53 @@ function getRoleAccessLabels(role: RoleDto) {
   return getCustomAccessLabels(role);
 }
 
+type RoleDragGroup = "full-control" | "regular";
+
+type RoleDragBoard = {
+  "full-control": RoleDto[];
+
+  regular: RoleDto[];
+};
+
+function buildRoleDragBoard(roles: RoleDto[]): RoleDragBoard {
+  const customRoles = roles.filter((role) => role.kind === "custom");
+
+  return {
+    "full-control": customRoles.filter((role) => hasFullControl(role.permissions)),
+
+    regular: customRoles.filter((role) => !hasFullControl(role.permissions)),
+  };
+}
+
+function cloneRoleDragBoard(board: RoleDragBoard): RoleDragBoard {
+  return {
+    "full-control": [...board["full-control"]],
+
+    regular: [...board.regular],
+  };
+}
+
+function findRoleGroup(board: RoleDragBoard, roleId: string): RoleDragGroup | null {
+  if (board["full-control"].some((role) => role.id === roleId)) {
+    return "full-control";
+  }
+
+  if (board.regular.some((role) => role.id === roleId)) {
+    return "regular";
+  }
+
+  return null;
+}
+
+function haveSameRoleOrder(first: RoleDragBoard, second: RoleDragBoard) {
+  return (
+    first["full-control"].length === second["full-control"].length &&
+    first["full-control"].every((role, index) => role.id === second["full-control"][index]?.id) &&
+    first.regular.length === second.regular.length &&
+    first.regular.every((role, index) => role.id === second.regular[index]?.id)
+  );
+}
+
 function AccessSummary({
   role,
   onOpen,
@@ -127,10 +165,8 @@ function AccessSummary({
   onOpen: () => void;
 }) {
   const labels = getRoleAccessLabels(role);
-
-  const visible = labels.slice(0, 3);
-
-  const hidden = labels.slice(3);
+  const visible = labels.slice(0, 5);
+  const hidden = labels.slice(5);
 
   return (
     <button
@@ -475,21 +511,132 @@ function RoleDialog({
   );
 }
 
+function RoleRow({ role, onOpen, dragHandle, dragging = false, rowRef }: { role: RoleDto; onOpen: () => void; dragHandle?: ReactNode; dragging?: boolean; rowRef?: (node: HTMLDivElement | null) => void }) {
+  return (
+    <div
+      ref={rowRef}
+      className={cn(
+        `
+          group/role
+          grid min-h-12
+          grid-cols-[32px_minmax(260px,0.8fr)_minmax(420px,1.2fr)]
+          items-center
+          border-b
+          border-border/60
+          text-sm
+          transition-opacity
+        `,
+
+        dragging && "opacity-50",
+      )}
+    >
+      <div className="flex items-center justify-start">{dragHandle}</div>
+
+      <div className="flex min-w-0 items-center gap-2 pr-4">
+        <span className="truncate">{role.name}</span>
+
+        {role.kind === "built_in" ? (
+          <Badge variant="outline" className="shrink-0 text-[10px] font-normal text-muted-foreground">
+            Built-in
+          </Badge>
+        ) : null}
+      </div>
+
+      <AccessSummary role={role} onOpen={onOpen} />
+    </div>
+  );
+}
+
+function SortableRoleRow({
+  role,
+  index,
+  group,
+  disabled,
+  onOpen,
+}: {
+  role: RoleDto;
+
+  index: number;
+
+  group: RoleDragGroup;
+
+  disabled: boolean;
+
+  onOpen: () => void;
+}) {
+  const { ref, handleRef, isDragSource } = useSortable({
+    id: role.id,
+
+    index,
+
+    group,
+
+    type: "role",
+
+    disabled,
+  });
+
+  return (
+    <RoleRow
+      role={role}
+      rowRef={ref}
+      dragging={isDragSource}
+      onOpen={onOpen}
+      dragHandle={
+        <button
+          ref={handleRef}
+          type="button"
+          disabled={disabled}
+          aria-label={`Reorder ${role.name}`}
+          title="Drag to reorder"
+          className={cn(
+            `
+              flex size-7
+              items-center
+              justify-center
+              rounded-md
+              text-muted-foreground
+              opacity-0
+              transition-opacity
+              group-hover/role:opacity-100
+              focus-visible:opacity-100
+            `,
+
+            disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+          )}
+        >
+          <DotsSixVerticalIcon className="size-4" aria-hidden="true" />
+        </button>
+      }
+    />
+  );
+}
+
 export function RolesSettings() {
   const { data: auth } = useMe();
-
   const { data: roles = [], isPending, isError } = useRoles();
-
   const canManage = hasPermission(auth, "roles.manage");
-
+  const reorderRoles = useReorderRoles();
+  const serverRoleBoard = useMemo(() => buildRoleDragBoard(roles), [roles]);
+  const [dragRoleBoard, setDragRoleBoard] = useState<RoleDragBoard | null>(null);
+  const roleBoard = dragRoleBoard ?? serverRoleBoard;
+  const roleBoardRef = useRef<RoleDragBoard | null>(null);
+  const previousRoleBoardRef = useRef<RoleDragBoard | null>(null);
   const [query, setQuery] = useState("");
-
   const [createOpen, setCreateOpen] = useState(false);
-
   const [editingRole, setEditingRole] = useState<RoleDto | null>(null);
-
   const normalizedQuery = query.trim().toLowerCase();
+  const ownerRole = roles.find((role) => role.systemKey === "owner");
+  const adminRole = roles.find((role) => role.systemKey === "admin");
+  const memberRole = roles.find((role) => role.systemKey === "member");
+  const dragDisabled = !canManage || reorderRoles.isPending || Boolean(normalizedQuery);
+  function resetRoleDrag() {
+    roleBoardRef.current = null;
 
+    previousRoleBoardRef.current = null;
+
+    setDragRoleBoard(null);
+  }
   const filteredRoles = normalizedQuery ? roles.filter((role) => role.name.toLowerCase().includes(normalizedQuery)) : roles;
 
   return (
@@ -558,48 +705,172 @@ export function RolesSettings() {
           <div className="mt-6">
             <div
               className="
-                grid h-8
-                grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.2fr)]
-                items-center
-                border-b border-border
-                text-[11px]
-                text-muted-foreground
-              "
+              grid h-8
+              grid-cols-[32px_minmax(260px,0.8fr)_minmax(420px,1.2fr)]
+              items-center
+              border-b border-border
+              text-[11px]
+              text-muted-foreground
+            "
             >
+              <span />
+
               <span>Name</span>
 
               <span>Access</span>
             </div>
 
-            {filteredRoles.map((role) => (
-              <div
-                key={role.id}
-                className="
-                    grid min-h-12
-                    grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.2fr)]
-                    items-center
-                    border-b border-border/60
-                    text-sm
-                  "
-              >
-                <div className="flex min-w-0 items-center gap-2 pr-4">
-                  <span className="truncate">{role.name}</span>
-
-                  {role.kind === "built_in" ? (
-                    <Badge variant="outline" className="shrink-0 text-[10px] font-normal text-muted-foreground">
-                      Built-in
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <AccessSummary
+            {normalizedQuery ? (
+              filteredRoles.map((role) => (
+                <RoleRow
+                  key={role.id}
                   role={role}
                   onOpen={() => {
                     setEditingRole(role);
                   }}
                 />
-              </div>
-            ))}
+              ))
+            ) : (
+              <DragDropProvider
+                onDragStart={() => {
+                  if (dragDisabled) {
+                    return;
+                  }
+
+                  reorderRoles.reset();
+
+                  const snapshot = cloneRoleDragBoard(roleBoard);
+
+                  previousRoleBoardRef.current = snapshot;
+
+                  roleBoardRef.current = snapshot;
+
+                  setDragRoleBoard(snapshot);
+                }}
+                onDragOver={(event) => {
+                  const source = event.operation.source;
+
+                  const target = event.operation.target;
+
+                  if (!source || source.type !== "role" || !target) {
+                    return;
+                  }
+
+                  setDragRoleBoard((current) => {
+                    const base = current ?? roleBoardRef.current ?? roleBoard;
+
+                    const sourceGroup = findRoleGroup(base, String(source.id));
+
+                    const targetGroup = findRoleGroup(base, String(target.id));
+
+                    if (!sourceGroup || !targetGroup || sourceGroup !== targetGroup) {
+                      return base;
+                    }
+
+                    const next = move(base, event) as RoleDragBoard;
+
+                    roleBoardRef.current = next;
+
+                    return next;
+                  });
+                }}
+                onDragEnd={(event) => {
+                  const previous = previousRoleBoardRef.current;
+
+                  const current = roleBoardRef.current;
+
+                  if (!previous || !current || event.canceled || !event.operation.target) {
+                    resetRoleDrag();
+
+                    return;
+                  }
+
+                  if (haveSameRoleOrder(previous, current)) {
+                    resetRoleDrag();
+
+                    return;
+                  }
+
+                  const roleIds = [...current["full-control"], ...current.regular].map((role) => role.id);
+
+                  const toastId = toast.loading("Saving role order…");
+
+                  reorderRoles.mutate(
+                    {
+                      roleIds,
+                    },
+                    {
+                      onSuccess: () => {
+                        toast.dismiss(toastId);
+                      },
+
+                      onError: (error) => {
+                        toast.error(error instanceof Error ? error.message : "Failed to save role order.", {
+                          id: toastId,
+                        });
+                      },
+
+                      onSettled: () => {
+                        resetRoleDrag();
+                      },
+                    },
+                  );
+                }}
+              >
+                {ownerRole ? (
+                  <RoleRow
+                    role={ownerRole}
+                    onOpen={() => {
+                      setEditingRole(ownerRole);
+                    }}
+                  />
+                ) : null}
+
+                {roleBoard["full-control"].map((role, index) => (
+                  <SortableRoleRow
+                    key={role.id}
+                    role={role}
+                    index={index}
+                    group="full-control"
+                    disabled={dragDisabled}
+                    onOpen={() => {
+                      setEditingRole(role);
+                    }}
+                  />
+                ))}
+
+                {adminRole ? (
+                  <RoleRow
+                    role={adminRole}
+                    onOpen={() => {
+                      setEditingRole(adminRole);
+                    }}
+                  />
+                ) : null}
+
+                {roleBoard.regular.map((role, index) => (
+                  <SortableRoleRow
+                    key={role.id}
+                    role={role}
+                    index={index}
+                    group="regular"
+                    disabled={dragDisabled}
+                    onOpen={() => {
+                      setEditingRole(role);
+                    }}
+                  />
+                ))}
+
+                {memberRole ? (
+                  <RoleRow
+                    role={memberRole}
+                    onOpen={() => {
+                      setEditingRole(memberRole);
+                    }}
+                  />
+                ) : null}
+              </DragDropProvider>
+            )}
           </div>
         )}
       </div>

@@ -84,20 +84,24 @@ function haveSameIds(first: readonly string[], second: readonly string[]) {
   return first.every((id) => secondSet.has(id));
 }
 
-function getMemberRoleRank(member: MemberDto, customRoleOrder: ReadonlyMap<string, number>) {
-  if (member.role === "admin") {
-    return 0;
+function getMemberRoleId(member: MemberDto) {
+  if (member.role === "owner") {
+    return "builtin:owner";
   }
 
-  if (member.role === "owner") {
-    return 1;
+  if (member.role === "admin") {
+    return "builtin:admin";
   }
 
   if (member.customRole) {
-    return 10 + (customRoleOrder.get(member.customRole.id) ?? 999);
+    return member.customRole.id;
   }
 
-  return 10_000;
+  return "builtin:member";
+}
+
+function getMemberRoleRank(member: MemberDto, roleOrder: ReadonlyMap<string, number>) {
+  return roleOrder.get(getMemberRoleId(member)) ?? Number.MAX_SAFE_INTEGER;
 }
 
 function PendingMembersDialog({
@@ -172,55 +176,28 @@ function PendingMembersDialog({
   );
 }
 
-function EditMemberDialog({
-  member,
-  teams,
-  open,
-  onOpenChange,
-}: {
-  member: MemberDto;
-
-  teams: TeamDto[];
-
-  open: boolean;
-
-  onOpenChange: (open: boolean) => void;
-}) {
+function EditMemberDialog({ member, teams, open, onOpenChange }: { member: MemberDto; teams: TeamDto[]; open: boolean; onOpenChange: (open: boolean) => void }) {
   const updateMember = useUpdateWorkspaceMember();
-
   const updateRole = useUpdateMemberRole();
-
   const updateExpertise = useUpdateMemberExpertise();
-
   const createExpertise = useCreateWorkspaceExpertise();
-
   const addTeamMember = useAddTeamMember();
-
   const removeTeamMember = useRemoveTeamMember();
-
   const { data: roles = [] } = useRoles();
-
+  const { data: auth } = useMe();
+  const availableRoles = roles.filter((role) => role.systemKey !== "owner" || auth?.workspace.isCreator || member.role === "owner");
   const { data: expertise = [] } = useWorkspaceExpertise();
-
   const initialRoleValue = member.customRole ? `custom:${member.customRole.id}` : `built_in:${member.role}`;
-
   const initialTeamIds = teams.filter((team) => team.members.some((teamMember) => teamMember.user.id === member.id)).map((team) => team.id);
-
   const initialExpertiseIds = (member.expertise ?? []).map((item) => item.id);
-
   const [displayName, setDisplayName] = useState(() => member.displayName);
-
   const [roleValue, setRoleValue] = useState(() => initialRoleValue);
-
   const [teamIds, setTeamIds] = useState<string[]>(() => initialTeamIds);
-
   const [expertiseIds, setExpertiseIds] = useState<string[]>(() => initialExpertiseIds);
-
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
-
   const [creatingExpertise, setCreatingExpertise] = useState(false);
-
   const [expertiseName, setExpertiseName] = useState("");
+
   function createNewExpertise() {
     const name = expertiseName.trim();
 
@@ -416,7 +393,7 @@ function EditMemberDialog({
               }}
             >
               <SelectTrigger className="mt-3 h-8 w-auto min-w-32 rounded-lg px-2.5 text-xs">
-                {roles.find((role) => {
+                {availableRoles.find((role) => {
                   if (role.kind === "built_in") {
                     return roleValue === `built_in:${role.systemKey}`;
                   }
@@ -431,7 +408,7 @@ function EditMemberDialog({
 
                   <SelectSeparator />
 
-                  {roles.map((role) => (
+                  {availableRoles.map((role) => (
                     <SelectItem key={role.id} value={role.kind === "built_in" ? `built_in:${role.systemKey}` : `custom:${role.id}`}>
                       {role.name}
                     </SelectItem>
@@ -673,7 +650,11 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
 
           <span className="min-w-0 truncate">{member.displayName}</span>
 
-          {member.role === "admin" ? (
+          {member.role === "owner" ? (
+            <Badge variant="outline" className="shrink-0 text-[10px]">
+              Owner
+            </Badge>
+          ) : member.role === "admin" ? (
             <Badge variant="outline" className="shrink-0 text-[10px]">
               Admin
             </Badge>
@@ -884,14 +865,12 @@ export function MembersSettings() {
 
   const normalizedQuery = query.trim().toLowerCase();
 
-  const customRoleOrder = useMemo(() => {
+  const roleOrder = useMemo(() => {
     const map = new Map<string, number>();
 
-    roles
-      .filter((role) => role.kind === "custom")
-      .forEach((role, index) => {
-        map.set(role.id, index);
-      });
+    roles.forEach((role, index) => {
+      map.set(role.id, index);
+    });
 
     return map;
   }, [roles]);
@@ -908,7 +887,7 @@ export function MembersSettings() {
       : [...members];
 
     return filtered.sort((first, second) => {
-      const roleDifference = getMemberRoleRank(first, customRoleOrder) - getMemberRoleRank(second, customRoleOrder);
+      const roleDifference = getMemberRoleRank(first, roleOrder) - getMemberRoleRank(second, roleOrder);
 
       if (roleDifference !== 0) {
         return roleDifference;
@@ -916,7 +895,7 @@ export function MembersSettings() {
 
       return first.displayName.localeCompare(second.displayName);
     });
-  }, [members, normalizedQuery, teamsByUserId, customRoleOrder]);
+  }, [members, normalizedQuery, teamsByUserId, roleOrder]);
 
   if (!auth) {
     return null;

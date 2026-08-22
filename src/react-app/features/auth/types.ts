@@ -14,7 +14,7 @@ export type AuthContext = {
     name: string;
 
     role: WorkspaceRole;
-
+    isCreator: boolean;
     customRole: {
       id: string;
       name: string;
