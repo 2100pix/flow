@@ -744,29 +744,77 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage(`Task status updated to ${parsedStatus.data}.`));
     }
 
-    const rawPriority = findStringOption(interaction, "priority");
+    if (commandName === "setpriority") {
+      const rawPriority = findStringOption(interaction, "priority");
 
-    let priority: TaskPriority | null;
+      let priority: TaskPriority | null;
 
-    if (rawPriority === "none") {
-      priority = null;
-    } else {
-      const parsedPriority = taskPrioritySchema.safeParse(rawPriority);
+      if (rawPriority === "none") {
+        priority = null;
+      } else {
+        const parsedPriority = taskPrioritySchema.safeParse(rawPriority);
 
-      if (!parsedPriority.success) {
-        return c.json(interactionMessage("Invalid Task priority."));
+        if (!parsedPriority.success) {
+          return c.json(interactionMessage("Invalid Task priority."));
+        }
+
+        priority = parsedPriority.data;
       }
 
-      priority = parsedPriority.data;
+      const outboxEventId = await persistDiscordTaskMutation(
+        db,
+        taskContext.workspaceId,
+        taskContext.projectId,
+        taskContext.taskId,
+        {
+          kind: "priority",
+
+          value: priority,
+        },
+      );
+
+      c.executionCtx.waitUntil(
+        dispatchDiscordOutboxEvent(
+          db,
+          c.env.FLOW_DISCORD_QUEUE,
+          outboxEventId,
+        )
+          .then((result) => {
+            if (result.status === "error") {
+              console.error("Discord command Task sync dispatch failed", {
+                commandName,
+
+                taskId: taskContext.taskId,
+
+                outboxEventId,
+
+                result,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Discord command Task sync dispatch crashed", {
+              commandName,
+
+              taskId: taskContext.taskId,
+
+              outboxEventId,
+
+              error,
+            });
+          }),
+      );
+
+      return c.json(
+        interactionMessage(
+          priority === null
+            ? "Task priority cleared."
+            : `Task priority updated to ${priority}.`,
+        ),
+      );
     }
 
-    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-      kind: "priority",
-
-      value: priority,
-    });
-  }
-  if (commandName === "setlead") {
+    if (commandName === "setlead") {
     const action = findStringOption(interaction, "action");
 
     if (action !== "set" && action !== "clear") {
