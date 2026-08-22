@@ -626,195 +626,182 @@ discordInteractionRoutes.post("/", async (c) => {
   const commandName = interaction.data?.name;
 
   if (commandName !== "setstatus" && commandName !== "setpriority" && commandName !== "setlead" && commandName !== "setassign" && commandName !== "setstartdate" && commandName !== "setduedate") {
-    const guildId = interaction.guild_id;
+    return c.json(interactionMessage("Unsupported Flow command."));
+  }
 
-    const channelId = interaction.channel_id;
+  const guildId = interaction.guild_id;
 
-    const discordUserId = interaction.member?.user?.id;
+  const channelId = interaction.channel_id;
 
-    if (!guildId || !channelId || !discordUserId) {
-      return c.json(interactionMessage("Flow Task commands only work inside a connected Discord server."));
+  const discordUserId = interaction.member?.user?.id;
+
+  if (!guildId || !channelId || !discordUserId) {
+    return c.json(interactionMessage("Flow Task commands only work inside a connected Discord server."));
+  }
+
+  const db = createDb(c.env.flow_db);
+
+  const taskContext = await resolveDiscordTaskContext(db, guildId, channelId);
+
+  if (taskContext.status === "integration_unavailable") {
+    return c.json(interactionMessage("Discord integration is not active for this server."));
+  }
+
+  if (taskContext.status === "task_mapping_missing") {
+    return c.json(interactionMessage("This command only works inside a Flow-managed Task Forum Post."));
+  }
+
+  const actor = await resolveDiscordActor(db, taskContext.workspaceId, discordUserId);
+
+  if (actor.status === "missing") {
+    return c.json(interactionMessage("Your Discord account is not linked to a Flow workspace member."));
+  }
+
+  if (actor.status === "integrity_error") {
+    return c.json(interactionMessage("Flow could not resolve your workspace permissions."));
+  }
+
+  const canAccessProject = await canDiscordActorAccessProject(db, taskContext.projectId, taskContext.projectVisibility, actor.userId, actor.permissions);
+
+  if (!canAccessProject) {
+    /*
+     * Avoid leaking private Project
+     * existence/details to a workspace
+     * member who does not have access.
+     */
+    return c.json(interactionMessage("This Flow Task is not available to your account."));
+  }
+
+  const editsTask = commandName === "setstatus" || commandName === "setpriority" || commandName === "setstartdate" || commandName === "setduedate";
+
+  const assignsTask = commandName === "setlead" || commandName === "setassign";
+
+  if (editsTask && !actor.permissions.includes("tasks.edit")) {
+    return c.json(interactionMessage("You do not have permission to edit this Task in Flow."));
+  }
+
+  if (assignsTask && !actor.permissions.includes("tasks.assign")) {
+    return c.json(interactionMessage("You do not have permission to assign this Task in Flow."));
+  }
+
+  if (commandName === "setstatus") {
+    const rawStatus = findStringOption(interaction, "status");
+
+    const parsedStatus = taskStatusSchema.safeParse(rawStatus);
+
+    if (!parsedStatus.success) {
+      return c.json(interactionMessage("Invalid Task status."));
     }
 
-    const db = createDb(c.env.flow_db);
+    /*
+     * Fixed status vocabulary is shared,
+     * but each Project may disable a
+     * workflow status.
+     */
+    const [workflowStatus] = await db
+      .select({
+        enabled: projectTaskStatuses.enabled,
+      })
+      .from(projectTaskStatuses)
+      .where(and(eq(projectTaskStatuses.projectId, taskContext.projectId), eq(projectTaskStatuses.statusKey, parsedStatus.data)))
+      .limit(1);
 
-    const taskContext = await resolveDiscordTaskContext(db, guildId, channelId);
-
-    if (taskContext.status === "integration_unavailable") {
-      return c.json(interactionMessage("Discord integration is not active for this server."));
+    if (!workflowStatus?.enabled) {
+      return c.json(interactionMessage("That Task status is disabled for this Project."));
     }
 
-    if (taskContext.status === "task_mapping_missing") {
-      return c.json(interactionMessage("This command only works inside a Flow-managed Task Forum Post."));
-    }
+    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
+      kind: "status",
 
-    const actor = await resolveDiscordActor(db, taskContext.workspaceId, discordUserId);
+      value: parsedStatus.data,
+    });
 
-    if (actor.status === "missing") {
-      return c.json(interactionMessage("Your Discord account is not linked to a Flow workspace member."));
-    }
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId)
+        .then((result) => {
+          if (result.status === "error") {
+            console.error("Discord command Task sync dispatch failed", {
+              commandName,
 
-    if (actor.status === "integrity_error") {
-      return c.json(interactionMessage("Flow could not resolve your workspace permissions."));
-    }
+              taskId: taskContext.taskId,
 
-    const canAccessProject = await canDiscordActorAccessProject(db, taskContext.projectId, taskContext.projectVisibility, actor.userId, actor.permissions);
+              outboxEventId,
 
-    if (!canAccessProject) {
-      /*
-       * Avoid leaking private Project
-       * existence/details to a workspace
-       * member who does not have access.
-       */
-      return c.json(interactionMessage("This Flow Task is not available to your account."));
-    }
-
-    const editsTask = commandName === "setstatus" || commandName === "setpriority" || commandName === "setstartdate" || commandName === "setduedate";
-
-    const assignsTask = commandName === "setlead" || commandName === "setassign";
-
-    if (editsTask && !actor.permissions.includes("tasks.edit")) {
-      return c.json(interactionMessage("You do not have permission to edit this Task in Flow."));
-    }
-
-    if (assignsTask && !actor.permissions.includes("tasks.assign")) {
-      return c.json(interactionMessage("You do not have permission to assign this Task in Flow."));
-    }
-
-    if (commandName === "setstatus") {
-      const rawStatus = findStringOption(interaction, "status");
-
-      const parsedStatus = taskStatusSchema.safeParse(rawStatus);
-
-      if (!parsedStatus.success) {
-        return c.json(interactionMessage("Invalid Task status."));
-      }
-
-      /*
-       * Fixed status vocabulary is shared,
-       * but each Project may disable a
-       * workflow status.
-       */
-      const [workflowStatus] = await db
-        .select({
-          enabled: projectTaskStatuses.enabled,
+              result,
+            });
+          }
         })
-        .from(projectTaskStatuses)
-        .where(and(eq(projectTaskStatuses.projectId, taskContext.projectId), eq(projectTaskStatuses.statusKey, parsedStatus.data)))
-        .limit(1);
+        .catch((error) => {
+          console.error("Discord command Task sync dispatch crashed", {
+            commandName,
 
-      if (!workflowStatus?.enabled) {
-        return c.json(interactionMessage("That Task status is disabled for this Project."));
+            taskId: taskContext.taskId,
+
+            outboxEventId,
+
+            error,
+          });
+        }),
+    );
+
+    return c.json(interactionMessage(`Task status updated to ${parsedStatus.data}.`));
+  }
+
+  if (commandName === "setpriority") {
+    const rawPriority = findStringOption(interaction, "priority");
+
+    let priority: TaskPriority | null;
+
+    if (rawPriority === "none") {
+      priority = null;
+    } else {
+      const parsedPriority = taskPrioritySchema.safeParse(rawPriority);
+
+      if (!parsedPriority.success) {
+        return c.json(interactionMessage("Invalid Task priority."));
       }
 
-      const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-        kind: "status",
+      priority = parsedPriority.data;
+    }
 
-        value: parsedStatus.data,
-      });
+    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
+      kind: "priority",
 
-      c.executionCtx.waitUntil(
-        dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId)
-          .then((result) => {
-            if (result.status === "error") {
-              console.error("Discord command Task sync dispatch failed", {
-                commandName,
+      value: priority,
+    });
 
-                taskId: taskContext.taskId,
-
-                outboxEventId,
-
-                result,
-              });
-            }
-          })
-          .catch((error) => {
-            console.error("Discord command Task sync dispatch crashed", {
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId)
+        .then((result) => {
+          if (result.status === "error") {
+            console.error("Discord command Task sync dispatch failed", {
               commandName,
 
               taskId: taskContext.taskId,
 
               outboxEventId,
 
-              error,
+              result,
             });
-          }),
-      );
+          }
+        })
+        .catch((error) => {
+          console.error("Discord command Task sync dispatch crashed", {
+            commandName,
 
-      return c.json(interactionMessage(`Task status updated to ${parsedStatus.data}.`));
-    }
+            taskId: taskContext.taskId,
 
-    if (commandName === "setpriority") {
-      const rawPriority = findStringOption(interaction, "priority");
+            outboxEventId,
 
-      let priority: TaskPriority | null;
+            error,
+          });
+        }),
+    );
 
-      if (rawPriority === "none") {
-        priority = null;
-      } else {
-        const parsedPriority = taskPrioritySchema.safeParse(rawPriority);
+    return c.json(interactionMessage(priority === null ? "Task priority cleared." : `Task priority updated to ${priority}.`));
+  }
 
-        if (!parsedPriority.success) {
-          return c.json(interactionMessage("Invalid Task priority."));
-        }
-
-        priority = parsedPriority.data;
-      }
-
-      const outboxEventId = await persistDiscordTaskMutation(
-        db,
-        taskContext.workspaceId,
-        taskContext.projectId,
-        taskContext.taskId,
-        {
-          kind: "priority",
-
-          value: priority,
-        },
-      );
-
-      c.executionCtx.waitUntil(
-        dispatchDiscordOutboxEvent(
-          db,
-          c.env.FLOW_DISCORD_QUEUE,
-          outboxEventId,
-        )
-          .then((result) => {
-            if (result.status === "error") {
-              console.error("Discord command Task sync dispatch failed", {
-                commandName,
-
-                taskId: taskContext.taskId,
-
-                outboxEventId,
-
-                result,
-              });
-            }
-          })
-          .catch((error) => {
-            console.error("Discord command Task sync dispatch crashed", {
-              commandName,
-
-              taskId: taskContext.taskId,
-
-              outboxEventId,
-
-              error,
-            });
-          }),
-      );
-
-      return c.json(
-        interactionMessage(
-          priority === null
-            ? "Task priority cleared."
-            : `Task priority updated to ${priority}.`,
-        ),
-      );
-    }
-
-    if (commandName === "setlead") {
+  if (commandName === "setlead") {
     const action = findStringOption(interaction, "action");
 
     if (action !== "set" && action !== "clear") {
