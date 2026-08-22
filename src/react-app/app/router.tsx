@@ -62,6 +62,7 @@ export const router = createBrowserRouter([
         path: "/projects",
         element: <ProjectsPage />,
       },
+
       {
         path: "/members",
         element: <Navigate to="/settings?section=members" replace />,
