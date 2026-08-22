@@ -293,7 +293,7 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
          * Global scheduled automation remains
          * separately gated until Phase 3C.3.
          */
-        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision"]),
+        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision", "task_thread.sync"]),
       ),
     )
     .orderBy(asc(discordOutboxEvents.createdAt))

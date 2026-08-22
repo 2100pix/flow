@@ -7,12 +7,12 @@ import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflo
 import { createTaskResourceSchema, updateTaskResourceSchema, type TaskResourceDto } from "../../shared/contracts/task-resources";
 
 import { createDb } from "../db";
-import { projectDiscordForums, projectMembers, projectTaskStatuses, projects, taskAssignees, taskResources, tasks, users, workspaceDiscordIntegrations, workspaceMembers } from "../db/schema";
+import { discordOutboxEvents, projectDiscordForums, projectMembers, projectTaskStatuses, projects, taskAssignees, taskDiscordThreads, taskResources, tasks, users, workspaceDiscordIntegrations, workspaceMembers } from "../db/schema";
 import { createId } from "../lib/id";
 import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { findAccessibleProject } from "../lib/project-access";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
-import { provisionTaskDiscordThread } from "../lib/task-discord-thread";
+import { provisionTaskDiscordThread, syncTaskDiscordThread } from "../lib/task-discord-thread";
 
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -61,6 +61,105 @@ async function findActiveAccessibleTask(db: Db, auth: AuthContext, taskId: strin
   }
 
   return task;
+}
+
+async function createTaskDiscordSyncIntent(db: Db, workspaceId: string, taskId: string, now: Date) {
+  const [mapping] = await db
+    .select({
+      taskId: taskDiscordThreads.taskId,
+    })
+    .from(taskDiscordThreads)
+    .where(eq(taskDiscordThreads.taskId, taskId))
+    .limit(1);
+
+  if (!mapping) {
+    return null;
+  }
+
+  const eventId = createId("obx");
+
+  return {
+    eventId,
+
+    deletePrevious: db.delete(discordOutboxEvents).where(
+      and(
+        eq(discordOutboxEvents.aggregateId, taskId),
+
+        eq(discordOutboxEvents.eventType, "task_thread.sync"),
+      ),
+    ),
+
+    insertLatest: db.insert(discordOutboxEvents).values({
+      id: eventId,
+
+      workspaceId,
+
+      aggregateType: "task_thread",
+
+      aggregateId: taskId,
+
+      eventType: "task_thread.sync",
+
+      status: "pending",
+
+      dispatchAttemptCount: 0,
+
+      lastDispatchError: null,
+
+      dispatchedAt: null,
+
+      createdAt: now,
+
+      updatedAt: now,
+    }),
+  };
+}
+
+async function canImmediatelyDispatchDiscordSync(db: Db, workspaceId: string) {
+  const [integration] = await db
+    .select({
+      enabled: workspaceDiscordIntegrations.enabled,
+
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(eq(workspaceDiscordIntegrations.workspaceId, workspaceId))
+    .limit(1);
+
+  return Boolean(integration?.enabled && integration.guildId);
+}
+
+async function dispatchTaskDiscordSyncImmediately(db: Db, queue: Queue<DiscordOutboxQueueMessage>, workspaceId: string, taskId: string, outboxEventId: string) {
+  try {
+    const canDispatch = await canImmediatelyDispatchDiscordSync(db, workspaceId);
+
+    if (!canDispatch) {
+      return;
+    }
+
+    const result = await dispatchDiscordOutboxEvent(db, queue, outboxEventId);
+
+    if (result.status === "error") {
+      console.error("Immediate Discord Task sync outbox dispatch failed", {
+        taskId,
+        outboxEventId,
+        result,
+      });
+    }
+  } catch (error) {
+    /*
+     * D1 mutation and durable sync intent
+     * already committed.
+     *
+     * Immediate dispatch is only a latency
+     * optimization and must remain nonfatal.
+     */
+    console.error("Immediate Discord Task sync dispatch crashed", {
+      taskId,
+      outboxEventId,
+      error,
+    });
+  }
 }
 
 async function loadTaskWorkflow(db: Db, projectId: string): Promise<TaskWorkflowStatusDto[] | null> {
@@ -951,6 +1050,109 @@ tasksRoutes.post("/projects/:projectId/tasks/:taskId/discord-thread/provision", 
   );
 });
 
+tasksRoutes.post("/projects/:projectId/tasks/:taskId/discord-thread/sync", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const projectId = c.req.param("projectId");
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const [task] = await db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .innerJoin(projects, eq(projects.id, tasks.projectId))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(tasks.projectId, projectId),
+
+        eq(projects.workspaceId, auth.workspace.id),
+
+        isNull(projects.archivedAt),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!task) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const result = await syncTaskDiscordThread(db, c.env.DISCORD_BOT_TOKEN, taskId);
+
+  if (result.status === "synced") {
+    return c.json({
+      data: result,
+    });
+  }
+
+  if (result.status === "error") {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_TASK_SYNC_FAILED",
+
+          message: result.message,
+        },
+      },
+      502,
+    );
+  }
+
+  const error =
+    result.reason === "mapping_missing"
+      ? {
+          code: "DISCORD_TASK_THREAD_MAPPING_MISSING",
+
+          message: "This Task does not have a Discord thread mapping",
+        }
+      : result.reason === "mapping_not_ready"
+        ? {
+            code: "DISCORD_TASK_THREAD_NOT_READY",
+
+            message: "The Task Discord thread is not ready",
+          }
+        : result.reason === "integration_disabled"
+          ? {
+              code: "DISCORD_INTEGRATION_DISABLED",
+
+              message: "Discord integration is disabled",
+            }
+          : result.reason === "integration_not_connected"
+            ? {
+                code: "DISCORD_NOT_CONNECTED",
+
+                message: "Discord integration is not connected",
+              }
+            : {
+                code: "DISCORD_PROJECT_FORUM_NOT_READY",
+
+                message: "The Project Discord Forum is not ready",
+              };
+
+  return c.json(
+    {
+      error,
+    },
+    409,
+  );
+});
+
 tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePermission("tasks.edit"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("projectId");
@@ -1033,6 +1235,7 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
   const currentTasks = await db
     .select({
       id: tasks.id,
+      status: tasks.status,
     })
     .from(tasks)
     .where(and(eq(tasks.projectId, projectId), inArray(tasks.status, statuses), isNull(tasks.archivedAt)));
@@ -1051,6 +1254,10 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
     );
   }
 
+  const currentStatusByTaskId = new Map(currentTasks.map((task) => [task.id, task.status] as const));
+
+  const statusChangedTaskIds = input.columns.flatMap((column) => column.taskIds.filter((taskId) => currentStatusByTaskId.get(taskId) !== column.status));
+
   if (receivedIds.length === 0) {
     return c.json({
       data: {
@@ -1058,6 +1265,20 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
       },
     });
   }
+
+  const discordMappedStatusChanges =
+    statusChangedTaskIds.length > 0
+      ? await db
+          .select({
+            taskId: taskDiscordThreads.taskId,
+          })
+          .from(taskDiscordThreads)
+          .where(inArray(taskDiscordThreads.taskId, statusChangedTaskIds))
+      : [];
+
+  const discordMappedTaskIds = new Set(discordMappedStatusChanges.map((mapping) => mapping.taskId));
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
   const REORDER_UPDATE_CHUNK_SIZE = 20;
   const updateStatements: D1PreparedStatement[] = [];
@@ -1071,21 +1292,36 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
       }
 
       const sortOrderCases = chunk.map(() => "WHEN id = ? THEN ?").join(" ");
+
       const idPlaceholders = chunk.map(() => "?").join(", ");
 
+      const statusChangedInChunk = chunk.filter((taskId) => currentStatusByTaskId.get(taskId) !== column.status);
+
+      const updatedAtCases = statusChangedInChunk.map(() => "WHEN id = ? THEN ?").join(" ");
+
+      const updatedAtExpression =
+        statusChangedInChunk.length > 0
+          ? `
+      CASE
+        ${updatedAtCases}
+        ELSE updated_at
+      END
+    `
+          : "updated_at";
+
       const statement = c.env.flow_db.prepare(`
-          UPDATE tasks
-          SET
-            status = ?,
-            sort_order = CASE
-              ${sortOrderCases}
-              ELSE sort_order
-            END,
-            updated_at = CAST(strftime('%s', 'now') AS INTEGER)
-          WHERE project_id = ?
-            AND id IN (${idPlaceholders})
-            AND archived_at IS NULL
-        `);
+    UPDATE tasks
+    SET
+      status = ?,
+      sort_order = CASE
+        ${sortOrderCases}
+        ELSE sort_order
+      END,
+      updated_at = ${updatedAtExpression}
+    WHERE project_id = ?
+      AND id IN (${idPlaceholders})
+      AND archived_at IS NULL
+  `);
 
       const bindings: Array<string | number> = [column.status];
 
@@ -1095,14 +1331,84 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
         bindings.push(taskId, (absoluteIndex + 1) * 100);
       });
 
+      statusChangedInChunk.forEach((taskId) => {
+        bindings.push(taskId, nowSeconds);
+      });
+
       bindings.push(projectId, ...chunk);
 
       updateStatements.push(statement.bind(...bindings));
     }
   }
 
-  if (updateStatements.length > 0) {
-    await c.env.flow_db.batch(updateStatements);
+  const discordSyncStatements: D1PreparedStatement[] = [];
+
+  for (const taskId of statusChangedTaskIds) {
+    if (!discordMappedTaskIds.has(taskId)) {
+      continue;
+    }
+
+    const eventId = createId("obx");
+
+    discordSyncStatements.push(
+      c.env.flow_db
+        .prepare(
+          `
+        DELETE FROM discord_outbox_events
+        WHERE aggregate_id = ?
+          AND event_type = 'task_thread.sync'
+      `,
+        )
+        .bind(taskId),
+    );
+
+    discordSyncStatements.push(
+      c.env.flow_db
+        .prepare(
+          `
+        INSERT INTO discord_outbox_events (
+          id,
+          workspace_id,
+          aggregate_type,
+          aggregate_id,
+          event_type,
+          status,
+          dispatch_attempt_count,
+          last_dispatch_error,
+          dispatched_at,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ?,
+          ?,
+          'task_thread',
+          ?,
+          'task_thread.sync',
+          'pending',
+          0,
+          NULL,
+          NULL,
+          ?,
+          ?
+        )
+      `,
+        )
+        .bind(eventId, auth.workspace.id, taskId, nowSeconds, nowSeconds),
+    );
+  }
+
+  const statements = [...updateStatements, ...discordSyncStatements];
+
+  if (statements.length > 0) {
+    /*
+     * Board state and Discord sync intent
+     * commit atomically.
+     *
+     * Discord itself is never called from
+     * this mutation path.
+     */
+    await c.env.flow_db.batch(statements);
   }
 
   return c.json({
@@ -1286,7 +1592,15 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
   const editsTask = input.title !== undefined || input.description !== undefined || input.status !== undefined || input.priority !== undefined || input.startDate !== undefined || input.dueDate !== undefined || input.discordThreadUrl !== undefined;
 
   const assignsTask = input.assigneeIds !== undefined || input.leadUserId !== undefined;
-
+  const syncsDiscordTask =
+    input.title !== undefined ||
+    input.description !== undefined ||
+    input.status !== undefined ||
+    input.priority !== undefined ||
+    input.startDate !== undefined ||
+    input.dueDate !== undefined ||
+    input.assigneeIds !== undefined ||
+    input.leadUserId !== undefined;
   if (editsTask && !canEditTasks) {
     return c.json(
       {
@@ -1459,6 +1773,22 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
 
   const now = new Date();
 
+  let discordSyncOutboxEventId: string | null = null;
+
+  if (syncsDiscordTask) {
+    const [discordMapping] = await db
+      .select({
+        taskId: taskDiscordThreads.taskId,
+      })
+      .from(taskDiscordThreads)
+      .where(eq(taskDiscordThreads.taskId, taskId))
+      .limit(1);
+
+    if (discordMapping) {
+      discordSyncOutboxEventId = createId("obx");
+    }
+  }
+
   const taskUpdate = db
     .update(tasks)
     .set({
@@ -1487,7 +1817,41 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
         isNull(tasks.archivedAt),
       ),
     );
+  const discordSyncDelete = discordSyncOutboxEventId
+    ? db.delete(discordOutboxEvents).where(
+        and(
+          eq(discordOutboxEvents.aggregateId, taskId),
 
+          eq(discordOutboxEvents.eventType, "task_thread.sync"),
+        ),
+      )
+    : null;
+
+  const discordSyncInsert = discordSyncOutboxEventId
+    ? db.insert(discordOutboxEvents).values({
+        id: discordSyncOutboxEventId,
+
+        workspaceId: auth.workspace.id,
+
+        aggregateType: "task_thread",
+
+        aggregateId: taskId,
+
+        eventType: "task_thread.sync",
+
+        status: "pending",
+
+        dispatchAttemptCount: 0,
+
+        lastDispatchError: null,
+
+        dispatchedAt: null,
+
+        createdAt: now,
+
+        updatedAt: now,
+      })
+    : null;
   if (assigneeIds !== undefined) {
     const assignmentDelete = db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId));
 
@@ -1495,17 +1859,44 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       const assignmentInsert = db.insert(taskAssignees).values(
         assigneeIds.map((userId) => ({
           taskId,
+
           userId,
+
           createdAt: now,
         })),
       );
 
-      await db.batch([taskUpdate, assignmentDelete, assignmentInsert]);
+      if (discordSyncDelete && discordSyncInsert) {
+        await db.batch([taskUpdate, assignmentDelete, assignmentInsert, discordSyncDelete, discordSyncInsert]);
+      } else {
+        await db.batch([taskUpdate, assignmentDelete, assignmentInsert]);
+      }
     } else {
-      await db.batch([taskUpdate, assignmentDelete]);
+      if (discordSyncDelete && discordSyncInsert) {
+        await db.batch([taskUpdate, assignmentDelete, discordSyncDelete, discordSyncInsert]);
+      } else {
+        await db.batch([taskUpdate, assignmentDelete]);
+      }
     }
+  } else if (discordSyncDelete && discordSyncInsert) {
+    await db.batch([taskUpdate, discordSyncDelete, discordSyncInsert]);
   } else {
     await taskUpdate;
+  }
+
+  /*
+   * D1 is authoritative.
+   *
+   * The Task mutation and latest durable
+   * Discord sync intent have already
+   * committed before this point.
+   *
+   * Queue dispatch is only a latency
+   * optimization. It must never make the
+   * Task PATCH depend on Discord.
+   */
+  if (discordSyncOutboxEventId) {
+    c.executionCtx.waitUntil(dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, taskId, discordSyncOutboxEventId));
   }
 
   const data = await loadTaskDto(db, taskId);
@@ -1702,7 +2093,30 @@ tasksRoutes.post("/tasks/:taskId/resources", requireAuth, requirePermission("tas
           updatedAt: now,
         };
 
-  await db.insert(taskResources).values(resource);
+  const resourceInsert = db.insert(taskResources).values(resource);
+
+  const taskTouch = db
+    .update(tasks)
+    .set({
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(tasks.id, task.id),
+
+        isNull(tasks.archivedAt),
+      ),
+    );
+
+  const discordSync = await createTaskDiscordSyncIntent(db, auth.workspace.id, task.id, now);
+
+  if (discordSync) {
+    await db.batch([resourceInsert, taskTouch, discordSync.deletePrevious, discordSync.insertLatest]);
+
+    c.executionCtx.waitUntil(dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, task.id, discordSync.eventId));
+  } else {
+    await db.batch([resourceInsert, taskTouch]);
+  }
 
   const data: TaskResourceDto = {
     id: resource.id,
@@ -1881,7 +2295,7 @@ tasksRoutes.patch("/tasks/:taskId/resources/:resourceId", requireAuth, requirePe
     content = null;
   }
 
-  await db
+  const resourceUpdate = db
     .update(taskResources)
     .set({
       title,
@@ -1897,6 +2311,29 @@ tasksRoutes.patch("/tasks/:taskId/resources/:resourceId", requireAuth, requirePe
         eq(taskResources.taskId, task.id),
       ),
     );
+
+  const taskTouch = db
+    .update(tasks)
+    .set({
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(tasks.id, task.id),
+
+        isNull(tasks.archivedAt),
+      ),
+    );
+
+  const discordSync = await createTaskDiscordSyncIntent(db, auth.workspace.id, task.id, now);
+
+  if (discordSync) {
+    await db.batch([resourceUpdate, taskTouch, discordSync.deletePrevious, discordSync.insertLatest]);
+
+    c.executionCtx.waitUntil(dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, task.id, discordSync.eventId));
+  } else {
+    await db.batch([resourceUpdate, taskTouch]);
+  }
 
   const data: TaskResourceDto = {
     id: resource.id,
@@ -1974,13 +2411,38 @@ tasksRoutes.delete("/tasks/:taskId/resources/:resourceId", requireAuth, requireP
     );
   }
 
-  await db.delete(taskResources).where(
+  const now = new Date();
+
+  const resourceDelete = db.delete(taskResources).where(
     and(
       eq(taskResources.id, resource.id),
 
       eq(taskResources.taskId, task.id),
     ),
   );
+
+  const taskTouch = db
+    .update(tasks)
+    .set({
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(tasks.id, task.id),
+
+        isNull(tasks.archivedAt),
+      ),
+    );
+
+  const discordSync = await createTaskDiscordSyncIntent(db, auth.workspace.id, task.id, now);
+
+  if (discordSync) {
+    await db.batch([resourceDelete, taskTouch, discordSync.deletePrevious, discordSync.insertLatest]);
+
+    c.executionCtx.waitUntil(dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, task.id, discordSync.eventId));
+  } else {
+    await db.batch([resourceDelete, taskTouch]);
+  }
 
   return c.json({
     data: {

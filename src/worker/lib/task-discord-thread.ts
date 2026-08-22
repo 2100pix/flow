@@ -6,8 +6,17 @@ import { createDb } from "../db";
 
 import { projectDiscordForums, projects, taskAssignees, taskDiscordThreads, taskResources, tasks, users, workspaceDiscordIntegrations } from "../db/schema";
 
-import { createDiscordForumThread, DiscordApiError, DISCORD_PUBLIC_THREAD_TYPE, getDiscordMessage, listActiveDiscordGuildThreads, listArchivedDiscordPublicThreads, type DiscordGuildChannel, type DiscordMessage } from "./discord-api";
-
+import {
+  createDiscordForumThread,
+  DiscordApiError,
+  DISCORD_PUBLIC_THREAD_TYPE,
+  editDiscordMessage,
+  getDiscordMessage,
+  listActiveDiscordGuildThreads,
+  listArchivedDiscordPublicThreads,
+  type DiscordGuildChannel,
+  type DiscordMessage,
+} from "./discord-api";
 type Db = ReturnType<typeof createDb>;
 
 const PROVISION_LEASE_MS = 60_000;
@@ -54,8 +63,40 @@ export type ProvisionTaskDiscordThreadResult =
       message: string;
     };
 
+export type SyncTaskDiscordThreadResult =
+  | {
+      status: "skipped";
+
+      reason: "mapping_missing" | "mapping_not_ready" | "integration_disabled" | "integration_not_connected" | "project_forum_not_ready";
+    }
+  | {
+      status: "synced";
+
+      taskId: string;
+
+      guildId: string;
+
+      forumChannelId: string;
+
+      threadId: string;
+
+      initialMessageId: string;
+    }
+  | {
+      status: "error";
+
+      taskId: string;
+
+      message: string;
+    };
 function resolveErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Unknown Discord task thread provisioning error";
+
+  return message.slice(0, MAX_LAST_ERROR_LENGTH);
+}
+
+function resolveSyncErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "Unknown Discord task message sync error";
 
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
 }
@@ -749,6 +790,183 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       attemptCount: claimed.attemptCount,
 
       message,
+    };
+  }
+}
+
+export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: string): Promise<SyncTaskDiscordThreadResult> {
+  const [mapping] = await db
+    .select({
+      taskId: taskDiscordThreads.taskId,
+
+      guildId: taskDiscordThreads.guildId,
+
+      forumChannelId: taskDiscordThreads.forumChannelId,
+
+      threadId: taskDiscordThreads.threadId,
+
+      initialMessageId: taskDiscordThreads.initialMessageId,
+
+      provisioningStatus: taskDiscordThreads.provisioningStatus,
+
+      projectId: tasks.projectId,
+
+      description: tasks.description,
+
+      status: tasks.status,
+
+      priority: tasks.priority,
+
+      leadUserId: tasks.leadUserId,
+
+      startDate: tasks.startDate,
+
+      dueDate: tasks.dueDate,
+
+      taskUpdatedAt: tasks.updatedAt,
+
+      workspaceId: projects.workspaceId,
+    })
+    .from(taskDiscordThreads)
+    .innerJoin(tasks, eq(tasks.id, taskDiscordThreads.taskId))
+    .innerJoin(projects, eq(projects.id, tasks.projectId))
+    .where(eq(taskDiscordThreads.taskId, taskId))
+    .limit(1);
+
+  if (!mapping) {
+    return {
+      status: "skipped",
+
+      reason: "mapping_missing",
+    };
+  }
+
+  if (mapping.provisioningStatus !== "ready" || !mapping.forumChannelId || !mapping.threadId || !mapping.initialMessageId) {
+    return {
+      status: "skipped",
+
+      reason: "mapping_not_ready",
+    };
+  }
+
+  const [integration] = await db
+    .select({
+      enabled: workspaceDiscordIntegrations.enabled,
+
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(eq(workspaceDiscordIntegrations.workspaceId, mapping.workspaceId))
+    .limit(1);
+
+  if (!integration?.enabled) {
+    return {
+      status: "skipped",
+
+      reason: "integration_disabled",
+    };
+  }
+
+  if (!integration.guildId) {
+    return {
+      status: "skipped",
+
+      reason: "integration_not_connected",
+    };
+  }
+
+  const [projectForum] = await db
+    .select({
+      guildId: projectDiscordForums.guildId,
+
+      forumChannelId: projectDiscordForums.forumChannelId,
+
+      provisioningStatus: projectDiscordForums.provisioningStatus,
+    })
+    .from(projectDiscordForums)
+    .where(eq(projectDiscordForums.projectId, mapping.projectId))
+    .limit(1);
+
+  if (!projectForum || projectForum.provisioningStatus !== "ready" || !projectForum.forumChannelId) {
+    return {
+      status: "skipped",
+
+      reason: "project_forum_not_ready",
+    };
+  }
+
+  if (mapping.guildId !== integration.guildId || projectForum.guildId !== integration.guildId || mapping.forumChannelId !== projectForum.forumChannelId) {
+    return {
+      status: "error",
+
+      taskId,
+
+      message: "Task Discord thread mapping does not match the current Discord integration",
+    };
+  }
+
+  try {
+    /*
+     * Always rebuild from authoritative D1
+     * state instead of carrying mutation
+     * payloads into Discord.
+     */
+    const canonicalMessage = await buildCanonicalTaskMessage(db, {
+      id: taskId,
+
+      description: mapping.description,
+
+      status: mapping.status,
+
+      priority: mapping.priority,
+
+      leadUserId: mapping.leadUserId,
+
+      startDate: mapping.startDate,
+
+      dueDate: mapping.dueDate,
+
+      updatedAt: mapping.taskUpdatedAt,
+    });
+
+    const message = await editDiscordMessage(botToken, {
+      channelId: mapping.threadId,
+
+      messageId: mapping.initialMessageId,
+
+      content: canonicalMessage.content,
+
+      allowedUserIds: canonicalMessage.allowedUserIds,
+    });
+
+    /*
+     * Never silently accept Discord editing
+     * a different canonical object.
+     */
+    if (message.id !== mapping.initialMessageId || message.channel_id !== mapping.threadId) {
+      throw new Error("Discord returned an unexpected Task message while syncing");
+    }
+
+    return {
+      status: "synced",
+
+      taskId,
+
+      guildId: mapping.guildId,
+
+      forumChannelId: mapping.forumChannelId,
+
+      threadId: mapping.threadId,
+
+      initialMessageId: message.id,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+
+      taskId,
+
+      message: resolveSyncErrorMessage(error),
     };
   }
 }

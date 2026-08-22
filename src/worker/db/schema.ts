@@ -895,7 +895,7 @@ export const discordOutboxEvents = sqliteTable(
     aggregateId: text("aggregate_id").notNull(),
 
     eventType: text("event_type", {
-      enum: ["project_forum.provision", "task_thread.provision"],
+      enum: ["project_forum.provision", "task_thread.provision", "task_thread.sync"],
     }).notNull(),
 
     status: text("status", {

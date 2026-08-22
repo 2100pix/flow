@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { createDb } from "../db";
 
 import { discordOutboxEvents } from "../db/schema";
-import { provisionTaskDiscordThread } from "./task-discord-thread";
+import { provisionTaskDiscordThread, syncTaskDiscordThread } from "./task-discord-thread";
 
 import type { AppBindings } from "../types/app-env";
 
@@ -92,14 +92,121 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       reason: "stale_dispatch_attempt",
     };
   }
-  if (event.aggregateType === "task_thread" && event.eventType === "task_thread.provision") {
+  if (event.aggregateType === "task_thread" && event.eventType === "task_thread.sync") {
     /*
-     * Receiving this Queue message proves that
+     * Receiving this Queue message proves
      * queue.send() succeeded.
      *
-     * Persist that fact before performing the
-     * external Discord side effect.
+     * Persist that delivery fact first.
+     * Any Discord failure below may then
+     * return this exact dispatch attempt
+     * back to durable pending state.
      */
+    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+    /*
+     * syncTaskDiscordThread never trusts
+     * mutation payloads carried by Queue.
+     *
+     * It re-reads the latest authoritative
+     * Task, assignees, resources, mapping,
+     * and integration state from D1.
+     */
+    const result = await syncTaskDiscordThread(db, botToken, event.aggregateId);
+
+    if (result.status === "synced") {
+      await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+      return {
+        status: "processed",
+
+        eventId,
+
+        aggregateType: "task_thread",
+
+        aggregateId: result.taskId,
+      };
+    }
+
+    if (result.status === "error") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Task message sync failed: ${result.message}`);
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: result.message,
+      };
+    }
+
+    if (result.reason === "integration_disabled") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is disabled");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "integration_disabled",
+      };
+    }
+
+    if (result.reason === "integration_not_connected") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is not connected");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "integration_not_connected",
+      };
+    }
+
+    if (result.reason === "project_forum_not_ready") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because the Project Discord Forum is not ready");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "project_forum_not_ready",
+      };
+    }
+
+    if (result.reason === "mapping_not_ready") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because the Task Discord thread is not ready");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "task_thread_not_ready",
+      };
+    }
+
+    /*
+     * mapping_missing means the Task no
+     * longer owns a Discord sync target.
+     *
+     * The Queue delivery itself was valid,
+     * so leave this old event dispatched
+     * and ACK it instead of retrying
+     * indefinitely.
+     */
+    return {
+      status: "ignored",
+
+      eventId,
+
+      reason: "mapping_missing",
+    };
+  }
+
+  if (event.aggregateType === "task_thread" && event.eventType === "task_thread.provision") {
     await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
 
     const result = await provisionTaskDiscordThread(db, botToken, event.aggregateId);

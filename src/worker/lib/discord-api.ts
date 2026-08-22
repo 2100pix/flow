@@ -188,3 +188,42 @@ export function createDiscordForumThread(botToken: string, input: CreateDiscordF
     }),
   });
 }
+
+type EditDiscordMessageInput = {
+  channelId: string;
+
+  messageId: string;
+
+  content: string;
+
+  allowedUserIds: readonly string[];
+};
+
+export function editDiscordMessage(botToken: string, input: EditDiscordMessageInput) {
+  return discordFetch<DiscordMessage>(botToken, `/channels/${encodeURIComponent(input.channelId)}/messages/${encodeURIComponent(input.messageId)}`, {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      content: input.content,
+
+      /*
+       * Edit Message does not inherit the
+       * allowed_mentions rules that were
+       * used when the message was created.
+       *
+       * Keep arbitrary user content from
+       * producing @everyone/@here or
+       * unintended user mentions.
+       */
+      allowed_mentions: {
+        parse: [],
+
+        users: input.allowedUserIds,
+      },
+    }),
+  });
+}
