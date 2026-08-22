@@ -42,6 +42,7 @@ rolesRoutes.get("/", requireAuth, requirePermission("roles.view"), async (c) => 
     .select({
       id: workspaceRoles.id,
       name: workspaceRoles.name,
+      position: workspaceRoles.position,
       createdAt: workspaceRoles.createdAt,
       updatedAt: workspaceRoles.updatedAt,
     })
@@ -310,25 +311,42 @@ rolesRoutes.put(
 
     const now = new Date();
 
-    if (input.roleIds.length > 0) {
-      await db.batch(
-        input.roleIds.map((roleId, position) =>
-          db
-            .update(workspaceRoles)
-            .set({
-              position,
+    const [firstRoleId, ...remainingRoleIds] = input.roleIds;
 
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(workspaceRoles.id, roleId),
+    if (firstRoleId) {
+      const firstStatement = db
+        .update(workspaceRoles)
+        .set({
+          position: 0,
 
-                eq(workspaceRoles.workspaceId, auth.workspace.id),
-              ),
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workspaceRoles.id, firstRoleId),
+
+            eq(workspaceRoles.workspaceId, auth.workspace.id),
+          ),
+        );
+
+      const remainingStatements = remainingRoleIds.map((roleId, index) =>
+        db
+          .update(workspaceRoles)
+          .set({
+            position: index + 1,
+
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(workspaceRoles.id, roleId),
+
+              eq(workspaceRoles.workspaceId, auth.workspace.id),
             ),
-        ),
+          ),
       );
+
+      await db.batch([firstStatement, ...remainingStatements]);
     }
 
     return c.json({
@@ -380,6 +398,9 @@ rolesRoutes.patch(
     const [role] = await db
       .select({
         id: workspaceRoles.id,
+
+        position: workspaceRoles.position,
+
         createdAt: workspaceRoles.createdAt,
       })
       .from(workspaceRoles)
@@ -465,7 +486,7 @@ rolesRoutes.patch(
       name: input.name,
       kind: "custom",
       systemKey: null,
-      position: null,
+      position: role.position,
       permissions: input.permissions,
       createdAt: role.createdAt.toISOString(),
       updatedAt: now.toISOString(),

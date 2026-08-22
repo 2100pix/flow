@@ -927,43 +927,8 @@ membersRoutes.patch(
     const db = createDb(c.env.flow_db);
     const callerIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, auth.user.id);
     const targetIsWorkspaceCreator = await isWorkspaceCreator(db, c.env, userId);
-
-    if (targetIsWorkspaceCreator && input.kind === "built_in" && input.role !== "owner") {
-      return c.json(
-        {
-          error: {
-            code: "WORKSPACE_CREATOR_OWNER_PROTECTED",
-
-            message: "The workspace creator must remain an Owner",
-          },
-        },
-        409,
-      );
-    }
-    if (targetMember.role === "owner" && input.kind === "built_in" && input.role !== "owner" && !callerIsWorkspaceCreator) {
-      return c.json(
-        {
-          error: {
-            code: "WORKSPACE_CREATOR_REQUIRED",
-
-            message: "Only the workspace creator can remove Owner access",
-          },
-        },
-        403,
-      );
-    }
-    if (input.kind === "built_in" && input.role === "owner" && !callerIsWorkspaceCreator) {
-      return c.json(
-        {
-          error: {
-            code: "WORKSPACE_CREATOR_REQUIRED",
-
-            message: "Only the workspace creator can assign Owner",
-          },
-        },
-        403,
-      );
-    }
+    const isSystemOwner = auth.workspace.role === "owner";
+    const isSystemAdministrator = isSystemOwner || auth.workspace.role === "admin";
 
     const [targetMember] = await db
       .select({
@@ -995,11 +960,70 @@ membersRoutes.patch(
         404,
       );
     }
+
+    /*
+     * Workspace creator:
+     * - must remain system Owner
+     * - may use/remove a custom role
+     */
+    if (targetIsWorkspaceCreator && input.kind === "built_in" && input.role !== "owner") {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_OWNER_PROTECTED",
+
+            message: "The workspace creator must remain an Owner",
+          },
+        },
+        409,
+      );
+    }
+
+    /*
+     * Only the workspace creator may
+     * grant system Owner.
+     */
+    if (input.kind === "built_in" && input.role === "owner" && !callerIsWorkspaceCreator) {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_REQUIRED",
+
+            message: "Only the workspace creator can assign Owner",
+          },
+        },
+        403,
+      );
+    }
+
+    /*
+     * Only the workspace creator may
+     * remove Owner access from another
+     * Owner.
+     *
+     * Assigning a custom role is allowed
+     * because the system Owner role is
+     * preserved later.
+     */
+    if (targetMember.role === "owner" && input.kind === "built_in" && input.role !== "owner" && !callerIsWorkspaceCreator) {
+      return c.json(
+        {
+          error: {
+            code: "WORKSPACE_CREATOR_REQUIRED",
+
+            message: "Only the workspace creator can remove Owner access",
+          },
+        },
+        403,
+      );
+    }
+
     if ((targetMember.role === "owner" || targetMember.role === "admin") && !isSystemAdministrator) {
       return c.json(
         {
           error: {
             code: "SYSTEM_ROLE_PROTECTED",
+
             message: "You cannot change a system administrator",
           },
         },
@@ -1019,9 +1043,7 @@ membersRoutes.patch(
         403,
       );
     }
-
     let nextRole: "owner" | "admin" | "member";
-
     let nextCustomRoleId: string | null = null;
 
     let nextCustomRole: {
@@ -1030,30 +1052,6 @@ membersRoutes.patch(
     } | null = null;
 
     if (input.kind === "built_in") {
-      if (input.role === "owner" && auth.workspace.role !== "owner") {
-        return c.json(
-          {
-            error: {
-              code: "OWNER_REQUIRED",
-
-              message: "Only a workspace owner can assign the owner role",
-            },
-          },
-          403,
-        );
-      }
-      if (input.role === "owner" && !isSystemOwner) {
-        return c.json(
-          {
-            error: {
-              code: "OWNER_REQUIRED",
-              message: "Only a workspace owner can assign the owner role",
-            },
-          },
-          403,
-        );
-      }
-
       if (input.role === "admin" && !isSystemAdministrator) {
         return c.json(
           {
