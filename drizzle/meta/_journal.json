@@ -134,6 +134,13 @@
       "when": 1787390475444,
       "tag": "0018_fantastic_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1787396623418,
+      "tag": "0019_light_mauler",
+      "breakpoints": true
     }
   ]
 }

@@ -481,6 +481,79 @@ export const projects = sqliteTable(
   ],
 );
 
+export const projectDiscordForums = sqliteTable(
+  "project_discord_forums",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    guildId: text("guild_id").notNull(),
+
+    forumChannelId: text("forum_channel_id"),
+
+    provisioningStatus: text("provisioning_status", {
+      enum: ["pending", "ready", "error"],
+    })
+      .default("pending")
+      .notNull(),
+
+    attemptCount: integer("attempt_count").default(0).notNull(),
+
+    lastError: text("last_error"),
+
+    lastAttemptAt: integer("last_attempt_at", {
+      mode: "timestamp",
+    }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+
+  (table) => [
+    uniqueIndex("project_discord_forums_forum_channel_id_unique").on(table.forumChannelId),
+
+    index("project_discord_forums_guild_id_idx").on(table.guildId),
+
+    index("project_discord_forums_provisioning_status_idx").on(table.provisioningStatus),
+
+    check(
+      "project_discord_forums_status_check",
+      sql`
+          ${table.provisioningStatus}
+          in (
+            'pending',
+            'ready',
+            'error'
+          )
+        `,
+    ),
+
+    check(
+      "project_discord_forums_ready_channel_check",
+      sql`
+          ${table.provisioningStatus} != 'ready'
+          or
+          ${table.forumChannelId} is not null
+        `,
+    ),
+
+    check(
+      "project_discord_forums_attempt_count_check",
+      sql`
+          ${table.attemptCount} >= 0
+        `,
+    ),
+  ],
+);
+
 export const projectMembers = sqliteTable(
   "project_members",
   {

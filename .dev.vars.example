@@ -1,5 +1,9 @@
 DISCORD_CLIENT_ID=""
 DISCORD_CLIENT_SECRET=""
 DISCORD_REDIRECT_URI="http://localhost:5173/api/auth/discord/callback"
+
+DISCORD_BOT_TOKEN=""
+DISCORD_INTEGRATION_REDIRECT_URI="http://localhost:5173/api/integrations/discord/callback"
+
 FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID=""
 FLOW_WORKSPACE_ID=""
