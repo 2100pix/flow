@@ -203,3 +203,6 @@ dist
 .wrangler-test-*/
 .wrangler-state-*/
 .tmp-*.sql
+
+### Production database exports ###
+/backups/

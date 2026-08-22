@@ -1,11 +1,10 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 
 import { ClientDetailPage } from "@/app/pages/client-detail-page";
 import { ClientsPage } from "@/app/pages/clients-page";
 import { HomePage } from "@/app/pages/home-page";
 import { LoginPage } from "@/app/pages/login-page";
-import { MembersPage } from "@/app/pages/members-page";
 import { NotFoundPage } from "@/app/pages/not-found-page";
 import { ProjectDetailPage } from "@/app/pages/project-detail-page";
 
@@ -65,7 +64,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "/members",
-        element: <MembersPage />,
+        element: <Navigate to="/settings?section=members" replace />,
       },
       {
         path: "/settings",

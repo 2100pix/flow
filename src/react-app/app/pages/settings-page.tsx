@@ -26,14 +26,6 @@ const settingsSections = [
     id: "roles",
     label: "Roles",
   },
-  {
-    id: "task-fields",
-    label: "Task Fields",
-  },
-  {
-    id: "task-appearance",
-    label: "Task Appearance",
-  },
 ] as const;
 
 type SettingsSection = (typeof settingsSections)[number]["id"];
@@ -176,20 +168,6 @@ function GeneralSettings() {
   );
 }
 
-function PlaceholderSettings({ title }: { title: string }) {
-  return (
-    <div className="p-6 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
-
-        <div className="mt-10 max-w-xl rounded-xl border border-dashed border-border p-6">
-          <p className="text-sm text-muted-foreground">No settings available here yet.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function SettingsPage() {
   const [searchParams] = useSearchParams();
 
@@ -224,11 +202,7 @@ export function SettingsPage() {
         ? "general"
         : requestedSection === "roles" && !hasPermission(auth, "roles.view")
           ? "general"
-          : requestedSection === "task-fields" && !hasPermission(auth, "task_fields.view")
-            ? "general"
-            : requestedSection === "task-appearance" && !hasPermission(auth, "task_appearance.view")
-              ? "general"
-              : requestedSection;
+          : requestedSection;
 
   if (activeSection === "general") {
     return <GeneralSettings />;
@@ -244,5 +218,5 @@ export function SettingsPage() {
     return <RolesSettings />;
   }
 
-  return <PlaceholderSettings title={settingsSections.find((section) => section.id === activeSection)?.label ?? "Settings"} />;
+  return <GeneralSettings />;
 }
