@@ -922,11 +922,18 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
       dueDateMode: projects.dueDateMode,
       discordChannelUrl: projects.discordChannelUrl,
 
+      discordForumGuildId: projectDiscordForums.guildId,
+
+      discordForumChannelId: projectDiscordForums.forumChannelId,
+
+      discordForumProvisioningStatus: projectDiscordForums.provisioningStatus,
+
       createdAt: projects.createdAt,
     })
     .from(projects)
     .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
+    .leftJoin(projectDiscordForums, eq(projectDiscordForums.projectId, projects.id))
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
@@ -1074,6 +1081,8 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
     effectiveDueDate,
 
     discordChannelUrl,
+
+    discordForumUrl: project.discordForumProvisioningStatus === "ready" && project.discordForumGuildId && project.discordForumChannelId ? `https://discord.com/channels/${project.discordForumGuildId}/${project.discordForumChannelId}` : null,
 
     createdAt: project.createdAt.toISOString(),
 

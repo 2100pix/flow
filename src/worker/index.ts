@@ -11,6 +11,7 @@ import { workspaceRoutes } from "./routes/workspace";
 import { teamsRoutes } from "./routes/teams";
 import { rolesRoutes } from "./routes/roles";
 import { discordIntegrationRoutes } from "./routes/discord-integration";
+import { discordInteractionRoutes } from "./routes/discord-interactions";
 
 import { createDb } from "./db";
 
@@ -36,6 +37,8 @@ app.route("/api/dashboard", dashboardRoutes);
 app.route("/api/workspace", workspaceRoutes);
 app.route("/api/teams", teamsRoutes);
 app.route("/api/roles", rolesRoutes);
+app.route("/api/integrations/discord", discordIntegrationRoutes);
+app.route("/api/integrations/discord/interactions", discordInteractionRoutes);
 app.route("/api/integrations/discord", discordIntegrationRoutes);
 
 app.route("/api", tasksRoutes);

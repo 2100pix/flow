@@ -7,6 +7,9 @@ export type AppBindings = Env & {
 
   DISCORD_BOT_TOKEN: string;
   DISCORD_INTEGRATION_REDIRECT_URI: string;
+
+  DISCORD_PUBLIC_KEY: string;
+
   FLOW_BOOTSTRAP_OWNER_DISCORD_USER_ID: string;
   FLOW_WORKSPACE_ID: string;
 

@@ -397,6 +397,11 @@ async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
 
     discordThreadUrl: task.discordThreadUrl,
 
+    discordForumPostUrl:
+      task.discordForumProvisioningStatus === "ready" && task.discordForumGuildId && task.discordForumThreadId && task.discordForumInitialMessageId
+        ? `https://discord.com/channels/${task.discordForumGuildId}/${task.discordForumThreadId}/${task.discordForumInitialMessageId}`
+        : null,
+
     createdAt: task.createdAt.toISOString(),
 
     updatedAt: task.updatedAt.toISOString(),

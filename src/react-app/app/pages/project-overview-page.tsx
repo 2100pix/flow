@@ -31,7 +31,7 @@ import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_LEAD_MAX_COUNT } from "@/featur
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 import { useUpdateProjectLeads } from "@/features/projects/hooks/use-update-project-leads";
-import { type ProjectDto, type ProjectStatus } from "@/features/projects/types";
+import { type ProjectDetailDto, type ProjectDto, type ProjectStatus } from "@/features/projects/types";
 
 const statusLabels: Record<ProjectStatus, string> = {
   planning: "Planning",
@@ -732,7 +732,7 @@ function CollaborationControls({
   canManageMembers,
   canViewWorkspaceMembers,
 }: {
-  project: ProjectDto;
+  project: ProjectDetailDto;
   projectMembers: ProjectMemberDto[];
   membersPending: boolean;
   membersError: boolean;

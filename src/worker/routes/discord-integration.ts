@@ -6,7 +6,7 @@ import { createDb } from "../db";
 import { workspaceDiscordIntegrations } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { zValidator } from "@hono/zod-validator";
-import { dispatchPendingDiscordOutboxEvents } from "../lib/discord-outbox";
+import { taskPrioritySchema, taskStatusSchema } from "../../shared/contracts/tasks";
 
 import type { AppBindings } from "../types/app-env";
 import type { AuthContext } from "../types/auth";
@@ -39,6 +39,13 @@ type DiscordGuildChannel = {
 };
 
 const DISCORD_GUILD_CATEGORY_TYPE = 4;
+const DISCORD_CHAT_INPUT_COMMAND_TYPE = 1;
+
+const DISCORD_STRING_OPTION_TYPE = 3;
+
+function formatDiscordChoiceName(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
 type DiscordIntegrationEnv = {
   Bindings: AppBindings;
@@ -59,6 +66,150 @@ function getIntegrationSettingsUrl(status: string) {
 
   return `/settings?${params.toString()}`;
 }
+
+discordIntegrationRoutes.post("/commands/register", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const db = createDb(c.env.flow_db);
+
+  const [integration] = await db
+    .select({
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+    .limit(1);
+
+  if (!integration?.guildId) {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_NOT_CONNECTED",
+
+          message: "Connect a Discord server before registering commands",
+        },
+      },
+      409,
+    );
+  }
+
+  /*
+   * Choices are generated from the same
+   * shared Zod enums used by Flow's Task
+   * HTTP contracts.
+   */
+  const commands = [
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setstatus",
+
+      description: "Update the Flow Task status",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "status",
+
+          description: "New Task status",
+
+          required: true,
+
+          choices: taskStatusSchema.options.map((value) => ({
+            name: formatDiscordChoiceName(value),
+
+            value,
+          })),
+        },
+      ],
+    },
+
+    {
+      type: DISCORD_CHAT_INPUT_COMMAND_TYPE,
+
+      name: "setpriority",
+
+      description: "Update the Flow Task priority",
+
+      options: [
+        {
+          type: DISCORD_STRING_OPTION_TYPE,
+
+          name: "priority",
+
+          description: "New Task priority",
+
+          required: true,
+
+          choices: taskPrioritySchema.options.map((value) => ({
+            name: formatDiscordChoiceName(value),
+
+            value,
+          })),
+        },
+      ],
+    },
+  ];
+
+  /*
+   * Bulk overwrite the connected Guild's
+   * Flow command set.
+   *
+   * Guild commands are preferred during
+   * development because registration is
+   * isolated to the connected workspace
+   * server.
+   */
+  const response = await fetch(`${DISCORD_API_BASE}/applications/${encodeURIComponent(c.env.DISCORD_CLIENT_ID)}/guilds/${encodeURIComponent(integration.guildId)}/commands`, {
+    method: "PUT",
+
+    headers: {
+      Authorization: `Bot ${c.env.DISCORD_BOT_TOKEN}`,
+
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(commands),
+  });
+
+  if (!response.ok) {
+    console.error("Discord command registration failed", {
+      status: response.status,
+
+      guildId: integration.guildId,
+    });
+
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_COMMAND_REGISTRATION_FAILED",
+
+          message: "Failed to register Discord commands",
+        },
+      },
+      502,
+    );
+  }
+
+  const registered = (await response.json()) as Array<{
+    id: string;
+
+    name: string;
+  }>;
+
+  return c.json({
+    data: {
+      guildId: integration.guildId,
+
+      commands: registered.map((command) => ({
+        id: command.id,
+
+        name: command.name,
+      })),
+    },
+  });
+});
 
 discordIntegrationRoutes.get("/connect", requireAuth, requirePermission("settings.manage"), (c) => {
   const state = crypto.randomUUID();
@@ -575,34 +726,6 @@ discordIntegrationRoutes.patch(
     return c.json(response);
   },
 );
-
-discordIntegrationRoutes.post("/outbox/dispatch", requireAuth, requirePermission("settings.manage"), async (c) => {
-  const auth = c.var.auth;
-
-  const db = createDb(c.env.flow_db);
-
-  const results = await dispatchPendingDiscordOutboxEvents(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id);
-
-  const data = {
-    selected: results.length,
-
-    dispatched: results.filter((result) => result.status === "dispatched").length,
-
-    alreadyDispatched: results.filter((result) => result.status === "already_dispatched").length,
-
-    busy: results.filter((result) => result.status === "busy").length,
-
-    missing: results.filter((result) => result.status === "missing").length,
-
-    failed: results.filter((result) => result.status === "error").length,
-
-    results,
-  };
-
-  return c.json({
-    data,
-  });
-});
 
 discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"), async (c) => {
   const auth = c.var.auth;
