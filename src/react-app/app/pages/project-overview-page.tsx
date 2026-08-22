@@ -1025,16 +1025,21 @@ function CollaborationControls({
         </div>
 
         <div>
-          <p className="text-xs text-muted-foreground">Channel Chat</p>
+          <p className="text-xs text-muted-foreground">Discord Forum</p>
 
           <div className="mt-2">
-            {project.discordChannelUrl ? (
-              <a href={project.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline">
-                Open Discord
+            {project.discordForumUrl ? (
+              <a
+                href={project.discordForumUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Open Forum
                 <ArrowSquareOutIcon size={14} aria-hidden="true" />
               </a>
             ) : (
-              <p className="text-sm text-muted-foreground">Not Connected</p>
+              <p className="text-sm text-muted-foreground">Not available</p>
             )}
           </div>
         </div>

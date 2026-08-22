@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ArrowSquareOutIcon,
   CalendarBlankIcon,
   CellSignalHighIcon,
   CellSignalLowIcon,
@@ -510,7 +511,21 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
       <div className="min-h-0 flex-1">
         <div className={isPage ? "flex min-h-full flex-col pt-10" : "flex min-h-full flex-col px-6 py-6 md:px-7"}>
           <div className={isPage ? "min-w-0 max-w-2xl" : undefined}>
-            <CopyCode value={task.taskCode} appearance={isPage ? "badge" : "plain"} className={isPage ? undefined : "inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground"} />
+            <div className="flex flex-wrap items-center gap-2">
+              <CopyCode value={task.taskCode} appearance={isPage ? "badge" : "plain"} className={isPage ? undefined : "inline-flex rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground"} />
+
+              {task.discordForumPostUrl ? (
+                <a
+                  href={task.discordForumPostUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-sm text-[10px] font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Open Discord
+                  <ArrowSquareOutIcon className="size-3" aria-hidden="true" />
+                </a>
+              ) : null}
+            </div>
 
             <label htmlFor={`task-title-${task.id}`} className="sr-only">
               Task title

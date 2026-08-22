@@ -94,6 +94,14 @@ export type ProjectDto = {
 
 export type ProjectDetailDto = ProjectDto & {
   effectiveDueDate: string | null;
+
+  /*
+   * Official Flow-managed Discord Forum.
+   *
+   * This is independent from the legacy
+   * manually entered discordChannelUrl.
+   */
+  discordForumUrl: string | null;
 };
 
 export type ProjectsResponse = {

@@ -794,6 +794,13 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
       dueDate: projects.dueDate,
       dueDateMode: projects.dueDateMode,
       discordChannelUrl: projects.discordChannelUrl,
+
+      discordForumGuildId: projectDiscordForums.guildId,
+
+      discordForumChannelId: projectDiscordForums.forumChannelId,
+
+      discordForumProvisioningStatus: projectDiscordForums.provisioningStatus,
+
       leadUserId: projectLeads.userId,
       projectCodeOverride: projects.projectCodeOverride,
 
@@ -804,6 +811,7 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     .from(projects)
     .leftJoin(clients, and(eq(projects.clientId, clients.id), eq(clients.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projects.id), eq(projectLeads.position, 0)))
+    .leftJoin(projectDiscordForums, eq(projectDiscordForums.projectId, projects.id))
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)))
     .limit(1);
 
@@ -847,6 +855,8 @@ projectsRoutes.get("/:id", requireAuth, requirePermission("projects.view"), asyn
     effectiveDueDate,
 
     discordChannelUrl: project.discordChannelUrl,
+
+    discordForumUrl: project.discordForumProvisioningStatus === "ready" && project.discordForumGuildId && project.discordForumChannelId ? `https://discord.com/channels/${project.discordForumGuildId}/${project.discordForumChannelId}` : null,
 
     createdAt: project.createdAt.toISOString(),
 

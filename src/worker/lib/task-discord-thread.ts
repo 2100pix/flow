@@ -11,7 +11,9 @@ import {
   DiscordApiError,
   DISCORD_PUBLIC_THREAD_TYPE,
   editDiscordMessage,
+  getDiscordChannel,
   getDiscordMessage,
+  modifyDiscordThread,
   listActiveDiscordGuildThreads,
   listArchivedDiscordPublicThreads,
   type DiscordGuildChannel,
@@ -210,17 +212,39 @@ async function buildCanonicalTaskMessage(
   }
 
   if (resources.length > 0) {
-    const resourceLines = resources.map((resource) => {
-      const title = resource.title?.trim() || (resource.type === "link" ? "Link" : "Brief");
+    const briefs = resources.filter((resource) => resource.type === "document_brief");
 
-      if (resource.type === "link") {
-        return resource.url ? `- ${title}: ${resource.url}` : `- ${title}`;
-      }
+    const links = resources.filter((resource) => resource.type === "link");
 
-      return resource.content ? `- ${title}: ${resource.content}` : `- ${title}`;
-    });
+    const resourceLines: string[] = ["Resources:"];
 
-    lines.push(["Resources:", ...resourceLines].join("\n"));
+    if (briefs.length > 0) {
+      resourceLines.push("Brief:");
+
+      resourceLines.push(
+        ...briefs.map((resource) => {
+          const title = resource.title?.trim() || "Brief";
+
+          const content = resource.content?.trim();
+
+          return content ? `- ${title}: ${content}` : `- ${title}`;
+        }),
+      );
+    }
+
+    if (links.length > 0) {
+      resourceLines.push("Links:");
+
+      resourceLines.push(
+        ...links.map((resource) => {
+          const title = resource.title?.trim() || "Link";
+
+          return resource.url ? `- ${title}: ${resource.url}` : `- ${title}`;
+        }),
+      );
+    }
+
+    lines.push(resourceLines.join("\n"));
   }
 
   const marker = resolveTaskMarker(task.id);
@@ -811,6 +835,10 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
 
       projectId: tasks.projectId,
 
+      taskNumber: tasks.taskNumber,
+
+      title: tasks.title,
+
       description: tasks.description,
 
       status: tasks.status,
@@ -826,6 +854,10 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
       taskUpdatedAt: tasks.updatedAt,
 
       workspaceId: projects.workspaceId,
+
+      projectName: projects.name,
+
+      projectCodeOverride: projects.projectCodeOverride,
     })
     .from(taskDiscordThreads)
     .innerJoin(tasks, eq(tasks.id, taskDiscordThreads.taskId))
@@ -911,6 +943,27 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
      * state instead of carrying mutation
      * payloads into Discord.
      */
+    const desiredThreadName = resolveTaskThreadName(mapping.projectName, mapping.projectCodeOverride, mapping.taskNumber, mapping.title);
+
+    const currentThread = await getDiscordChannel(botToken, mapping.threadId);
+
+    if (currentThread.id !== mapping.threadId || currentThread.type !== DISCORD_PUBLIC_THREAD_TYPE || currentThread.parent_id !== mapping.forumChannelId) {
+      throw new Error("Discord returned an unexpected Task thread while syncing");
+    }
+
+    if (currentThread.name !== desiredThreadName) {
+      const renamedThread = await modifyDiscordThread(botToken, {
+        threadId: mapping.threadId,
+
+        name: desiredThreadName,
+
+        auditReason: `Flow task thread sync: ${taskId}`,
+      });
+
+      if (renamedThread.id !== mapping.threadId || renamedThread.type !== DISCORD_PUBLIC_THREAD_TYPE || renamedThread.parent_id !== mapping.forumChannelId || renamedThread.name !== desiredThreadName) {
+        throw new Error("Discord returned an unexpected Task thread after renaming");
+      }
+    }
     const canonicalMessage = await buildCanonicalTaskMessage(db, {
       id: taskId,
 

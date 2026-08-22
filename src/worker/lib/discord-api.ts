@@ -142,6 +142,41 @@ export function listArchivedDiscordPublicThreads(botToken: string, forumChannelI
 export function getDiscordMessage(botToken: string, channelId: string, messageId: string) {
   return discordFetch<DiscordMessage>(botToken, `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`);
 }
+export function getDiscordChannel(botToken: string, channelId: string) {
+  return discordFetch<DiscordGuildChannel>(botToken, `/channels/${encodeURIComponent(channelId)}`);
+}
+
+type ModifyDiscordThreadInput = {
+  threadId: string;
+
+  name: string;
+
+  auditReason: string;
+};
+
+export function modifyDiscordThread(botToken: string, input: ModifyDiscordThreadInput) {
+  return discordFetch<DiscordGuildChannel>(botToken, `/channels/${encodeURIComponent(input.threadId)}`, {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+
+      "X-Audit-Log-Reason": encodeURIComponent(input.auditReason),
+    },
+
+    /*
+     * Intentionally do not send
+     * archived=false.
+     *
+     * Renaming a Flow Task must never
+     * silently reopen an archived
+     * Discord thread.
+     */
+    body: JSON.stringify({
+      name: input.name,
+    }),
+  });
+}
 
 type CreateDiscordForumThreadInput = {
   forumChannelId: string;

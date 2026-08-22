@@ -16,6 +16,7 @@ import { provisionTaskDiscordThread, syncTaskDiscordThread } from "../lib/task-d
 
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
+import type { DiscordOutboxQueueMessage } from "../types/discord-queue";
 
 type TasksEnv = {
   Bindings: AppBindings;
@@ -343,12 +344,21 @@ async function loadTaskDto(db: Db, taskId: string): Promise<TaskDto | null> {
 
       discordThreadUrl: tasks.discordThreadUrl,
 
+      discordForumGuildId: taskDiscordThreads.guildId,
+
+      discordForumThreadId: taskDiscordThreads.threadId,
+
+      discordForumInitialMessageId: taskDiscordThreads.initialMessageId,
+
+      discordForumProvisioningStatus: taskDiscordThreads.provisioningStatus,
+
       createdAt: tasks.createdAt,
 
       updatedAt: tasks.updatedAt,
     })
     .from(tasks)
     .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .leftJoin(taskDiscordThreads, eq(taskDiscordThreads.taskId, tasks.id))
     .where(and(eq(tasks.id, taskId), isNull(tasks.archivedAt), isNull(projects.archivedAt)))
     .limit(1);
 
@@ -443,12 +453,20 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
 
       discordThreadUrl: tasks.discordThreadUrl,
 
-      createdAt: tasks.createdAt,
+      discordForumGuildId: taskDiscordThreads.guildId,
 
+      discordForumThreadId: taskDiscordThreads.threadId,
+
+      discordForumInitialMessageId: taskDiscordThreads.initialMessageId,
+
+      discordForumProvisioningStatus: taskDiscordThreads.provisioningStatus,
+
+      createdAt: tasks.createdAt,
       updatedAt: tasks.updatedAt,
     })
     .from(tasks)
     .innerJoin(projects, eq(tasks.projectId, projects.id))
+    .leftJoin(taskDiscordThreads, eq(taskDiscordThreads.taskId, tasks.id))
     .where(and(eq(tasks.projectId, projectId), isNull(tasks.archivedAt)))
     .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
@@ -487,6 +505,11 @@ tasksRoutes.get("/projects/:projectId/tasks", requireAuth, requirePermission("ta
     sortOrder: task.sortOrder,
 
     discordThreadUrl: task.discordThreadUrl,
+
+    discordForumPostUrl:
+      task.discordForumProvisioningStatus === "ready" && task.discordForumGuildId && task.discordForumThreadId && task.discordForumInitialMessageId
+        ? `https://discord.com/channels/${task.discordForumGuildId}/${task.discordForumThreadId}/${task.discordForumInitialMessageId}`
+        : null,
 
     createdAt: task.createdAt.toISOString(),
 
@@ -1343,13 +1366,20 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
 
   const discordSyncStatements: D1PreparedStatement[] = [];
 
+  const discordImmediateSyncEvents: Array<{
+    taskId: string;
+    eventId: string;
+  }> = [];
   for (const taskId of statusChangedTaskIds) {
     if (!discordMappedTaskIds.has(taskId)) {
       continue;
     }
 
     const eventId = createId("obx");
-
+    discordImmediateSyncEvents.push({
+      taskId,
+      eventId,
+    });
     discordSyncStatements.push(
       c.env.flow_db
         .prepare(
@@ -1401,14 +1431,18 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
   const statements = [...updateStatements, ...discordSyncStatements];
 
   if (statements.length > 0) {
-    /*
-     * Board state and Discord sync intent
-     * commit atomically.
-     *
-     * Discord itself is never called from
-     * this mutation path.
-     */
     await c.env.flow_db.batch(statements);
+  }
+
+  /*
+   * Board state and durable sync intents
+   * are already committed.
+   *
+   * Queue dispatch remains nonfatal and
+   * happens only after the D1 batch.
+   */
+  if (discordImmediateSyncEvents.length > 0) {
+    c.executionCtx.waitUntil(Promise.all(discordImmediateSyncEvents.map(({ taskId, eventId }) => dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, taskId, eventId))));
   }
 
   return c.json({

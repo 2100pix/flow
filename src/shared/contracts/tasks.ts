@@ -125,7 +125,16 @@ export type TaskDto = {
 
   sortOrder: number;
 
+  /*
+   * Legacy manually entered Discord URL.
+   */
   discordThreadUrl: string | null;
+
+  /*
+   * Official Flow-managed Discord Forum
+   * Post / starter message URL.
+   */
+  discordForumPostUrl: string | null;
 
   createdAt: string;
   updatedAt: string;
