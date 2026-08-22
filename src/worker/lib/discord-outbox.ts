@@ -191,7 +191,7 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
 
   const dispatchedAt = new Date();
 
-  await db
+  const [finalized] = await db
     .update(discordOutboxEvents)
     .set({
       status: "dispatched",
@@ -202,7 +202,67 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
 
       updatedAt: dispatchedAt,
     })
-    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending"), eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount)));
+    .where(
+      and(
+        eq(discordOutboxEvents.id, eventId),
+
+        eq(discordOutboxEvents.status, "pending"),
+
+        eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount),
+
+        /*
+         * The Queue consumer may already have
+         * received this dispatch and returned
+         * the durable event to pending with a
+         * defer/error reason.
+         *
+         * Never let the producer erase that
+         * consumer-owned retry state.
+         */
+        isNull(discordOutboxEvents.lastDispatchError),
+      ),
+    )
+    .returning({
+      status: discordOutboxEvents.status,
+
+      dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
+
+      lastDispatchError: discordOutboxEvents.lastDispatchError,
+    });
+
+  if (!finalized) {
+    const [latest] = await db
+      .select({
+        status: discordOutboxEvents.status,
+
+        dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
+
+        lastDispatchError: discordOutboxEvents.lastDispatchError,
+      })
+      .from(discordOutboxEvents)
+      .where(eq(discordOutboxEvents.id, eventId))
+      .limit(1);
+
+    if (latest?.dispatchAttemptCount !== claimed.attemptCount) {
+      return {
+        status: "busy",
+
+        eventId,
+      };
+    }
+
+    if (latest.status === "pending" && latest.lastDispatchError) {
+      return {
+        status: "error",
+
+        eventId,
+
+        attemptCount: claimed.attemptCount,
+
+        message: latest.lastDispatchError,
+      };
+    }
+  }
 
   return {
     status: "dispatched",
@@ -219,7 +279,22 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
       id: discordOutboxEvents.id,
     })
     .from(discordOutboxEvents)
-    .where(and(eq(discordOutboxEvents.workspaceId, workspaceId), eq(discordOutboxEvents.status, "pending")))
+    .where(
+      and(
+        eq(discordOutboxEvents.workspaceId, workspaceId),
+
+        eq(discordOutboxEvents.status, "pending"),
+
+        /*
+         * Phase 3B creates durable Task intents
+         * before the Task Discord provisioner
+         * exists.
+         *
+         * Do not deliver those events yet.
+         */
+        eq(discordOutboxEvents.eventType, "project_forum.provision"),
+      ),
+    )
     .orderBy(asc(discordOutboxEvents.createdAt))
     .limit(limit);
 
@@ -251,6 +326,8 @@ export async function dispatchAllPendingDiscordOutboxEvents(db: Db, queue: Queue
     .where(
       and(
         eq(discordOutboxEvents.status, "pending"),
+
+        eq(discordOutboxEvents.eventType, "project_forum.provision"),
 
         eq(workspaceDiscordIntegrations.enabled, true),
 

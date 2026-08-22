@@ -91,10 +91,23 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       reason: "stale_dispatch_attempt",
     };
   }
-  if (event.aggregateType !== "project_forum" || event.eventType !== "project_forum.provision") {
-    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+  if (event.aggregateType === "task_thread" && event.eventType === "task_thread.provision") {
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Task Discord thread provisioning is not active yet");
+
     return {
-      status: "ignored",
+      status: "deferred",
+
+      eventId,
+
+      reason: "task_thread_provisioning_not_active",
+    };
+  }
+
+  if (event.aggregateType !== "project_forum" || event.eventType !== "project_forum.provision") {
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Unsupported Discord outbox event");
+
+    return {
+      status: "deferred",
 
       eventId,
 

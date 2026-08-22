@@ -889,13 +889,13 @@ export const discordOutboxEvents = sqliteTable(
       }),
 
     aggregateType: text("aggregate_type", {
-      enum: ["project_forum"],
+      enum: ["project_forum", "task_thread"],
     }).notNull(),
 
     aggregateId: text("aggregate_id").notNull(),
 
     eventType: text("event_type", {
-      enum: ["project_forum.provision"],
+      enum: ["project_forum.provision", "task_thread.provision"],
     }).notNull(),
 
     status: text("status", {
@@ -959,8 +959,7 @@ export const taskDiscordThreads = sqliteTable(
 
     guildId: text("guild_id").notNull(),
 
-    forumChannelId: text("forum_channel_id").notNull(),
-
+    forumChannelId: text("forum_channel_id"),
     threadId: text("thread_id").unique(),
 
     initialMessageId: text("initial_message_id").unique(),
