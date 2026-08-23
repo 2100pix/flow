@@ -87,6 +87,8 @@ async function createTaskDiscordSyncIntent(db: Db, workspaceId: string, taskId: 
         eq(discordOutboxEvents.aggregateId, taskId),
 
         eq(discordOutboxEvents.eventType, "task_thread.sync"),
+
+        eq(discordOutboxEvents.status, "pending"),
       ),
     ),
 

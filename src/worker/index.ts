@@ -16,7 +16,7 @@ import { discordInteractionRoutes } from "./routes/discord-interactions";
 import { createDb } from "./db";
 
 import { dispatchAllPendingDiscordOutboxEvents } from "./lib/discord-outbox";
-
+import { materializeDiscordTaskReminders } from "./lib/discord-reminders";
 import { consumeDiscordOutboxBatch } from "./lib/discord-queue-consumer";
 import type { DiscordOutboxQueueMessage } from "./types/discord-queue";
 
@@ -103,6 +103,14 @@ export default {
 
   async scheduled(_controller, env) {
     const db = createDb(env.flow_db);
+
+    try {
+      await materializeDiscordTaskReminders(db);
+    } catch (error) {
+      console.error("Scheduled Discord reminder materialization failed", {
+        error,
+      });
+    }
 
     const results = await dispatchAllPendingDiscordOutboxEvents(db, env.FLOW_DISCORD_QUEUE);
 

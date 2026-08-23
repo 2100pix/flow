@@ -1003,8 +1003,9 @@ export const discordOutboxEvents = sqliteTable(
   },
 
   (table) => [
-    uniqueIndex("discord_outbox_events_event_aggregate_unique").on(table.eventType, table.aggregateId),
-
+    uniqueIndex("discord_outbox_events_event_aggregate_unique")
+      .on(table.eventType, table.aggregateId)
+      .where(sql`${table.status} = 'pending'`),
     index("discord_outbox_events_status_idx").on(table.status),
 
     index("discord_outbox_events_workspace_id_idx").on(table.workspaceId),

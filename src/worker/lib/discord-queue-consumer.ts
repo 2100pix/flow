@@ -5,6 +5,8 @@ import { createDb } from "../db";
 import { discordOutboxEvents } from "../db/schema";
 import { provisionTaskDiscordThread, syncTaskDiscordThread } from "./task-discord-thread";
 
+import { deliverDiscordTaskReminder } from "./discord-reminders";
+
 import type { AppBindings } from "../types/app-env";
 
 import type { DiscordOutboxQueueMessage } from "../types/discord-queue";
@@ -20,8 +22,7 @@ type ProcessDiscordQueueResult =
 
       eventId: string;
 
-      aggregateType: "project_forum" | "task_thread";
-
+      aggregateType: "project_forum" | "task_thread" | "task_reminder";
       aggregateId: string;
     }
   | {
@@ -90,6 +91,49 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       eventId,
 
       reason: "stale_dispatch_attempt",
+    };
+  }
+  if (event.aggregateType === "task_reminder" && event.eventType === "task_reminder.send") {
+    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+    const result = await deliverDiscordTaskReminder(db, botToken, event.aggregateId);
+
+    if (result.status === "sent") {
+      await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+      return {
+        status: "processed",
+
+        eventId,
+
+        aggregateType: "task_reminder",
+
+        aggregateId: result.reminderId,
+      };
+    }
+
+    if (result.status === "cancelled") {
+      await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+      return {
+        status: "processed",
+
+        eventId,
+
+        aggregateType: "task_reminder",
+
+        aggregateId: result.reminderId,
+      };
+    }
+
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Task reminder delivery failed: ${result.message}`);
+
+    return {
+      status: "deferred",
+
+      eventId,
+
+      reason: result.message,
     };
   }
   if (event.aggregateType === "task_thread" && event.eventType === "task_thread.sync") {

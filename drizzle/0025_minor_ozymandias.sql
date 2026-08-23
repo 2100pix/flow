@@ -54,7 +54,34 @@ CREATE TABLE `__new_workspace_discord_integrations` (
         )
 );
 --> statement-breakpoint
-INSERT INTO `__new_workspace_discord_integrations`("workspace_id", "enabled", "guild_id", "guild_name", "project_category_id", "reminders_enabled", "reminder_time_zone", "reminder_hour_local", "connected_by_user_id", "connected_at", "created_at", "updated_at") SELECT "workspace_id", "enabled", "guild_id", "guild_name", "project_category_id", "reminders_enabled", "reminder_time_zone", "reminder_hour_local", "connected_by_user_id", "connected_at", "created_at", "updated_at" FROM `workspace_discord_integrations`;--> statement-breakpoint
+INSERT INTO `__new_workspace_discord_integrations`(
+  "workspace_id",
+  "enabled",
+  "guild_id",
+  "guild_name",
+  "project_category_id",
+  "reminders_enabled",
+  "reminder_time_zone",
+  "reminder_hour_local",
+  "connected_by_user_id",
+  "connected_at",
+  "created_at",
+  "updated_at"
+)
+SELECT
+  "workspace_id",
+  "enabled",
+  "guild_id",
+  "guild_name",
+  "project_category_id",
+  0,
+  'UTC',
+  9,
+  "connected_by_user_id",
+  "connected_at",
+  "created_at",
+  "updated_at"
+FROM `workspace_discord_integrations`;--> statement-breakpoint
 DROP TABLE `workspace_discord_integrations`;--> statement-breakpoint
 ALTER TABLE `__new_workspace_discord_integrations` RENAME TO `workspace_discord_integrations`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

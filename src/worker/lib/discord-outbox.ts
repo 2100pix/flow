@@ -293,7 +293,7 @@ export async function dispatchPendingDiscordOutboxEvents(db: Db, queue: Queue<Di
          * Global scheduled automation remains
          * separately gated until Phase 3C.3.
          */
-        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision", "task_thread.sync"]),
+        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision", "task_thread.sync", "task_reminder.send"]),
       ),
     )
     .orderBy(asc(discordOutboxEvents.createdAt))
@@ -328,7 +328,7 @@ export async function dispatchAllPendingDiscordOutboxEvents(db: Db, queue: Queue
       and(
         eq(discordOutboxEvents.status, "pending"),
 
-        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision", "task_thread.sync"]),
+        inArray(discordOutboxEvents.eventType, ["project_forum.provision", "task_thread.provision", "task_thread.sync", "task_reminder.send"]),
         eq(workspaceDiscordIntegrations.enabled, true),
 
         isNotNull(workspaceDiscordIntegrations.guildId),

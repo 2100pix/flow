@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/features/auth/permissions";
@@ -10,6 +12,7 @@ import { useDiscordIntegration } from "../hooks/use-discord-integration";
 import { useDisconnectDiscordIntegration } from "../hooks/use-disconnect-discord-integration";
 import { useDiscordCategories } from "../hooks/use-discord-categories";
 import { useUpdateDiscordProjectCategory } from "../hooks/use-update-discord-project-category";
+import { useUpdateDiscordReminderSettings } from "../hooks/use-update-discord-reminder-settings";
 
 function getDiscordConnectionFeedback(value: string | null) {
   switch (value) {
@@ -71,7 +74,20 @@ export function DiscordIntegrationSettings() {
   const connected = integration?.connectionStatus === "connected";
   const { data: categories = [], isPending: categoriesPending, isError: categoriesError } = useDiscordCategories(connected);
   const updateCategory = useUpdateDiscordProjectCategory();
+  const updateReminders = useUpdateDiscordReminderSettings();
+  const [reminderTimeZone, setReminderTimeZone] = useState("UTC");
+  const [reminderHourLocal, setReminderHourLocal] = useState(9);
   const statusLabel = !connected ? "Not connected" : integration.enabled ? "Enabled" : "Connected";
+
+  useEffect(() => {
+    if (!integration) {
+      return;
+    }
+    setReminderTimeZone(integration.reminders.timeZone);
+    setReminderHourLocal(integration.reminders.hourLocal);
+  }, [integration]);
+
+  const reminderSettingsDirty = integration ? reminderTimeZone !== integration.reminders.timeZone || reminderHourLocal !== integration.reminders.hourLocal : false;
 
   return (
     <div className="p-6 md:p-8">
@@ -260,6 +276,131 @@ export function DiscordIntegrationSettings() {
                         ) : null}
                       </div>
                     </div>
+                    <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Deadline reminders</p>
+
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">DM Task leads and assignees one day before and on the due date.</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium">{integration.reminders.enabled ? "Enabled" : "Off"}</span>
+
+                        {connected && canManageIntegration ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={integration.reminders.enabled ? "outline" : "default"}
+                            disabled={updateReminders.isPending || disconnectDiscord.isPending}
+                            onClick={() => {
+                              updateReminders.mutate({
+                                enabled: !integration.reminders.enabled,
+
+                                timeZone: reminderTimeZone.trim(),
+
+                                hourLocal: reminderHourLocal,
+                              });
+                            }}
+                          >
+                            {updateReminders.isPending ? "Saving…" : integration.reminders.enabled ? "Disable" : "Enable"}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Reminder schedule</p>
+
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Workspace timezone and local delivery hour.</p>
+                      </div>
+
+                      {connected ? (
+                        canManageIntegration ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={reminderTimeZone}
+                              disabled={updateReminders.isPending || disconnectDiscord.isPending}
+                              onChange={(event) => {
+                                setReminderTimeZone(event.target.value);
+                              }}
+                              aria-label="Reminder timezone"
+                              placeholder="Asia/Jakarta"
+                              className="
+            h-8
+            w-36
+            rounded-md
+            border border-input
+            bg-background
+            px-2.5
+            text-xs
+            outline-none
+            focus-visible:border-ring
+            focus-visible:ring-3
+            focus-visible:ring-ring/50
+            disabled:cursor-not-allowed
+            disabled:opacity-60
+          "
+                            />
+
+                            <select
+                              value={reminderHourLocal}
+                              disabled={updateReminders.isPending || disconnectDiscord.isPending}
+                              onChange={(event) => {
+                                setReminderHourLocal(Number(event.target.value));
+                              }}
+                              aria-label="Reminder delivery hour"
+                              className="
+            h-8
+            rounded-md
+            border border-input
+            bg-background
+            px-2.5
+            text-xs
+            outline-none
+            focus-visible:border-ring
+            focus-visible:ring-3
+            focus-visible:ring-ring/50
+            disabled:cursor-not-allowed
+            disabled:opacity-60
+          "
+                            >
+                              {Array.from({ length: 24 }, (_, hour) => (
+                                <option key={hour} value={hour}>
+                                  {String(hour).padStart(2, "0")}
+                                  :00
+                                </option>
+                              ))}
+                            </select>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={!reminderSettingsDirty || updateReminders.isPending || disconnectDiscord.isPending || !reminderTimeZone.trim()}
+                              onClick={() => {
+                                updateReminders.mutate({
+                                  enabled: integration.reminders.enabled,
+
+                                  timeZone: reminderTimeZone.trim(),
+
+                                  hourLocal: reminderHourLocal,
+                                });
+                              }}
+                            >
+                              {updateReminders.isPending ? "Saving…" : "Save"}
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium">
+                            {integration.reminders.timeZone} · {String(integration.reminders.hourLocal).padStart(2, "0")}
+                            :00
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-xs font-medium">Not available</span>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -267,6 +408,7 @@ export function DiscordIntegrationSettings() {
             {disconnectDiscord.isError ? <p className="mt-2 text-xs text-destructive">{disconnectDiscord.error.message}</p> : null}
             {updateDiscord.isError ? <p className="mt-2 text-xs text-destructive">{updateDiscord.error.message}</p> : null}
             {updateCategory.isError ? <p className="mt-2 text-xs text-destructive">{updateCategory.error.message}</p> : null}
+            {updateReminders.isError ? <p className="mt-2 text-xs text-destructive">{updateReminders.error.message}</p> : null}
           </section>
         </div>
       </div>

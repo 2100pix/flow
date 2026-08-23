@@ -462,8 +462,15 @@ function createDiscordTaskSyncIntent(db: ReturnType<typeof createDb>, workspaceI
   return {
     eventId,
 
-    deletePrevious: db.delete(discordOutboxEvents).where(and(eq(discordOutboxEvents.aggregateId, taskId), eq(discordOutboxEvents.eventType, "task_thread.sync"))),
+    deletePrevious: db.delete(discordOutboxEvents).where(
+      and(
+        eq(discordOutboxEvents.aggregateId, taskId),
 
+        eq(discordOutboxEvents.eventType, "task_thread.sync"),
+
+        eq(discordOutboxEvents.status, "pending"),
+      ),
+    ),
     insertLatest: db.insert(discordOutboxEvents).values({
       id: eventId,
 
@@ -488,6 +495,42 @@ function createDiscordTaskSyncIntent(db: ReturnType<typeof createDb>, workspaceI
       updatedAt: now,
     }),
   };
+}
+
+async function dispatchDiscordCommandTaskSync(db: ReturnType<typeof createDb>, queue: Queue, commandName: string, taskId: string, outboxEventId: string) {
+  try {
+    const result = await dispatchDiscordOutboxEvent(db, queue, outboxEventId);
+
+    if (result.status === "error") {
+      console.error("Discord command Task sync dispatch failed", {
+        commandName,
+
+        taskId,
+
+        outboxEventId,
+
+        result,
+      });
+    }
+  } catch (error) {
+    /*
+     * Task mutation and durable outbox intent
+     * have already committed.
+     *
+     * Immediate Queue dispatch is only a
+     * latency optimization. Scheduled outbox
+     * recovery owns eventual retry.
+     */
+    console.error("Discord command Task sync dispatch crashed", {
+      commandName,
+
+      taskId,
+
+      outboxEventId,
+
+      error,
+    });
+  }
 }
 
 async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, mutation: DiscordTaskMutation) {
@@ -716,33 +759,7 @@ discordInteractionRoutes.post("/", async (c) => {
       value: parsedStatus.data,
     });
 
-    c.executionCtx.waitUntil(
-      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId)
-        .then((result) => {
-          if (result.status === "error") {
-            console.error("Discord command Task sync dispatch failed", {
-              commandName,
-
-              taskId: taskContext.taskId,
-
-              outboxEventId,
-
-              result,
-            });
-          }
-        })
-        .catch((error) => {
-          console.error("Discord command Task sync dispatch crashed", {
-            commandName,
-
-            taskId: taskContext.taskId,
-
-            outboxEventId,
-
-            error,
-          });
-        }),
-    );
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
 
     return c.json(interactionMessage(`Task status updated to ${parsedStatus.data}.`));
   }
@@ -770,33 +787,7 @@ discordInteractionRoutes.post("/", async (c) => {
       value: priority,
     });
 
-    c.executionCtx.waitUntil(
-      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId)
-        .then((result) => {
-          if (result.status === "error") {
-            console.error("Discord command Task sync dispatch failed", {
-              commandName,
-
-              taskId: taskContext.taskId,
-
-              outboxEventId,
-
-              result,
-            });
-          }
-        })
-        .catch((error) => {
-          console.error("Discord command Task sync dispatch crashed", {
-            commandName,
-
-            taskId: taskContext.taskId,
-
-            outboxEventId,
-
-            error,
-          });
-        }),
-    );
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
 
     return c.json(interactionMessage(priority === null ? "Task priority cleared." : `Task priority updated to ${priority}.`));
   }
@@ -814,8 +805,7 @@ discordInteractionRoutes.post("/", async (c) => {
         value: null,
       });
 
-      c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId));
-
+      c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
       return c.json(interactionMessage("Task lead cleared."));
     }
 
@@ -836,8 +826,7 @@ discordInteractionRoutes.post("/", async (c) => {
       value: target.userId,
     });
 
-    c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId));
-
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
     return c.json(interactionMessage(`Task lead updated to ${target.displayName}.`));
   }
   if (commandName === "setassign") {
@@ -861,8 +850,7 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage(action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`));
     }
 
-    c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, result.eventId));
-
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
     return c.json(interactionMessage(action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`));
   }
   if (commandName === "setstartdate") {
@@ -879,7 +867,15 @@ discordInteractionRoutes.post("/", async (c) => {
         dueDate: tasks.dueDate,
       })
       .from(tasks)
-      .where(and(eq(tasks.id, taskContext.taskId), isNull(tasks.archivedAt)))
+      .where(
+        and(
+          eq(tasks.id, taskContext.taskId),
+
+          eq(tasks.projectId, taskContext.projectId),
+
+          isNull(tasks.archivedAt),
+        ),
+      )
       .limit(1);
 
     if (!currentTask) {
@@ -896,8 +892,7 @@ discordInteractionRoutes.post("/", async (c) => {
       value: parsedDate.data,
     });
 
-    c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId));
-
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
     return c.json(interactionMessage(`Task start date updated to ${parsedDate.data}.`));
   }
   const rawDate = findStringOption(interaction, "date");
@@ -938,7 +933,6 @@ discordInteractionRoutes.post("/", async (c) => {
     value: dueDate,
   });
 
-  c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, outboxEventId));
-
+  c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
   return c.json(interactionMessage(dueDate ? `Task due date updated to ${dueDate}.` : "Task due date cleared."));
 });

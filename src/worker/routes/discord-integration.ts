@@ -52,6 +52,10 @@ const DISCORD_CHAT_INPUT_COMMAND_TYPE = 1;
 const DISCORD_STRING_OPTION_TYPE = 3;
 const DISCORD_USER_OPTION_TYPE = 6;
 
+function formatDiscordChoiceName(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function isValidTimeZone(value: string) {
   try {
     new Intl.DateTimeFormat("en-US", {

@@ -26,6 +26,12 @@ export type DiscordMessage = {
   content: string;
 };
 
+export type DiscordDmChannel = {
+  id: string;
+
+  type: number;
+};
+
 type DiscordActiveThreadsResponse = {
   threads: DiscordGuildChannel[];
 };
@@ -258,6 +264,38 @@ export function editDiscordMessage(botToken: string, input: EditDiscordMessageIn
         parse: [],
 
         users: input.allowedUserIds,
+      },
+    }),
+  });
+}
+
+export function createDiscordDmChannel(botToken: string, discordUserId: string) {
+  return discordFetch<DiscordDmChannel>(botToken, "/users/@me/channels", {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      recipient_id: discordUserId,
+    }),
+  });
+}
+
+export function createDiscordMessage(botToken: string, channelId: string, content: string) {
+  return discordFetch<DiscordMessage>(botToken, `/channels/${encodeURIComponent(channelId)}/messages`, {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      content,
+
+      allowed_mentions: {
+        parse: [],
       },
     }),
   });
