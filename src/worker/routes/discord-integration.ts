@@ -1,7 +1,15 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { updateDiscordIntegrationSchema, updateDiscordProjectCategorySchema, type DiscordCategoriesResponse, type DiscordCategoryDto, type DiscordIntegrationDto, type DiscordIntegrationResponse } from "../../shared/contracts/discord-integration";
+import {
+  updateDiscordIntegrationSchema,
+  updateDiscordProjectCategorySchema,
+  updateDiscordReminderSettingsSchema,
+  type DiscordCategoriesResponse,
+  type DiscordCategoryDto,
+  type DiscordIntegrationDto,
+  type DiscordIntegrationResponse,
+} from "../../shared/contracts/discord-integration";
 import { createDb } from "../db";
 import { workspaceDiscordIntegrations } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
@@ -44,8 +52,16 @@ const DISCORD_CHAT_INPUT_COMMAND_TYPE = 1;
 const DISCORD_STRING_OPTION_TYPE = 3;
 const DISCORD_USER_OPTION_TYPE = 6;
 
-function formatDiscordChoiceName(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+function isValidTimeZone(value: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: value,
+    }).format(new Date());
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 type DiscordIntegrationEnv = {
@@ -537,7 +553,7 @@ discordIntegrationRoutes.delete("/", requireAuth, requirePermission("settings.ma
       connectedByUserId: null,
 
       connectedAt: null,
-
+      remindersEnabled: false,
       updatedAt: now,
     })
     .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id));
@@ -550,6 +566,14 @@ discordIntegrationRoutes.delete("/", requireAuth, requirePermission("settings.ma
     guild: null,
 
     projectCategoryId: null,
+
+    reminders: {
+      enabled: false,
+
+      timeZone: "UTC",
+
+      hourLocal: 9,
+    },
 
     connectedAt: null,
   };
@@ -660,6 +684,11 @@ discordIntegrationRoutes.patch(
         guildName: workspaceDiscordIntegrations.guildName,
 
         connectedAt: workspaceDiscordIntegrations.connectedAt,
+        remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
+
+        reminderTimeZone: workspaceDiscordIntegrations.reminderTimeZone,
+
+        reminderHourLocal: workspaceDiscordIntegrations.reminderHourLocal,
       })
       .from(workspaceDiscordIntegrations)
       .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
@@ -741,6 +770,142 @@ discordIntegrationRoutes.patch(
         : null,
 
       projectCategoryId: input.projectCategoryId,
+      reminders: {
+        enabled: integration.remindersEnabled,
+
+        timeZone: integration.reminderTimeZone,
+
+        hourLocal: integration.reminderHourLocal,
+      },
+      connectedAt: integration.connectedAt?.toISOString() ?? null,
+    };
+
+    const response: DiscordIntegrationResponse = {
+      data,
+    };
+
+    return c.json(response);
+  },
+);
+
+discordIntegrationRoutes.patch(
+  "/reminders",
+  requireAuth,
+  requirePermission("settings.manage"),
+  zValidator("json", updateDiscordReminderSettingsSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+
+            message: "Invalid Discord reminder settings",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+
+    const input = c.req.valid("json");
+
+    if (!isValidTimeZone(input.timeZone)) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_TIME_ZONE",
+
+            message: "Discord reminder timezone must be a valid IANA timezone",
+          },
+        },
+        400,
+      );
+    }
+
+    const db = createDb(c.env.flow_db);
+
+    const [integration] = await db
+      .select({
+        enabled: workspaceDiscordIntegrations.enabled,
+
+        guildId: workspaceDiscordIntegrations.guildId,
+
+        guildName: workspaceDiscordIntegrations.guildName,
+
+        projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
+
+        connectedAt: workspaceDiscordIntegrations.connectedAt,
+      })
+      .from(workspaceDiscordIntegrations)
+      .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+      .limit(1);
+
+    if (!integration) {
+      return c.json(
+        {
+          error: {
+            code: "DISCORD_INTEGRATION_NOT_CONFIGURED",
+
+            message: "Discord integration is not configured",
+          },
+        },
+        409,
+      );
+    }
+
+    if (input.enabled && !integration.guildId) {
+      return c.json(
+        {
+          error: {
+            code: "DISCORD_NOT_CONNECTED",
+
+            message: "Connect a Discord server before enabling deadline reminders",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+
+    await db
+      .update(workspaceDiscordIntegrations)
+      .set({
+        remindersEnabled: input.enabled,
+
+        reminderTimeZone: input.timeZone,
+
+        reminderHourLocal: input.hourLocal,
+
+        updatedAt: now,
+      })
+      .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id));
+
+    const data: DiscordIntegrationDto = {
+      enabled: integration.enabled,
+
+      connectionStatus: integration.guildId ? "connected" : "disconnected",
+
+      guild:
+        integration.guildId && integration.guildName
+          ? {
+              id: integration.guildId,
+
+              name: integration.guildName,
+            }
+          : null,
+
+      projectCategoryId: integration.projectCategoryId,
+
+      reminders: {
+        enabled: input.enabled,
+
+        timeZone: input.timeZone,
+
+        hourLocal: input.hourLocal,
+      },
 
       connectedAt: integration.connectedAt?.toISOString() ?? null,
     };
@@ -773,20 +938,18 @@ discordIntegrationRoutes.patch(
   }),
   async (c) => {
     const auth = c.var.auth;
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const [integration] = await db
+
       .select({
         guildId: workspaceDiscordIntegrations.guildId,
-
         guildName: workspaceDiscordIntegrations.guildName,
-
         projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
-
         connectedAt: workspaceDiscordIntegrations.connectedAt,
+        remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
+        reminderTimeZone: workspaceDiscordIntegrations.reminderTimeZone,
+        reminderHourLocal: workspaceDiscordIntegrations.reminderHourLocal,
       })
       .from(workspaceDiscordIntegrations)
       .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
@@ -844,7 +1007,13 @@ discordIntegrationRoutes.patch(
           : null,
 
       projectCategoryId: integration.projectCategoryId,
+      reminders: {
+        enabled: integration.remindersEnabled,
 
+        timeZone: integration.reminderTimeZone,
+
+        hourLocal: integration.reminderHourLocal,
+      },
       connectedAt: integration.connectedAt?.toISOString() ?? null,
     };
 
@@ -872,6 +1041,11 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
       projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
 
       connectedAt: workspaceDiscordIntegrations.connectedAt,
+      remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
+
+      reminderTimeZone: workspaceDiscordIntegrations.reminderTimeZone,
+
+      reminderHourLocal: workspaceDiscordIntegrations.reminderHourLocal,
     })
     .from(workspaceDiscordIntegrations)
     .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
@@ -892,7 +1066,13 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
             : null,
 
         projectCategoryId: integration.projectCategoryId,
+        reminders: {
+          enabled: integration.remindersEnabled,
 
+          timeZone: integration.reminderTimeZone,
+
+          hourLocal: integration.reminderHourLocal,
+        },
         connectedAt: integration.connectedAt?.toISOString() ?? null,
       }
     : {
@@ -903,7 +1083,13 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
         guild: null,
 
         projectCategoryId: null,
+        reminders: {
+          enabled: false,
 
+          timeZone: "UTC",
+
+          hourLocal: 9,
+        },
         connectedAt: null,
       };
 

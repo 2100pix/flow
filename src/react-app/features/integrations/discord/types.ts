@@ -1,1 +1,10 @@
-export type { DiscordCategoriesResponse, DiscordCategoryDto, DiscordIntegrationDto, DiscordIntegrationResponse, UpdateDiscordIntegrationInput, UpdateDiscordProjectCategoryInput } from "../../../../shared/contracts/discord-integration";
+export type {
+  DiscordCategoriesResponse,
+  DiscordCategoryDto,
+  DiscordIntegrationDto,
+  DiscordIntegrationResponse,
+  DiscordReminderSettingsDto,
+  UpdateDiscordIntegrationInput,
+  UpdateDiscordProjectCategoryInput,
+  UpdateDiscordReminderSettingsInput,
+} from "../../../../shared/contracts/discord-integration";

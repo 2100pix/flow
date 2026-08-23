@@ -176,6 +176,13 @@
       "when": 1787411050672,
       "tag": "0024_noisy_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1787464781466,
+      "tag": "0025_minor_ozymandias",
+      "breakpoints": true
     }
   ]
 }

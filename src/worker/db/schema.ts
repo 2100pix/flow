@@ -63,6 +63,16 @@ export const workspaceDiscordIntegrations = sqliteTable(
 
     projectCategoryId: text("project_category_id"),
 
+    remindersEnabled: integer("reminders_enabled", {
+      mode: "boolean",
+    })
+      .default(false)
+      .notNull(),
+
+    reminderTimeZone: text("reminder_time_zone").default("UTC").notNull(),
+
+    reminderHourLocal: integer("reminder_hour_local").default(9).notNull(),
+
     connectedByUserId: text("connected_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -93,7 +103,14 @@ export const workspaceDiscordIntegrations = sqliteTable(
           ${table.guildId} is not null
         `,
     ),
-
+    check(
+      "workspace_discord_integrations_reminder_hour_check",
+      sql`
+    ${table.reminderHourLocal} >= 0
+    and
+    ${table.reminderHourLocal} <= 23
+  `,
+    ),
     check(
       "workspace_discord_integrations_category_requires_guild_check",
       sql`
@@ -877,6 +894,70 @@ export const taskResources = sqliteTable(
   ],
 );
 
+export const taskDiscordReminders = sqliteTable(
+  "task_discord_reminders",
+  {
+    id: text("id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    dueDate: text("due_date").notNull(),
+
+    kind: text("kind", {
+      enum: ["day_before", "due_today"],
+    }).notNull(),
+
+    deliveryStatus: text("delivery_status", {
+      enum: ["pending", "sent", "cancelled"],
+    })
+      .default("pending")
+      .notNull(),
+
+    lastError: text("last_error"),
+
+    sentAt: integer("sent_at", {
+      mode: "timestamp",
+    }),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("task_discord_reminders_task_user_due_kind_unique").on(table.taskId, table.userId, table.dueDate, table.kind),
+
+    index("task_discord_reminders_workspace_id_idx").on(table.workspaceId),
+
+    index("task_discord_reminders_task_id_idx").on(table.taskId),
+
+    index("task_discord_reminders_delivery_status_idx").on(table.deliveryStatus),
+
+    check("task_discord_reminders_kind_check", sql`${table.kind} in ('day_before', 'due_today')`),
+
+    check("task_discord_reminders_delivery_status_check", sql`${table.deliveryStatus} in ('pending', 'sent', 'cancelled')`),
+  ],
+);
+
 export const discordOutboxEvents = sqliteTable(
   "discord_outbox_events",
   {
@@ -889,13 +970,13 @@ export const discordOutboxEvents = sqliteTable(
       }),
 
     aggregateType: text("aggregate_type", {
-      enum: ["project_forum", "task_thread"],
+      enum: ["project_forum", "task_thread", "task_reminder"],
     }).notNull(),
 
     aggregateId: text("aggregate_id").notNull(),
 
     eventType: text("event_type", {
-      enum: ["project_forum.provision", "task_thread.provision", "task_thread.sync"],
+      enum: ["project_forum.provision", "task_thread.provision", "task_thread.sync", "task_reminder.send"],
     }).notNull(),
 
     status: text("status", {
