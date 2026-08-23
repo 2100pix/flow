@@ -7,7 +7,21 @@ import { builtInRoleDefinitions } from "../../shared/roles";
 import { canViewProject, type ProjectVisibility } from "../../shared/project-privacy";
 
 import { createDb } from "../db";
-import { discordOutboxEvents, projectMembers, projectTaskStatuses, projects, taskAssignees, taskDiscordThreads, tasks, users, workspaceDiscordIntegrations, workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
+import {
+  discordInteractionReceipts,
+  discordOutboxEvents,
+  projectMembers,
+  projectTaskStatuses,
+  projects,
+  taskAssignees,
+  taskDiscordThreads,
+  tasks,
+  users,
+  workspaceDiscordIntegrations,
+  workspaceMembers,
+  workspaceRolePermissions,
+  workspaceRoles,
+} from "../db/schema";
 import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { createId } from "../lib/id";
 import type { AppBindings } from "../types/app-env";
@@ -120,6 +134,22 @@ type DiscordTaskMutation =
     };
 
 type DiscordAssigneeAction = "add" | "remove";
+
+type DiscordTaskCommandName = "setstatus" | "setpriority" | "setlead" | "setassign" | "setstartdate" | "setduedate";
+
+type DiscordInteractionReceiptInput = {
+  interactionId: string;
+
+  workspaceId: string;
+
+  taskId: string;
+
+  actorUserId: string;
+
+  commandName: DiscordTaskCommandName;
+
+  responseContent: string;
+};
 
 function hexToBytes(value: string) {
   if (value.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(value)) {
@@ -390,7 +420,51 @@ async function resolveDiscordProjectMember(db: ReturnType<typeof createDb>, work
   return member ?? null;
 }
 
-async function persistDiscordAssigneeMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, targetUserId: string, action: DiscordAssigneeAction) {
+async function findDiscordInteractionReceipt(db: ReturnType<typeof createDb>, interactionId: string) {
+  const [receipt] = await db
+    .select({
+      responseContent: discordInteractionReceipts.responseContent,
+    })
+    .from(discordInteractionReceipts)
+    .where(eq(discordInteractionReceipts.interactionId, interactionId))
+    .limit(1);
+
+  return receipt ?? null;
+}
+
+function createDiscordInteractionReceiptInsert(db: ReturnType<typeof createDb>, receipt: DiscordInteractionReceiptInput, now: Date) {
+  return db.insert(discordInteractionReceipts).values({
+    interactionId: receipt.interactionId,
+
+    workspaceId: receipt.workspaceId,
+
+    taskId: receipt.taskId,
+
+    actorUserId: receipt.actorUserId,
+
+    commandName: receipt.commandName,
+
+    responseContent: receipt.responseContent,
+
+    createdAt: now,
+  });
+}
+
+async function resolveDiscordInteractionBatchFailure(db: ReturnType<typeof createDb>, interactionId: string, error: unknown) {
+  const existing = await findDiscordInteractionReceipt(db, interactionId);
+
+  if (existing) {
+    return {
+      status: "duplicate",
+
+      responseContent: existing.responseContent,
+    } as const;
+  }
+
+  throw error;
+}
+
+async function persistDiscordAssigneeMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, targetUserId: string, action: DiscordAssigneeAction, receipt: DiscordInteractionReceiptInput) {
   const currentAssignments = await db
     .select({
       userId: taskAssignees.userId,
@@ -403,22 +477,24 @@ async function persistDiscordAssigneeMutation(db: ReturnType<typeof createDb>, w
 
   const alreadyAssigned = currentAssignments.some((assignment) => assignment.userId === targetUserId);
 
-  if (action === "add" && alreadyAssigned) {
-    return {
-      changed: false,
-      eventId: null,
-    } as const;
-  }
+  if ((action === "add" && alreadyAssigned) || (action === "remove" && !alreadyAssigned)) {
+    const existing = await findDiscordInteractionReceipt(db, receipt.interactionId);
 
-  if (action === "remove" && !alreadyAssigned) {
+    if (existing) {
+      return {
+        status: "duplicate",
+
+        responseContent: existing.responseContent,
+      } as const;
+    }
+
     return {
-      changed: false,
-      eventId: null,
+      status: "unchanged",
     } as const;
   }
 
   const now = new Date();
-
+  const receiptInsert = createDiscordInteractionReceiptInsert(db, receipt, now);
   const remainingAssignments = action === "remove" ? currentAssignments.filter((assignment) => assignment.userId !== targetUserId) : currentAssignments;
 
   const legacyAssigneeId = action === "add" ? (currentAssignments[0]?.userId ?? targetUserId) : (remainingAssignments[0]?.userId ?? null);
@@ -443,15 +519,24 @@ async function persistDiscordAssigneeMutation(db: ReturnType<typeof createDb>, w
       createdAt: now,
     });
 
-    await db.batch([taskUpdate, assignmentInsert, syncIntent.deletePrevious, syncIntent.insertLatest]);
+    try {
+      await db.batch([receiptInsert, taskUpdate, assignmentInsert, syncIntent.deletePrevious, syncIntent.insertLatest]);
+    } catch (error) {
+      return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+    }
   } else {
     const assignmentDelete = db.delete(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, targetUserId)));
 
-    await db.batch([taskUpdate, assignmentDelete, syncIntent.deletePrevious, syncIntent.insertLatest]);
+    try {
+      await db.batch([receiptInsert, taskUpdate, assignmentDelete, syncIntent.deletePrevious, syncIntent.insertLatest]);
+    } catch (error) {
+      return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+    }
   }
 
   return {
-    changed: true,
+    status: "executed",
+
     eventId: syncIntent.eventId,
   } as const;
 }
@@ -533,8 +618,9 @@ async function dispatchDiscordCommandTaskSync(db: ReturnType<typeof createDb>, q
   }
 }
 
-async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, mutation: DiscordTaskMutation) {
+async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, mutation: DiscordTaskMutation, receipt: DiscordInteractionReceiptInput) {
   const now = new Date();
+  const receiptInsert = createDiscordInteractionReceiptInsert(db, receipt, now);
   const syncIntent = createDiscordTaskSyncIntent(db, workspaceId, taskId, now);
 
   let nextSortOrder: number | undefined;
@@ -615,9 +701,17 @@ async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, works
    * outbox ID and cannot overwrite this
    * latest intent.
    */
-  await db.batch([taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
+  try {
+    await db.batch([receiptInsert, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
+  } catch (error) {
+    return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+  }
 
-  return syncIntent.eventId;
+  return {
+    status: "executed",
+
+    eventId: syncIntent.eventId,
+  } as const;
 }
 
 discordInteractionRoutes.post("/", async (c) => {
@@ -683,7 +777,11 @@ discordInteractionRoutes.post("/", async (c) => {
   }
 
   const db = createDb(c.env.flow_db);
+  const existingReceipt = await findDiscordInteractionReceipt(db, interaction.id);
 
+  if (existingReceipt) {
+    return c.json(interactionMessage(existingReceipt.responseContent));
+  }
   const taskContext = await resolveDiscordTaskContext(db, guildId, channelId);
 
   if (taskContext.status === "integration_unavailable") {
@@ -727,6 +825,20 @@ discordInteractionRoutes.post("/", async (c) => {
     return c.json(interactionMessage("You do not have permission to assign this Task in Flow."));
   }
 
+  const receiptFor = (responseContent: string): DiscordInteractionReceiptInput => ({
+    interactionId: interaction.id,
+
+    workspaceId: taskContext.workspaceId,
+
+    taskId: taskContext.taskId,
+
+    actorUserId: actor.userId,
+
+    commandName: commandName as DiscordTaskCommandName,
+
+    responseContent,
+  });
+
   if (commandName === "setstatus") {
     const rawStatus = findStringOption(interaction, "status");
 
@@ -753,15 +865,28 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage("That Task status is disabled for this Project."));
     }
 
-    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-      kind: "status",
+    const responseContent = `Task status updated to ${parsedStatus.data}.`;
 
-      value: parsedStatus.data,
-    });
+    const result = await persistDiscordTaskMutation(
+      db,
+      taskContext.workspaceId,
+      taskContext.projectId,
+      taskContext.taskId,
+      {
+        kind: "status",
 
-    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
+        value: parsedStatus.data,
+      },
+      receiptFor(responseContent),
+    );
 
-    return c.json(interactionMessage(`Task status updated to ${parsedStatus.data}.`));
+    if (result.status === "duplicate") {
+      return c.json(interactionMessage(result.responseContent));
+    }
+
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+    return c.json(interactionMessage(responseContent));
   }
 
   if (commandName === "setpriority") {
@@ -781,15 +906,27 @@ discordInteractionRoutes.post("/", async (c) => {
       priority = parsedPriority.data;
     }
 
-    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-      kind: "priority",
+    const responseContent = priority === null ? "Task priority cleared." : `Task priority updated to ${priority}.`;
+    const result = await persistDiscordTaskMutation(
+      db,
+      taskContext.workspaceId,
+      taskContext.projectId,
+      taskContext.taskId,
+      {
+        kind: "priority",
 
-      value: priority,
-    });
+        value: priority,
+      },
+      receiptFor(responseContent),
+    );
 
-    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
+    if (result.status === "duplicate") {
+      return c.json(interactionMessage(result.responseContent));
+    }
 
-    return c.json(interactionMessage(priority === null ? "Task priority cleared." : `Task priority updated to ${priority}.`));
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+    return c.json(interactionMessage(responseContent));
   }
 
   if (commandName === "setlead") {
@@ -800,13 +937,27 @@ discordInteractionRoutes.post("/", async (c) => {
     }
 
     if (action === "clear") {
-      const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-        kind: "lead",
-        value: null,
-      });
+      const responseContent = "Task lead cleared.";
+      const result = await persistDiscordTaskMutation(
+        db,
+        taskContext.workspaceId,
+        taskContext.projectId,
+        taskContext.taskId,
+        {
+          kind: "lead",
 
-      c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
-      return c.json(interactionMessage("Task lead cleared."));
+          value: null,
+        },
+        receiptFor(responseContent),
+      );
+
+      if (result.status === "duplicate") {
+        return c.json(interactionMessage(result.responseContent));
+      }
+
+      c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+      return c.json(interactionMessage(responseContent));
     }
 
     const targetDiscordUserId = findStringOption(interaction, "user");
@@ -821,13 +972,27 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage("The selected Discord user is not an available Flow Project member."));
     }
 
-    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-      kind: "lead",
-      value: target.userId,
-    });
+    const responseContent = `Task lead updated to ${target.displayName}.`;
+    const result = await persistDiscordTaskMutation(
+      db,
+      taskContext.workspaceId,
+      taskContext.projectId,
+      taskContext.taskId,
+      {
+        kind: "lead",
 
-    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
-    return c.json(interactionMessage(`Task lead updated to ${target.displayName}.`));
+        value: target.userId,
+      },
+      receiptFor(responseContent),
+    );
+
+    if (result.status === "duplicate") {
+      return c.json(interactionMessage(result.responseContent));
+    }
+
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+    return c.json(interactionMessage(responseContent));
   }
   if (commandName === "setassign") {
     const action = findStringOption(interaction, "action");
@@ -843,9 +1008,10 @@ discordInteractionRoutes.post("/", async (c) => {
     if (!target) {
       return c.json(interactionMessage("The selected Discord user is not an available Flow Project member."));
     }
+    const successResponseContent = action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`;
+    const unchangedResponseContent = action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`;
 
-    const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action);
-
+    const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action, receiptFor(successResponseContent));
     if (!result.changed || !result.eventId) {
       return c.json(interactionMessage(action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`));
     }
@@ -853,6 +1019,7 @@ discordInteractionRoutes.post("/", async (c) => {
     c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
     return c.json(interactionMessage(action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`));
   }
+
   if (commandName === "setstartdate") {
     const rawDate = findStringOption(interaction, "date");
 
@@ -886,14 +1053,27 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage("Start date cannot be after the current due date."));
     }
 
-    const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-      kind: "start_date",
+    const responseContent = `Task start date updated to ${parsedDate.data}.`;
+    const result = await persistDiscordTaskMutation(
+      db,
+      taskContext.workspaceId,
+      taskContext.projectId,
+      taskContext.taskId,
+      {
+        kind: "start_date",
 
-      value: parsedDate.data,
-    });
+        value: parsedDate.data,
+      },
+      receiptFor(responseContent),
+    );
 
-    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
-    return c.json(interactionMessage(`Task start date updated to ${parsedDate.data}.`));
+    if (result.status === "duplicate") {
+      return c.json(interactionMessage(result.responseContent));
+    }
+
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+    return c.json(interactionMessage(responseContent));
   }
   const rawDate = findStringOption(interaction, "date");
 
@@ -935,12 +1115,25 @@ discordInteractionRoutes.post("/", async (c) => {
     return c.json(interactionMessage("Due date cannot be before the current start date."));
   }
 
-  const outboxEventId = await persistDiscordTaskMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, {
-    kind: "due_date",
+  const responseContent = dueDate ? `Task due date updated to ${dueDate}.` : "Task due date cleared.";
+  const result = await persistDiscordTaskMutation(
+    db,
+    taskContext.workspaceId,
+    taskContext.projectId,
+    taskContext.taskId,
+    {
+      kind: "due_date",
 
-    value: dueDate,
-  });
+      value: dueDate,
+    },
+    receiptFor(responseContent),
+  );
 
-  c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
-  return c.json(interactionMessage(dueDate ? `Task due date updated to ${dueDate}.` : "Task due date cleared."));
+  if (result.status === "duplicate") {
+    return c.json(interactionMessage(result.responseContent));
+  }
+
+  c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
+
+  return c.json(interactionMessage(responseContent));
 });

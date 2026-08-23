@@ -958,6 +958,60 @@ export const taskDiscordReminders = sqliteTable(
   ],
 );
 
+export const discordInteractionReceipts = sqliteTable(
+  "discord_interaction_receipts",
+  {
+    interactionId: text("interaction_id").primaryKey(),
+
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "cascade",
+      }),
+
+    commandName: text("command_name", {
+      enum: ["setstatus", "setpriority", "setlead", "setassign", "setstartdate", "setduedate"],
+    }).notNull(),
+
+    responseContent: text("response_content").notNull(),
+
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    index("discord_interaction_receipts_workspace_id_idx").on(table.workspaceId),
+
+    index("discord_interaction_receipts_task_id_idx").on(table.taskId),
+
+    index("discord_interaction_receipts_actor_user_id_idx").on(table.actorUserId),
+
+    check(
+      "discord_interaction_receipts_command_name_check",
+      sql`${table.commandName} in (
+        'setstatus',
+        'setpriority',
+        'setlead',
+        'setassign',
+        'setstartdate',
+        'setduedate'
+      )`,
+    ),
+  ],
+);
+
 export const discordOutboxEvents = sqliteTable(
   "discord_outbox_events",
   {
