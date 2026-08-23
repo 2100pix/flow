@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { useMe } from "@/features/auth/hooks/use-me";
 import { useArchiveClient } from "@/features/clients/hooks/use-archive-client";
 import { useClient } from "@/features/clients/hooks/use-client";
@@ -68,19 +70,28 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
             </select>
           </div>
 
-          {updateClient.isError ? <p className="text-sm text-destructive">{updateClient.error.message}</p> : null}
-
           {canEdit ? (
             <Button
               disabled={!name.trim() || updateClient.isPending}
               onClick={() => {
-                updateClient.mutate({
-                  clientId: client.id,
-                  input: {
-                    name: name.trim(),
-                    status,
+                updateClient.mutate(
+                  {
+                    clientId: client.id,
+                    input: {
+                      name: name.trim(),
+                      status,
+                    },
                   },
-                });
+                  {
+                    onSuccess: () => {
+                      toast.success("Client updated.");
+                    },
+
+                    onError: (error) => {
+                      toast.error(getErrorMessage(error, "Failed to update client."));
+                    },
+                  },
+                );
               }}
             >
               {updateClient.isPending ? "Saving…" : "Save changes"}
@@ -95,8 +106,6 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
 
           <p className="mt-1 text-sm text-muted-foreground">Archived clients are removed from the active client list.</p>
 
-          {archiveClient.isError ? <p className="mt-3 text-sm text-destructive">{archiveClient.error.message}</p> : null}
-
           <Button
             className="mt-4"
             variant="destructive"
@@ -110,9 +119,15 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
 
               archiveClient.mutate(client.id, {
                 onSuccess: () => {
+                  toast.success("Client archived.");
+
                   void navigate("/clients", {
                     replace: true,
                   });
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to archive client."));
                 },
               });
             }}

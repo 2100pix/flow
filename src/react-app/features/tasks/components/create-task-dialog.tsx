@@ -34,6 +34,8 @@ import { useProjectMembers } from "@/features/members/hooks/use-project-members"
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 
 import type { TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+import { getErrorMessage } from "@/lib/errors";
+import { resolvePersonName } from "@/lib/person-name";
 
 type CreateTaskDialogProps = {
   open: boolean;
@@ -45,10 +47,6 @@ type CreateTaskDialogProps = {
 
   onClose: () => void;
 };
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -86,15 +84,15 @@ function formatDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   }).format(date);
 }
 
-function getInitials(displayName: string) {
+function getInitials(name: string) {
   return (
-    displayName
+    name
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -102,6 +100,24 @@ function getInitials(displayName: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+type PersonLike = {
+  firstName?: string | null;
+
+  lastName?: string | null;
+
+  displayName: string;
+};
+
+function getName(person: PersonLike) {
+  return resolvePersonName({
+    firstName: person.firstName,
+
+    lastName: person.lastName,
+
+    displayName: person.displayName,
+  });
 }
 
 function TaskStatusIcon({ status }: { status: TaskStatus }) {
@@ -310,7 +326,7 @@ function TaskAssigneePicker({
 
   const hiddenCount = Math.max(selectedMembers.length - visibleAvatars.length, 0);
 
-  const assigneeLabel = selectedMembers.length > 0 ? `Assignees: ${selectedMembers.map((member) => member.user.displayName).join(", ")}` : "Assignees";
+  const assigneeLabel = selectedMembers.length > 0 ? `Assignees: ${selectedMembers.map((member) => getName(member.user)).join(", ")}` : "Assignees";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -336,7 +352,7 @@ function TaskAssigneePicker({
               <Avatar key={member.user.id} size="sm" className="size-[18px]" aria-hidden="true">
                 {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                <AvatarFallback className="text-[8px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                <AvatarFallback className="text-[8px]">{getInitials(getName(member.user))}</AvatarFallback>
               </Avatar>
             ))}
 
@@ -383,10 +399,10 @@ function TaskAssigneePicker({
                     <Avatar size="sm" className="size-5" aria-hidden="true">
                       {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                      <AvatarFallback className="text-[9px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                      <AvatarFallback className="text-[9px]">{getInitials(getName(member.user))}</AvatarFallback>
                     </Avatar>
 
-                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate">{getName(member.user)}</span>
 
                     {selected ? <CheckIcon className="absolute right-2 size-4" aria-hidden="true" /> : null}
                   </button>

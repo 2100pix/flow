@@ -4,8 +4,9 @@ import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
 
-import { discordOutboxEvents, projects, taskAssignees, taskDiscordReminders, taskDiscordThreads, tasks, users, workspaceDiscordIntegrations } from "../db/schema";
+import { discordOutboxEvents, projects, taskAssignees, taskDiscordReminders, taskDiscordThreads, tasks, users, workspaceDiscordIntegrations, workspaceMembers } from "../db/schema";
 
+import { formatDisplayDate } from "./format-date";
 import { createDiscordDmChannel, createDiscordMessage, DiscordApiError } from "./discord-api";
 
 type Db = ReturnType<typeof createDb>;
@@ -148,6 +149,22 @@ async function createReminderIntent(
   };
 }
 
+type ReminderWindow = {
+  hourReached: boolean;
+
+  dueToday: string;
+
+  dueTomorrow: string;
+};
+
+type ReminderCandidate = {
+  taskId: string;
+
+  dueDate: string;
+
+  leadUserId: string | null;
+};
+
 export async function materializeDiscordTaskReminders(db: Db, now = new Date()) {
   const integrations = await db
     .select({
@@ -171,93 +188,168 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
   let evaluated = 0;
 
   for (const integration of integrations) {
-    const local = resolveLocalClock(now, integration.timeZone);
-
     /*
-     * Running after the configured hour is
-     * intentional.
-     *
-     * It gives the 5-minute cron a same-day
-     * catch-up window after temporary Worker
-     * or Queue downtime.
+     * Each recipient gets reminders on their own local
+     * clock. Users without a personal time zone fall back
+     * to the workspace reminder time zone.
      */
-    if (local.hour < integration.hourLocal) {
-      continue;
+    const memberRows = await db
+      .select({
+        userId: workspaceMembers.userId,
+
+        timeZone: users.timeZone,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(eq(workspaceMembers.workspaceId, integration.workspaceId));
+
+    const zoneByUserId = new Map<string, string>();
+
+    const userIdsByZone = new Map<string, Set<string>>();
+
+    for (const member of memberRows) {
+      const zone = member.timeZone?.trim() || integration.timeZone;
+
+      zoneByUserId.set(member.userId, zone);
+
+      const bucket = userIdsByZone.get(zone);
+
+      if (bucket) {
+        bucket.add(member.userId);
+      } else {
+        userIdsByZone.set(
+          zone,
+          new Set([member.userId]),
+        );
+      }
     }
 
-    const dueToday = local.date;
-    const dueTomorrow = addDaysToIsoDate(local.date, 1);
+    const windowsByZone = new Map<string, ReminderWindow>();
 
-    const candidates = await db
-      .select({
-        taskId: tasks.id,
+    const candidatesByDateRange = new Map<string, ReminderCandidate[]>();
 
-        dueDate: tasks.dueDate,
+    for (const [zone] of userIdsByZone) {
+      let window = windowsByZone.get(zone);
 
-        leadUserId: tasks.leadUserId,
-      })
-      .from(tasks)
-      .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .where(
-        and(
-          eq(projects.workspaceId, integration.workspaceId),
+      if (!window) {
+        const local = resolveLocalClock(now, zone);
 
-          isNull(projects.archivedAt),
+        /*
+         * Running after the configured hour is
+         * intentional.
+         *
+         * It gives the 5-minute cron a same-day
+         * catch-up window after temporary Worker
+         * or Queue downtime.
+         */
+        window = {
+          hourReached: local.hour >= integration.hourLocal,
 
-          isNull(tasks.archivedAt),
+          dueToday: local.date,
 
-          ne(tasks.status, "done"),
+          dueTomorrow: addDaysToIsoDate(local.date, 1),
+        };
 
-          ne(tasks.status, "cancelled"),
+        windowsByZone.set(zone, window);
+      }
 
-          isNotNull(tasks.dueDate),
-
-          inArray(tasks.dueDate, [dueToday, dueTomorrow]),
-        ),
-      );
-
-    for (const task of candidates) {
-      if (!task.dueDate) {
+      if (!window.hourReached) {
         continue;
       }
 
-      const assignees = await db
-        .select({
-          userId: taskAssignees.userId,
-        })
-        .from(taskAssignees)
-        .where(eq(taskAssignees.taskId, task.taskId));
+      const rangeKey = `${window.dueToday}:${window.dueTomorrow}`;
 
-      const recipientIds = new Set<string>();
+      let candidates = candidatesByDateRange.get(rangeKey);
 
-      if (task.leadUserId) {
-        recipientIds.add(task.leadUserId);
+      if (!candidates) {
+        const rows = await db
+          .select({
+            taskId: tasks.id,
+
+            dueDate: tasks.dueDate,
+
+            leadUserId: tasks.leadUserId,
+          })
+          .from(tasks)
+          .innerJoin(projects, eq(projects.id, tasks.projectId))
+          .where(
+            and(
+              eq(projects.workspaceId, integration.workspaceId),
+
+              isNull(projects.archivedAt),
+
+              isNull(tasks.archivedAt),
+
+              ne(tasks.status, "done"),
+
+              ne(tasks.status, "cancelled"),
+
+              isNotNull(tasks.dueDate),
+
+              inArray(tasks.dueDate, [window.dueToday, window.dueTomorrow]),
+            ),
+          );
+
+        candidates = rows.map((row) => ({
+          taskId: row.taskId,
+
+          dueDate: row.dueDate ?? "",
+
+          leadUserId: row.leadUserId,
+        }));
+
+        candidatesByDateRange.set(rangeKey, candidates);
       }
 
-      for (const assignee of assignees) {
-        recipientIds.add(assignee.userId);
-      }
+      for (const task of candidates) {
+        if (!task.dueDate) {
+          continue;
+        }
 
-      if (recipientIds.size === 0) {
-        continue;
-      }
+        const assignees = await db
+          .select({
+            userId: taskAssignees.userId,
+          })
+          .from(taskAssignees)
+          .where(eq(taskAssignees.taskId, task.taskId));
 
-      const kind: ReminderKind = task.dueDate === dueToday ? "due_today" : "day_before";
+        const recipientIds = new Set<string>();
 
-      for (const userId of recipientIds) {
-        await createReminderIntent(db, {
-          workspaceId: integration.workspaceId,
+        if (task.leadUserId) {
+          recipientIds.add(task.leadUserId);
+        }
 
-          taskId: task.taskId,
+        for (const assignee of assignees) {
+          recipientIds.add(assignee.userId);
+        }
 
-          userId,
+        if (recipientIds.size === 0) {
+          continue;
+        }
 
-          dueDate: task.dueDate,
+        const zoneRecipients = [...recipientIds].filter((userId) => (zoneByUserId.get(userId) ?? integration.timeZone) === zone);
 
-          kind,
-        });
+        if (zoneRecipients.length === 0) {
+          continue;
+        }
 
-        evaluated += 1;
+        const kind: ReminderKind = task.dueDate === window.dueToday ? "due_today" : "day_before";
+
+        for (const userId of zoneRecipients) {
+          await createReminderIntent(db, {
+            workspaceId: integration.workspaceId,
+
+            taskId: task.taskId,
+
+            userId,
+
+            dueDate: task.dueDate,
+
+            kind,
+          });
+
+          evaluated += 1;
+        }
       }
     }
   }
@@ -325,6 +417,8 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
       deliveryStatus: taskDiscordReminders.deliveryStatus,
 
       discordUserId: users.discordUserId,
+
+      userTimeZone: users.timeZone,
 
       taskTitle: tasks.title,
 
@@ -449,7 +543,9 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
     };
   }
 
-  const local = resolveLocalClock(now, reminder.timeZone);
+  const effectiveZone = reminder.userTimeZone?.trim() || reminder.timeZone;
+
+  const local = resolveLocalClock(now, effectiveZone);
 
   const expectedDate = reminder.kind === "due_today" ? reminder.dueDate : addDaysToIsoDate(reminder.dueDate, -1);
 
@@ -469,7 +565,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
   const timing = reminder.kind === "due_today" ? "is due today" : "is due tomorrow";
 
-  const lines = [`Flow reminder: ${taskCode} ${timing}.`, reminder.taskTitle, `Due Date: ${reminder.dueDate}`];
+  const lines = [`Flow reminder: ${taskCode} ${timing}.`, reminder.taskTitle, `Due Date: ${formatDisplayDate(reminder.dueDate)}`];
 
   if (reminder.threadGuildId && reminder.threadId) {
     lines.push(`Discord Task: https://discord.com/channels/${reminder.threadGuildId}/${reminder.threadId}`);

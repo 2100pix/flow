@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { useMe } from "@/features/auth/hooks/use-me";
 import { hasPermission } from "@/features/auth/permissions";
+import { getErrorMessage } from "@/lib/errors";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
@@ -48,10 +49,6 @@ const statusItems: Array<{
     label: "Complete",
   },
 ];
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function ProjectSettingsSkeleton() {
   return (

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
@@ -1275,6 +1275,8 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
     .select({
       id: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
       customRoleId: workspaceRoles.id,
@@ -1288,12 +1290,14 @@ projectsRoutes.get("/:id/members", requireAuth, requirePermission("projects.view
     .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
     .leftJoin(projectLeads, and(eq(projectLeads.projectId, projectMembers.projectId), eq(projectLeads.userId, projectMembers.userId)))
     .where(eq(projectMembers.projectId, projectId))
-    .orderBy(asc(users.displayName));
+    .orderBy(asc(sql`COALESCE(NULLIF(${users.firstName}, ''), ${users.displayName})`));
 
   const data: ProjectMemberDto[] = result.map((member) => ({
     user: {
       id: member.id,
       displayName: member.displayName,
+      firstName: member.firstName,
+      lastName: member.lastName,
       avatarUrl: member.avatarUrl,
       role: member.role,
 
@@ -1367,6 +1371,8 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.ass
     .select({
       id: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
       customRoleId: workspaceRoles.id,
@@ -1427,6 +1433,8 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.ass
     user: {
       id: member.id,
       displayName: member.displayName,
+      firstName: member.firstName,
+      lastName: member.lastName,
       avatarUrl: member.avatarUrl,
       role: member.role,
 

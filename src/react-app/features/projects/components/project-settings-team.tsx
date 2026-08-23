@@ -16,14 +16,12 @@ import type { ProjectMemberDto } from "@/features/members/types";
 import { PROJECT_LEAD_MAX_COUNT } from "@/features/projects/constants";
 import { useUpdateProjectLeads } from "@/features/projects/hooks/use-update-project-leads";
 import type { ProjectDto } from "@/features/projects/types";
+import { getErrorMessage } from "@/lib/errors";
+import { resolvePersonName } from "@/lib/person-name";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function getInitials(displayName: string) {
+function getInitials(name: string) {
   return (
-    displayName
+    name
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -31,6 +29,24 @@ function getInitials(displayName: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+type PersonLike = {
+  firstName?: string | null;
+
+  lastName?: string | null;
+
+  displayName: string;
+};
+
+function getName(person: PersonLike) {
+  return resolvePersonName({
+    firstName: person.firstName,
+
+    lastName: person.lastName,
+
+    displayName: person.displayName,
+  });
 }
 
 function getSecondaryLabel(member: ProjectMemberDto) {
@@ -127,11 +143,11 @@ function InviteMembersControl({ projectId, assignedUserIds, canManageMembers, ca
                 <Avatar size="sm" aria-hidden="true">
                   {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
 
-                  <AvatarFallback>{getInitials(member.displayName)}</AvatarFallback>
+                  <AvatarFallback>{getInitials(getName(member))}</AvatarFallback>
                 </Avatar>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate">{member.displayName}</p>
+                  <p className="truncate">{getName(member)}</p>
 
                   <p className="truncate text-xs text-muted-foreground">{member.customRole?.name ?? member.role}</p>
                 </div>
@@ -286,11 +302,11 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                 <Avatar size="default" aria-hidden="true">
                   {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
 
-                  <AvatarFallback>{getInitials(lead.user.displayName)}</AvatarFallback>
+                  <AvatarFallback>{getInitials(getName(lead.user))}</AvatarFallback>
                 </Avatar>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{lead.user.displayName}</p>
+                  <p className="truncate text-sm font-medium">{getName(lead.user)}</p>
 
                   <p className="mt-1 truncate text-xs text-muted-foreground">{getSecondaryLabel(lead)}</p>
                 </div>
@@ -305,8 +321,8 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                     variant="ghost"
                     size="icon"
                     className="size-9 rounded-full text-muted-foreground"
-                    aria-label={`Remove ${lead.user.displayName} as project lead`}
-                    title={soleLead ? "Assign another project lead before removing this lead" : `Remove ${lead.user.displayName} as project lead`}
+                    aria-label={`Remove ${getName(lead.user)} as project lead`}
+                    title={soleLead ? "Assign another project lead before removing this lead" : `Remove ${getName(lead.user)} as project lead`}
                     disabled={soleLead || mutationPending}
                     onClick={() => {
                       removeLead(lead.user.id);
@@ -332,7 +348,7 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                   <Avatar key={lead.user.id} className="size-12 border border-border" aria-hidden="true">
                     {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
 
-                    <AvatarFallback>{getInitials(lead.user.displayName)}</AvatarFallback>
+                    <AvatarFallback>{getInitials(getName(lead.user))}</AvatarFallback>
                   </Avatar>
                 ))}
               </div>
@@ -350,11 +366,11 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                   <Avatar size="default" aria-hidden="true">
                     {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                    <AvatarFallback>{getInitials(member.user.displayName)}</AvatarFallback>
+                    <AvatarFallback>{getInitials(getName(member.user))}</AvatarFallback>
                   </Avatar>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{member.user.displayName}</p>
+                    <p className="truncate text-sm font-medium">{getName(member.user)}</p>
 
                     <p className="mt-1 truncate text-xs text-muted-foreground">{getSecondaryLabel(member)}</p>
                   </div>
@@ -365,8 +381,8 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                       variant="ghost"
                       size="icon"
                       className="size-9 rounded-full text-muted-foreground"
-                      aria-label={`Set ${member.user.displayName} as project lead`}
-                      title={leadIds.length >= PROJECT_LEAD_MAX_COUNT ? "Maximum three project leads" : `Set ${member.user.displayName} as project lead`}
+                      aria-label={`Set ${getName(member.user)} as project lead`}
+                      title={leadIds.length >= PROJECT_LEAD_MAX_COUNT ? "Maximum three project leads" : `Set ${getName(member.user)} as project lead`}
                       disabled={mutationPending || leadIds.length >= PROJECT_LEAD_MAX_COUNT}
                       onClick={() => {
                         setAsLead(member.user.id);
@@ -382,8 +398,8 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
                       variant="ghost"
                       size="icon"
                       className="size-9 rounded-full text-muted-foreground"
-                      aria-label={`Remove ${member.user.displayName} from project`}
-                      title={`Remove ${member.user.displayName} from project`}
+                      aria-label={`Remove ${getName(member.user)} from project`}
+                      title={`Remove ${getName(member.user)} from project`}
                       disabled={mutationPending}
                       onClick={() => {
                         removeTeamMember(member);

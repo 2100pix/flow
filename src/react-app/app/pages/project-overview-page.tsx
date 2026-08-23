@@ -20,7 +20,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 import { useMe } from "@/features/auth/hooks/use-me";
 import { hasPermission } from "@/features/auth/permissions";
+import { getErrorMessage } from "@/lib/errors";
 import { useClients } from "@/features/clients/hooks/use-clients";
+import { resolvePersonName } from "@/lib/person-name";
 import { useAddProjectMember } from "@/features/members/hooks/use-add-project-member";
 import { useMembers } from "@/features/members/hooks/use-members";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
@@ -46,10 +48,6 @@ const engagementLabels: Record<ProjectDto["engagementType"], string> = {
 };
 
 const DESCRIPTION_PLACEHOLDER = "What are we building, and what does success look like?";
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function parseProjectDate(value: string | null): Date | undefined {
   if (!value) {
@@ -81,8 +79,8 @@ function formatProjectDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "long",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   }).format(date);
 }
@@ -94,6 +92,16 @@ function getMemberInitials(name: string) {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
+}
+
+function getMemberName(member: { firstName?: string | null; lastName?: string | null; displayName: string }) {
+  return resolvePersonName({
+    firstName: member.firstName,
+
+    lastName: member.lastName,
+
+    displayName: member.displayName,
+  });
 }
 
 function getProjectMemberRoleLabel(member: ProjectMemberDto) {
@@ -927,10 +935,10 @@ function CollaborationControls({
                               <Avatar size="sm" className="size-5" aria-hidden="true">
                                 {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                                <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                                <AvatarFallback className="text-[9px]">{getMemberInitials(getMemberName(member.user))}</AvatarFallback>
                               </Avatar>
 
-                              <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                              <span className="min-w-0 flex-1 truncate">{getMemberName(member.user)}</span>
                             </button>
                           ))}
                         </div>
@@ -954,18 +962,18 @@ function CollaborationControls({
               <div className="space-y-2">
                 {leads.map((lead) => (
                   <div key={lead.user.id} className="group/lead flex min-w-0 items-center gap-2">
-                    <Avatar size="sm" role="img" aria-label={lead.user.displayName} title={lead.user.displayName}>
+                    <Avatar size="sm" role="img" aria-label={getMemberName(lead.user)} title={getMemberName(lead.user)}>
                       {lead.user.avatarUrl ? <AvatarImage src={lead.user.avatarUrl} alt="" /> : null}
-                      <AvatarFallback>{getMemberInitials(lead.user.displayName)}</AvatarFallback>
+                      <AvatarFallback>{getMemberInitials(getMemberName(lead.user))}</AvatarFallback>
                     </Avatar>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{lead.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{getMemberName(lead.user)}</span>
                     {canEdit && leads.length > 1 ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
                         className="pointer-events-none opacity-0 transition-opacity group-hover/lead:pointer-events-auto group-hover/lead:opacity-100 group-focus-within/lead:pointer-events-auto group-focus-within/lead:opacity-100"
-                        aria-label={`Remove ${lead.user.displayName} as project lead`}
+                        aria-label={`Remove ${getMemberName(lead.user)} as project lead`}
                         disabled={updateLeads.isPending}
                         onClick={() => {
                           removeLead(lead.user.id);
@@ -1001,10 +1009,10 @@ function CollaborationControls({
                 {projectMembers.length > 0 ? (
                   <AvatarGroup>
                     {visibleMembers.map((member) => (
-                      <Avatar key={member.user.id} size="sm" role="img" aria-label={member.user.displayName} title={member.user.displayName}>
-                        {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={member.user.displayName} /> : null}
+                      <Avatar key={member.user.id} size="sm" role="img" aria-label={getMemberName(member.user)} title={getMemberName(member.user)}>
+                        {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt={getMemberName(member.user)} /> : null}
 
-                        <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                        <AvatarFallback>{getMemberInitials(getMemberName(member.user))}</AvatarFallback>
                       </Avatar>
                     ))}
 
@@ -1082,15 +1090,15 @@ function CollaborationControls({
 
                   return (
                     <div key={member.user.id} className="flex items-center gap-3 py-3">
-                      <Avatar size="sm" role="img" aria-label={member.user.displayName}>
+                      <Avatar size="sm" role="img" aria-label={getMemberName(member.user)}>
                         {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                        <AvatarFallback>{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                        <AvatarFallback>{getMemberInitials(getMemberName(member.user))}</AvatarFallback>
                       </Avatar>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2">
-                          <p className="truncate text-sm font-medium">{member.user.displayName}</p>
+                          <p className="truncate text-sm font-medium">{getMemberName(member.user)}</p>
 
                           {member.isLead ? (
                             <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -1107,8 +1115,8 @@ function CollaborationControls({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Remove ${member.user.displayName} from project`}
-                          title={soleLead ? "Add another project lead before removing this member." : `Remove ${member.user.displayName}`}
+                          aria-label={`Remove ${getMemberName(member.user)} from project`}
+                          title={soleLead ? "Add another project lead before removing this member." : `Remove ${getMemberName(member.user)}`}
                           disabled={collaborationPending || soleLead}
                           onClick={() => {
                             handleRemoveMember(member);
@@ -1141,10 +1149,10 @@ function CollaborationControls({
                           <Avatar size="sm" className="size-5" aria-hidden="true">
                             {selectedMemberToAdd.avatarUrl ? <AvatarImage src={selectedMemberToAdd.avatarUrl} alt="" /> : null}
 
-                            <AvatarFallback className="text-[9px]">{getMemberInitials(selectedMemberToAdd.displayName)}</AvatarFallback>
+                            <AvatarFallback className="text-[9px]">{getMemberInitials(getMemberName(selectedMemberToAdd))}</AvatarFallback>
                           </Avatar>
 
-                          <span className="min-w-0 truncate">{selectedMemberToAdd.displayName}</span>
+                          <span className="min-w-0 truncate">{getMemberName(selectedMemberToAdd)}</span>
                         </span>
                       ) : (
                         <span className="text-muted-foreground">Select workspace member</span>
@@ -1186,10 +1194,10 @@ function CollaborationControls({
                                 <Avatar size="sm" className="size-5" aria-hidden="true">
                                   {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
 
-                                  <AvatarFallback className="text-[9px]">{getMemberInitials(member.displayName)}</AvatarFallback>
+                                  <AvatarFallback className="text-[9px]">{getMemberInitials(getMemberName(member))}</AvatarFallback>
                                 </Avatar>
 
-                                <span className="min-w-0 flex-1 truncate">{member.displayName}</span>
+                                <span className="min-w-0 flex-1 truncate">{getMemberName(member)}</span>
 
                                 {selected ? <CheckIcon className="absolute right-2 size-4" aria-hidden="true" /> : null}
                               </button>

@@ -2,10 +2,6 @@ import * as z from "zod";
 
 export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
 
-export const updateWorkspaceMemberSchema = z.object({
-  displayName: z.string().trim().min(1).max(120),
-});
-
 export const addProjectMemberSchema = z.object({
   userId: z.string().trim().min(1),
 });
@@ -21,8 +17,6 @@ export const updateWorkspaceMemberRoleSchema = z.discriminatedUnion("kind", [
     roleId: z.string().trim().min(1),
   }),
 ]);
-
-export type UpdateWorkspaceMemberInput = z.infer<typeof updateWorkspaceMemberSchema>;
 
 export type UpdateWorkspaceMemberRoleInput = z.infer<typeof updateWorkspaceMemberRoleSchema>;
 
@@ -54,6 +48,10 @@ export type MemberDto = {
 
   displayName: string;
 
+  firstName: string | null;
+
+  lastName: string | null;
+
   avatarUrl: string | null;
 
   role: WorkspaceRole;
@@ -80,6 +78,8 @@ export type WorkspaceExpertiseItemResponse = {
 export type MemberAccessRequestDto = {
   id: string;
   displayName: string;
+  firstName: string | null;
+  lastName: string | null;
   avatarUrl: string | null;
   requestedAt: string;
 };

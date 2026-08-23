@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/features/auth/permissions";
 import { useMe } from "@/features/auth/hooks/use-me";
@@ -7,6 +8,7 @@ import { RolesSettings } from "@/features/roles/components/roles-settings";
 import { TeamsSettings } from "@/features/teams/components/teams-settings";
 import { MembersSettings } from "@/features/members/components/members-settings";
 import { DiscordIntegrationSettings } from "@/features/integrations/discord/components/discord-integration-settings";
+import { getErrorMessage } from "@/lib/errors";
 
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 import { PersonalSettings } from "@/features/profile/components/personal-settings";
@@ -80,9 +82,20 @@ function GeneralSettings() {
                   return;
                 }
 
-                updateWorkspace.mutate({
-                  name: normalizedName,
-                });
+                updateWorkspace.mutate(
+                  {
+                    name: normalizedName,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Workspace updated.");
+                    },
+
+                    onError: (error) => {
+                      toast.error(getErrorMessage(error, "Failed to update workspace."));
+                    },
+                  },
+                );
               }}
             >
               <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
@@ -142,10 +155,6 @@ function GeneralSettings() {
                   </div>
                 </div>
               </div>
-
-              {updateWorkspace.isError ? <p className="mt-2 text-xs text-destructive">{updateWorkspace.error.message}</p> : null}
-
-              {updateWorkspace.isSuccess && !hasNameChange ? <p className="mt-2 text-xs text-muted-foreground">Workspace updated.</p> : null}
 
               {canManageWorkspace && hasNameChange ? (
                 <div className="mt-3 flex justify-end">

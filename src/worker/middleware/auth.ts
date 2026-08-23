@@ -153,6 +153,8 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     user: {
       id: result.userId,
 
+      discordUserId: result.discordUserId,
+
       displayName: result.displayName,
 
       avatarUrl: result.avatarUrl,

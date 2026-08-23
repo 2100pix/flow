@@ -14,6 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 import { useCreateTaskResource, useDeleteTaskResource, useTaskResources, useUpdateTaskResource } from "../hooks/use-task-resources";
 
+import { getErrorMessage } from "@/lib/errors";
+
 import type { TaskResourceDto, TaskResourceType } from "../types";
 
 type ResourceEditor =
@@ -28,10 +30,6 @@ type ResourceEditor =
       resource: TaskResourceDto;
     }
   | null;
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function getHttpHostname(value: string) {
   try {

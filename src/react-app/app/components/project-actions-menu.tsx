@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DotsThreeIcon, GearSixIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 
@@ -81,7 +83,15 @@ function RenameProjectDialog({ project, onClose }: { project: ProjectDto; onClos
                 },
               },
               {
-                onSuccess: onClose,
+                onSuccess: () => {
+                  toast.success("Project renamed.");
+
+                  onClose();
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to rename project."));
+                },
               },
             );
           }}
@@ -102,8 +112,6 @@ function RenameProjectDialog({ project, onClose }: { project: ProjectDto; onClos
               className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </div>
-
-          {updateProject.isError ? <p className="text-sm text-destructive">{updateProject.error.message}</p> : null}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={updateProject.isPending} onClick={onClose}>

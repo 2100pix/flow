@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { hasPermission } from "@/features/auth/permissions";
 import { useMe } from "@/features/auth/hooks/use-me";
 
@@ -140,6 +142,8 @@ export function DiscordIntegrationSettings() {
 
                             disconnectDiscord.mutate(undefined, {
                               onSuccess: () => {
+                                toast.success("Discord disconnected.");
+
                                 const nextSearchParams = new URLSearchParams(searchParams);
 
                                 nextSearchParams.delete("discord");
@@ -147,6 +151,10 @@ export function DiscordIntegrationSettings() {
                                 setSearchParams(nextSearchParams, {
                                   replace: true,
                                 });
+                              },
+
+                              onError: (error) => {
+                                toast.error(getErrorMessage(error, "Failed to disconnect Discord."));
                               },
                             });
                           }}
@@ -211,9 +219,20 @@ export function DiscordIntegrationSettings() {
                             onChange={(event) => {
                               const value = event.target.value;
 
-                              updateCategory.mutate({
-                                projectCategoryId: value || null,
-                              });
+                              updateCategory.mutate(
+                                {
+                                  projectCategoryId: value || null,
+                                },
+                                {
+                                  onSuccess: () => {
+                                    toast.success("Project category updated.");
+                                  },
+
+                                  onError: (error) => {
+                                    toast.error(getErrorMessage(error, "Failed to update project category."));
+                                  },
+                                },
+                              );
                             }}
                             className="
                             h-8
@@ -264,9 +283,20 @@ export function DiscordIntegrationSettings() {
                             variant={integration.enabled ? "outline" : "default"}
                             disabled={updateDiscord.isPending || disconnectDiscord.isPending}
                             onClick={() => {
-                              updateDiscord.mutate({
-                                enabled: !integration.enabled,
-                              });
+                              updateDiscord.mutate(
+                                {
+                                  enabled: !integration.enabled,
+                                },
+                                {
+                                  onSuccess: () => {
+                                    toast.success(integration.enabled ? "Discord sync disabled." : "Discord sync enabled.");
+                                  },
+
+                                  onError: (error) => {
+                                    toast.error(getErrorMessage(error, "Failed to update Discord sync."));
+                                  },
+                                },
+                              );
                             }}
                           >
                             {updateDiscord.isPending ? "Saving…" : integration.enabled ? "Disable" : "Enable"}
@@ -301,8 +331,14 @@ export function DiscordIntegrationSettings() {
                                 },
                                 {
                                   onSuccess: () => {
+                                    toast.success("Reminder settings updated.");
+
                                     setReminderTimeZoneDraft(null);
                                     setReminderHourLocalDraft(null);
+                                  },
+
+                                  onError: (error) => {
+                                    toast.error(getErrorMessage(error, "Failed to update reminders."));
                                   },
                                 },
                               );
@@ -395,8 +431,14 @@ export function DiscordIntegrationSettings() {
                                   },
                                   {
                                     onSuccess: () => {
+                                      toast.success("Reminder schedule updated.");
+
                                       setReminderTimeZoneDraft(null);
                                       setReminderHourLocalDraft(null);
+                                    },
+
+                                    onError: (error) => {
+                                      toast.error(getErrorMessage(error, "Failed to update reminder schedule."));
                                     },
                                   },
                                 );
@@ -419,10 +461,6 @@ export function DiscordIntegrationSettings() {
                 ) : null}
               </div>
             </div>
-            {disconnectDiscord.isError ? <p className="mt-2 text-xs text-destructive">{disconnectDiscord.error.message}</p> : null}
-            {updateDiscord.isError ? <p className="mt-2 text-xs text-destructive">{updateDiscord.error.message}</p> : null}
-            {updateCategory.isError ? <p className="mt-2 text-xs text-destructive">{updateCategory.error.message}</p> : null}
-            {updateReminders.isError ? <p className="mt-2 text-xs text-destructive">{updateReminders.error.message}</p> : null}
           </section>
         </div>
       </div>

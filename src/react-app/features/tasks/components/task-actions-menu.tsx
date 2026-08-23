@@ -18,6 +18,8 @@ import { useArchiveTask } from "../hooks/use-archive-task";
 
 import { useDeleteTask } from "../hooks/use-delete-task";
 
+import { getErrorMessage } from "@/lib/errors";
+
 import type { TaskDto } from "../types";
 
 type TaskActionsMenuProps = {
@@ -29,10 +31,6 @@ type TaskActionsMenuProps = {
 
   onDeleted?: () => void;
 };
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export function TaskActionsMenu({ task, align = "start", onArchived, onDeleted }: TaskActionsMenuProps) {
   const { data: auth } = useMe();

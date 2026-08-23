@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 
 import { useProjectTaskWorkflow } from "../hooks/use-project-task-workflow";
 
@@ -160,26 +162,35 @@ function TaskWorkflowEditor({ projectId, initialStatuses, canManage }: TaskWorkf
 
       {hasDuplicateLabel ? <p className="mt-3 text-sm text-destructive">Status labels must be unique.</p> : null}
 
-      {updateWorkflow.isError ? <p className="mt-3 text-sm text-destructive">{updateWorkflow.error.message}</p> : null}
-
       {canManage ? (
         <Button
           className="mt-4"
           disabled={!canSave}
           onClick={() => {
-            updateWorkflow.mutate({
-              projectId,
+            updateWorkflow.mutate(
+              {
+                projectId,
 
-              input: {
-                statuses: statuses.map((status) => ({
-                  statusKey: status.statusKey,
+                input: {
+                  statuses: statuses.map((status) => ({
+                    statusKey: status.statusKey,
 
-                  label: status.label.trim(),
+                    label: status.label.trim(),
 
-                  enabled: status.enabled,
-                })),
+                    enabled: status.enabled,
+                  })),
+                },
               },
-            });
+              {
+                onSuccess: () => {
+                  toast.success("Workflow updated.");
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to update workflow."));
+                },
+              },
+            );
           }}
         >
           {updateWorkflow.isPending ? "Saving…" : "Save workflow"}

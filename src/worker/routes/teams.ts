@@ -41,6 +41,8 @@ teamsRoutes.get("/", requireAuth, requirePermission("teams.view"), async (c) => 
       teamId: teamMembers.teamId,
       userId: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
       role: workspaceMembers.role,
       customRoleId: workspaceRoles.id,
@@ -64,6 +66,8 @@ teamsRoutes.get("/", requireAuth, requirePermission("teams.view"), async (c) => 
         user: {
           id: member.userId,
           displayName: member.displayName,
+          firstName: member.firstName,
+          lastName: member.lastName,
           avatarUrl: member.avatarUrl,
           role: member.role,
 
@@ -206,6 +210,8 @@ teamsRoutes.patch(
       .select({
         userId: users.id,
         displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
         avatarUrl: users.avatarUrl,
         role: workspaceMembers.role,
         customRoleId: workspaceRoles.id,
@@ -226,6 +232,8 @@ teamsRoutes.patch(
         user: {
           id: member.userId,
           displayName: member.displayName,
+          firstName: member.firstName,
+          lastName: member.lastName,
           avatarUrl: member.avatarUrl,
           role: member.role,
 
@@ -338,6 +346,8 @@ teamsRoutes.post(
       .select({
         id: users.id,
         displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
         avatarUrl: users.avatarUrl,
         role: workspaceMembers.role,
       })

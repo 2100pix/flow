@@ -7,6 +7,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 
 import type { TaskDto, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+import { resolvePersonName } from "@/lib/person-name";
 
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
@@ -45,8 +46,9 @@ function formatTaskDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(date);
 }
 
@@ -77,7 +79,7 @@ function TaskCardAssignees({ task }: { task: TaskDto }) {
         <Avatar key={assignee.id} size="sm" className="size-[18px]" aria-hidden="true">
           {assignee.avatarUrl ? <AvatarImage src={assignee.avatarUrl} alt="" /> : null}
 
-          <AvatarFallback className="text-[8px]">{getInitials(assignee.displayName)}</AvatarFallback>
+          <AvatarFallback className="text-[8px]">{getInitials(resolvePersonName({ firstName: assignee.firstName, lastName: assignee.lastName, displayName: assignee.displayName }))}</AvatarFallback>
         </Avatar>
       ))}
 

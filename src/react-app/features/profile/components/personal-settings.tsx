@@ -1,9 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckIcon, PlusIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { useMe } from "@/features/auth/hooks/use-me";
 import { useCreateMyExpertise, useMyExpertise, useUpdateMyExpertise } from "@/features/auth/hooks/use-my-expertise";
+import { useRefreshDiscordProfile } from "@/features/auth/hooks/use-refresh-discord-profile";
 import { useUpdateProfile } from "@/features/auth/hooks/use-update-profile";
 import type { UpdateProfileInput } from "@/features/auth/types";
 
@@ -99,6 +102,7 @@ export function PersonalSettings() {
   const updateProfile = useUpdateProfile();
   const updateExpertise = useUpdateMyExpertise();
   const createExpertise = useCreateMyExpertise();
+  const refreshDiscord = useRefreshDiscordProfile();
 
   const { data: expertiseTags = [] } = useMyExpertise();
 
@@ -155,7 +159,9 @@ export function PersonalSettings() {
           setCreatingExpertise(false);
         },
 
-        onError: () => {},
+        onError: () => {
+          toast.error("Failed to create expertise.");
+        },
       },
     );
   }
@@ -187,8 +193,10 @@ export function PersonalSettings() {
       }
 
       await Promise.all(operations);
-    } catch {
-      // Errors are surfaced through mutation state below.
+
+      toast.success("Profile updated.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to update profile."));
     }
   }
 
@@ -203,6 +211,35 @@ export function PersonalSettings() {
 
             <form className="mt-3" onSubmit={handleSave}>
               <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-card">
+                <div className="flex min-h-12 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium">Discord Profile</p>
+
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Sync your display name and photo from Discord.</p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={refreshDiscord.isPending || isSaving}
+                    className="shrink-0"
+                    onClick={() => {
+                      refreshDiscord.mutate(undefined, {
+                        onSuccess: () => {
+                          toast.success("Discord profile refreshed.");
+                        },
+
+                        onError: (error) => {
+                          toast.error(getErrorMessage(error, "Failed to refresh Discord profile."));
+                        },
+                      });
+                    }}
+                  >
+                    {refreshDiscord.isPending ? "Refreshing…" : "Refresh from Discord"}
+                  </Button>
+                </div>
+
                 <div className="flex min-h-12 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor="personal-first-name" className="text-xs font-medium">
                     First Name
@@ -359,16 +396,8 @@ export function PersonalSettings() {
                       </button>
                     )}
                   </div>
-
-                  {createExpertise.isError ? <p className="text-xs text-destructive">{createExpertise.error.message}</p> : null}
                 </div>
               </div>
-
-              {updateProfile.isError ? <p className="mt-2 text-xs text-destructive">{updateProfile.error.message}</p> : null}
-
-              {updateExpertise.isError ? <p className="mt-2 text-xs text-destructive">{updateExpertise.error.message}</p> : null}
-
-              {updateProfile.isSuccess && !hasChanges ? <p className="mt-2 text-xs text-muted-foreground">Profile updated.</p> : null}
 
               {hasChanges ? (
                 <div className="mt-3 flex justify-end">

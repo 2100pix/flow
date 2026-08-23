@@ -9,6 +9,7 @@ export type WorkspaceRole = WorkspaceMember["role"];
 export type AuthContext = {
   user: {
     id: string;
+    discordUserId: string;
     displayName: string;
     avatarUrl: string | null;
 

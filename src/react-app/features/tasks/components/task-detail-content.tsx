@@ -27,6 +27,7 @@ import { hasPermission } from "@/features/auth/permissions";
 import { useMe } from "@/features/auth/hooks/use-me";
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import type { ProjectMemberDto } from "@/features/members/types";
+import { resolvePersonName } from "@/lib/person-name";
 import { TaskResourcesSection } from "./task-resources-section";
 import { useTaskDetailAutosave } from "../hooks/use-task-detail-autosave";
 
@@ -128,8 +129,8 @@ function formatTaskDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   }).format(date);
 }
@@ -142,8 +143,8 @@ function formatTaskTimestamp(value: string) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
@@ -162,9 +163,9 @@ function sortProjectMembers(projectMembers: readonly ProjectMemberDto[]) {
   });
 }
 
-function getMemberInitials(displayName: string) {
+function getMemberInitials(name: string) {
   return (
-    displayName
+    name
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -172,6 +173,24 @@ function getMemberInitials(displayName: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+type PersonLike = {
+  firstName?: string | null;
+
+  lastName?: string | null;
+
+  displayName: string;
+};
+
+function getMemberName(person: PersonLike) {
+  return resolvePersonName({
+    firstName: person.firstName,
+
+    lastName: person.lastName,
+
+    displayName: person.displayName,
+  });
 }
 
 function TaskDateControl({
@@ -276,7 +295,7 @@ function TaskLeadControl({
 
   const currentTaskLead = task.lead?.id === value ? task.lead : null;
 
-  const selectedName = selectedMember?.user.displayName ?? currentTaskLead?.displayName ?? null;
+  const selectedName = selectedMember ? getMemberName(selectedMember.user) : currentTaskLead ? getMemberName(currentTaskLead) : null;
 
   const selectedAvatarUrl = selectedMember?.user.avatarUrl ?? currentTaskLead?.avatarUrl ?? null;
 
@@ -334,10 +353,10 @@ function TaskLeadControl({
               <Avatar size="sm" className="size-5" aria-hidden="true">
                 {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                <AvatarFallback className="text-[9px]">{getMemberInitials(getMemberName(member.user))}</AvatarFallback>
               </Avatar>
 
-              <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+              <span className="min-w-0 flex-1 truncate">{getMemberName(member.user)}</span>
             </SelectItem>
           ))}
         </SelectGroup>
@@ -374,7 +393,7 @@ function TaskAssigneeControl({
       return [
         {
           id: member.user.id,
-          displayName: member.user.displayName,
+          displayName: getMemberName(member.user),
           avatarUrl: member.user.avatarUrl,
         },
       ];
@@ -461,10 +480,10 @@ function TaskAssigneeControl({
                     <Avatar size="sm" className="size-5" aria-hidden="true">
                       {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                      <AvatarFallback className="text-[9px]">{getMemberInitials(member.user.displayName)}</AvatarFallback>
+                      <AvatarFallback className="text-[9px]">{getMemberInitials(getMemberName(member.user))}</AvatarFallback>
                     </Avatar>
 
-                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate">{getMemberName(member.user)}</span>
 
                     {selected ? (
                       <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">

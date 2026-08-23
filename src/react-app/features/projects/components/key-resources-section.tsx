@@ -11,6 +11,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 import { useCreateProjectResource, useDeleteProjectResource, useProjectResources, useUpdateProjectResource } from "../hooks/use-project-resources";
 
+import { getErrorMessage } from "@/lib/errors";
+
 import type { ProjectResourceDto, ProjectResourceType } from "../types";
 
 type ResourceEditor =
@@ -23,10 +25,6 @@ type ResourceEditor =
       resource: ProjectResourceDto;
     }
   | null;
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function getHttpHostname(value: string) {
   try {

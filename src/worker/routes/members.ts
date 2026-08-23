@@ -1,8 +1,8 @@
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import { updateWorkspaceMemberRoleSchema, updateWorkspaceMemberSchema, createWorkspaceExpertiseSchema, updateMemberExpertiseSchema, type WorkspaceExpertiseDto, type MemberAccessRequestDto, type MemberDto } from "../../shared/contracts/members";
+import { updateWorkspaceMemberRoleSchema, createWorkspaceExpertiseSchema, updateMemberExpertiseSchema, type WorkspaceExpertiseDto, type MemberAccessRequestDto, type MemberDto } from "../../shared/contracts/members";
 import { createDb } from "../db";
 import { createId } from "../lib/id";
 import {
@@ -63,6 +63,10 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
 
       displayName: users.displayName,
 
+      firstName: users.firstName,
+
+      lastName: users.lastName,
+
       avatarUrl: users.avatarUrl,
 
       role: workspaceMembers.role,
@@ -84,7 +88,7 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
       ),
     )
     .where(eq(workspaceMembers.workspaceId, auth.workspace.id))
-    .orderBy(asc(users.displayName));
+    .orderBy(asc(sql`COALESCE(NULLIF(${users.firstName}, ''), ${users.displayName})`));
 
   const expertiseRows = await db
     .select({
@@ -121,6 +125,10 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
 
     displayName: member.displayName,
 
+    firstName: member.firstName,
+
+    lastName: member.lastName,
+
     avatarUrl: member.avatarUrl,
 
     role: member.role,
@@ -150,6 +158,8 @@ membersRoutes.get("/access-requests", requireAuth, requirePermission("members.ma
     .select({
       id: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
       requestedAt: workspaceAccessRequests.requestedAt,
     })
@@ -161,6 +171,8 @@ membersRoutes.get("/access-requests", requireAuth, requirePermission("members.ma
   const data: MemberAccessRequestDto[] = rows.map((request) => ({
     id: request.id,
     displayName: request.displayName,
+    firstName: request.firstName,
+    lastName: request.lastName,
     avatarUrl: request.avatarUrl,
     requestedAt: request.requestedAt.toISOString(),
   }));
@@ -179,6 +191,8 @@ membersRoutes.post("/access-requests/:userId/approve", requireAuth, requirePermi
     .select({
       userId: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
     })
     .from(workspaceAccessRequests)
@@ -235,6 +249,8 @@ membersRoutes.post("/access-requests/:userId/approve", requireAuth, requirePermi
   const data: MemberDto = {
     id: request.userId,
     displayName: request.displayName,
+    firstName: request.firstName,
+    lastName: request.lastName,
     avatarUrl: request.avatarUrl,
     role: "member",
     customRole: null,
@@ -533,125 +549,6 @@ membersRoutes.put(
       data: {
         success: true as const,
       },
-    });
-  },
-);
-
-membersRoutes.patch(
-  "/:userId",
-
-  requireAuth,
-
-  requirePermission("members.manage"),
-
-  zValidator(
-    "json",
-
-    updateWorkspaceMemberSchema,
-
-    (result, c) => {
-      if (!result.success) {
-        return c.json(
-          {
-            error: {
-              code: "VALIDATION_ERROR",
-
-              message: "Invalid member data",
-            },
-          },
-          400,
-        );
-      }
-    },
-  ),
-
-  async (c) => {
-    const auth = c.var.auth;
-
-    const userId = c.req.param("userId");
-
-    const input = c.req.valid("json");
-
-    const db = createDb(c.env.flow_db);
-
-    const [membership] = await db
-      .select({
-        role: workspaceMembers.role,
-
-        customRoleId: workspaceMembers.customRoleId,
-
-        customRoleName: workspaceRoles.name,
-
-        joinedAt: workspaceMembers.createdAt,
-
-        avatarUrl: users.avatarUrl,
-      })
-      .from(workspaceMembers)
-      .innerJoin(users, eq(workspaceMembers.userId, users.id))
-      .leftJoin(
-        workspaceRoles,
-        and(
-          eq(workspaceMembers.customRoleId, workspaceRoles.id),
-
-          eq(workspaceRoles.workspaceId, auth.workspace.id),
-        ),
-      )
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, auth.workspace.id),
-
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    if (!membership) {
-      return c.json(
-        {
-          error: {
-            code: "MEMBER_NOT_FOUND",
-
-            message: "Workspace member not found",
-          },
-        },
-        404,
-      );
-    }
-
-    const now = new Date();
-
-    await db
-      .update(users)
-      .set({
-        displayName: input.displayName,
-
-        updatedAt: now,
-      })
-      .where(eq(users.id, userId));
-
-    const data: MemberDto = {
-      id: userId,
-
-      displayName: input.displayName,
-
-      avatarUrl: membership.avatarUrl,
-
-      role: membership.role,
-
-      customRole:
-        membership.customRoleId && membership.customRoleName
-          ? {
-              id: membership.customRoleId,
-
-              name: membership.customRoleName,
-            }
-          : null,
-
-      joinedAt: membership.joinedAt.toISOString(),
-    };
-
-    return c.json({
-      data,
     });
   },
 );
@@ -1213,6 +1110,10 @@ membersRoutes.patch(
 
         displayName: users.displayName,
 
+        firstName: users.firstName,
+
+        lastName: users.lastName,
+
         avatarUrl: users.avatarUrl,
       })
       .from(users)
@@ -1236,6 +1137,10 @@ membersRoutes.patch(
       id: user.id,
 
       displayName: user.displayName,
+
+      firstName: user.firstName,
+
+      lastName: user.lastName,
 
       avatarUrl: user.avatarUrl,
 

@@ -6,6 +6,7 @@ import { useMe } from "@/features/auth/hooks/use-me";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import { hasPermission } from "@/features/auth/permissions";
+import { formatDate } from "@/lib/format-date";
 
 export function ProjectsPage() {
   const navigate = useNavigate();
@@ -99,7 +100,7 @@ export function ProjectsPage() {
                 <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">{project.description || "No description"}</p>
 
                 <div className="mt-auto flex items-center justify-between gap-4 pt-5 text-xs text-muted-foreground">
-                  <span>{project.dueDate ? `Due ${project.dueDate}` : "No due date"}</span>
+                  <span>{project.dueDate ? `Due ${formatDate(project.dueDate)}` : "No due date"}</span>
 
                   <span className="transition-colors group-hover:text-foreground">Open</span>
                 </div>

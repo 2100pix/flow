@@ -4,6 +4,9 @@ import { resolveProjectCode } from "../../shared/project-code";
 
 import { createDb } from "../db";
 
+import { formatDisplayDate } from "./format-date";
+import { resolvePersonName } from "./person-name";
+
 import { projectDiscordForums, projects, taskAssignees, taskDiscordThreads, taskResources, tasks, users, workspaceDiscordIntegrations } from "../db/schema";
 
 import {
@@ -142,6 +145,8 @@ async function buildCanonicalTaskMessage(
   let lead: {
     discordUserId: string | null;
     displayName: string;
+    firstName: string | null;
+    lastName: string | null;
   } | null = null;
 
   if (task.leadUserId) {
@@ -149,6 +154,8 @@ async function buildCanonicalTaskMessage(
       .select({
         discordUserId: users.discordUserId,
         displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
       })
       .from(users)
       .where(eq(users.id, task.leadUserId))
@@ -161,6 +168,8 @@ async function buildCanonicalTaskMessage(
     .select({
       discordUserId: users.discordUserId,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -196,19 +205,19 @@ async function buildCanonicalTaskMessage(
   }
 
   if (task.startDate) {
-    lines.push(`Start Date: ${task.startDate}`);
+    lines.push(`Start Date: ${formatDisplayDate(task.startDate)}`);
   }
 
   if (task.dueDate) {
-    lines.push(`Due Date: ${task.dueDate}`);
+    lines.push(`Due Date: ${formatDisplayDate(task.dueDate)}`);
   }
 
   if (lead) {
-    lines.push(`Lead: ${lead.discordUserId ? `<@${lead.discordUserId}>` : lead.displayName}`);
+    lines.push(`Lead: ${lead.discordUserId ? `<@${lead.discordUserId}>` : resolvePersonName(lead)}`);
   }
 
   if (assignees.length > 0) {
-    lines.push(`Assigned: ${assignees.map((assignee) => (assignee.discordUserId ? `<@${assignee.discordUserId}>` : assignee.displayName)).join(", ")}`);
+    lines.push(`Assigned: ${assignees.map((assignee) => (assignee.discordUserId ? `<@${assignee.discordUserId}>` : resolvePersonName(assignee))).join(", ")}`);
   }
 
   if (resources.length > 0) {

@@ -11,7 +11,6 @@ export type {
   RejectMemberAccessRequestResponse,
   RemoveProjectMemberResponse,
   RemoveWorkspaceMemberResponse,
-  UpdateWorkspaceMemberInput,
   UpdateWorkspaceMemberRoleInput,
   WorkspaceRole,
   CreateWorkspaceExpertiseInput,

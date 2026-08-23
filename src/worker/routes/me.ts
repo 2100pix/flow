@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
@@ -9,8 +9,10 @@ import {
 } from "../../shared/contracts/members";
 import { updateProfileSchema, type UserProfileDto } from "../../shared/contracts/me";
 import { createDb } from "../db";
+import { getDiscordGuildMember, DiscordApiError } from "../lib/discord-api";
+import { getDiscordAvatarUrl, resolveDiscordDisplayName } from "../lib/discord-profile";
 import { createId } from "../lib/id";
-import { memberExpertise, users, workspaceExpertise } from "../db/schema";
+import { memberExpertise, users, workspaceDiscordIntegrations, workspaceExpertise } from "../db/schema";
 import { requireAuth } from "../middleware/auth";
 
 import type { AuthContext } from "../types/auth";
@@ -126,6 +128,95 @@ meRoutes.put(
     });
   },
 );
+
+meRoutes.post("/discord-refresh", requireAuth, async (c) => {
+  const auth = c.var.auth;
+
+  const db = createDb(c.env.flow_db);
+
+  const [integration] = await db
+    .select({
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(and(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id), isNotNull(workspaceDiscordIntegrations.guildId)))
+    .limit(1);
+
+  if (!integration?.guildId) {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_NOT_CONNECTED",
+
+          message: "Discord is not connected to this workspace. Log in again with Discord to sync your profile.",
+        },
+      },
+      409,
+    );
+  }
+
+  let discordUser;
+
+  try {
+    const member = await getDiscordGuildMember(c.env.DISCORD_BOT_TOKEN, integration.guildId, auth.user.discordUserId);
+
+    discordUser = member.user;
+  } catch (error) {
+    const status = error instanceof DiscordApiError ? error.status : null;
+
+    if (status === 404 || status === 403) {
+      return c.json(
+        {
+          error: {
+            code: "DISCORD_PROFILE_UNAVAILABLE",
+
+            message: "Your Discord profile could not be found in the connected server. Log in again with Discord to sync.",
+          },
+        },
+        409,
+      );
+    }
+
+    throw error;
+  }
+
+  const now = new Date();
+
+  const displayName = resolveDiscordDisplayName(discordUser);
+
+  const avatarUrl = getDiscordAvatarUrl(discordUser);
+
+  await db
+    .update(users)
+    .set({
+      displayName,
+
+      avatarUrl,
+
+      updatedAt: now,
+    })
+    .where(eq(users.id, auth.user.id));
+
+  const data: UserProfileDto = {
+    id: auth.user.id,
+
+    displayName,
+
+    avatarUrl,
+
+    firstName: auth.user.firstName,
+
+    lastName: auth.user.lastName,
+
+    timeZone: auth.user.timeZone,
+
+    expertise: auth.user.expertise,
+  };
+
+  return c.json({
+    data,
+  });
+});
 
 meRoutes.get("/expertise", requireAuth, async (c) => {
   const auth = c.var.auth;

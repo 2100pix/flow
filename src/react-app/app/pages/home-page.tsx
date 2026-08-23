@@ -33,9 +33,9 @@ const taskStatuses = [
 ] as const;
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }

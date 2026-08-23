@@ -74,3 +74,11 @@ export async function updateMyExpertise(input: UpdateMemberExpertiseInput) {
     body: JSON.stringify(input),
   });
 }
+
+export async function refreshMyDiscordProfile(): Promise<UserProfileDto> {
+  const response = await apiFetch<UpdateProfileResponse>("/api/me/discord-refresh", {
+    method: "POST",
+  });
+
+  return response.data;
+}

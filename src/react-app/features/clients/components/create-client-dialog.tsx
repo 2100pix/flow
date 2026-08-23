@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { XIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { useCreateClient } from "@/features/clients/hooks/use-create-client";
 
 export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -47,8 +49,14 @@ export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: 
               },
               {
                 onSuccess: () => {
+                  toast.success("Client created.");
+
                   setName("");
                   onClose();
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to create client."));
                 },
               },
             );
@@ -71,8 +79,6 @@ export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: 
               className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </div>
-
-          {createClient.isError && <p className="text-sm text-destructive">{createClient.error.message}</p>}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>

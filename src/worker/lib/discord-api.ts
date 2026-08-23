@@ -98,6 +98,22 @@ export function listDiscordGuildChannels(botToken: string, guildId: string) {
   return discordFetch<DiscordGuildChannel[]>(botToken, `/guilds/${encodeURIComponent(guildId)}/channels`);
 }
 
+export type DiscordGuildMember = {
+  user: {
+    id: string;
+
+    username: string;
+
+    global_name: string | null;
+
+    avatar: string | null;
+  };
+};
+
+export function getDiscordGuildMember(botToken: string, guildId: string, discordUserId: string) {
+  return discordFetch<DiscordGuildMember>(botToken, `/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(discordUserId)}`);
+}
+
 type CreateDiscordForumChannelInput = {
   guildId: string;
   name: string;

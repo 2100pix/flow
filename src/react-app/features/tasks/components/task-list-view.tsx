@@ -27,6 +27,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
 import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
 import type { TaskDto, TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
+import { resolvePersonName } from "@/lib/person-name";
+import { serializeIsoDate } from "@/lib/format-date";
+import { getErrorMessage } from "@/lib/errors";
 
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
@@ -46,10 +49,6 @@ type TaskListViewProps = {
   onOpenTask: (taskId: string) => void;
 };
 
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
 function parseTaskDate(value: string | null) {
   if (!value) {
     return undefined;
@@ -65,13 +64,7 @@ function parseTaskDate(value: string | null) {
 }
 
 function serializeTaskDate(date: Date) {
-  const year = date.getFullYear();
-
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return serializeIsoDate(date);
 }
 
 function formatTaskDate(value: string | null) {
@@ -82,8 +75,9 @@ function formatTaskDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(date);
 }
 
@@ -97,6 +91,24 @@ function getInitials(name: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+type PersonLike = {
+  firstName?: string | null;
+
+  lastName?: string | null;
+
+  displayName: string;
+};
+
+function getName(person: PersonLike) {
+  return resolvePersonName({
+    firstName: person.firstName,
+
+    lastName: person.lastName,
+
+    displayName: person.displayName,
+  });
 }
 
 function InlineControl({ children }: { children: ReactNode }) {
@@ -163,7 +175,7 @@ function TaskAssigneeAvatars({ task }: { task: TaskDto }) {
         <Avatar key={assignee.id} size="sm" className="size-[18px]" aria-hidden="true">
           {assignee.avatarUrl ? <AvatarImage src={assignee.avatarUrl} alt="" /> : null}
 
-          <AvatarFallback className="text-[8px]">{getInitials(assignee.displayName)}</AvatarFallback>
+          <AvatarFallback className="text-[8px]">{getInitials(getName(assignee))}</AvatarFallback>
         </Avatar>
       ))}
 
@@ -550,10 +562,10 @@ function TaskAssigneeControl({ task, projectId, disabled }: { task: TaskDto; pro
                     <Avatar size="sm" className="size-5" aria-hidden="true">
                       {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                      <AvatarFallback className="text-[9px]">{getInitials(member.user.displayName)}</AvatarFallback>
+                      <AvatarFallback className="text-[9px]">{getInitials(getName(member.user))}</AvatarFallback>
                     </Avatar>
 
-                    <span className="min-w-0 flex-1 truncate">{member.user.displayName}</span>
+                    <span className="min-w-0 flex-1 truncate">{getName(member.user)}</span>
 
                     {selected ? (
                       <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">

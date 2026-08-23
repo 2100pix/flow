@@ -5,6 +5,7 @@ export type WorkspaceRole = "owner" | "admin" | "member";
 export type AuthContext = {
   user: {
     id: string;
+    discordUserId: string;
     displayName: string;
     avatarUrl: string | null;
 

@@ -24,7 +24,9 @@ import {
   workspaceRoles,
 } from "../db/schema";
 import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
+import { formatDisplayDate } from "../lib/format-date";
 import { createId } from "../lib/id";
+import { resolvePersonName } from "../lib/person-name";
 import type { AppBindings } from "../types/app-env";
 
 type DiscordInteractionEnv = {
@@ -411,6 +413,10 @@ async function resolveDiscordProjectMember(db: ReturnType<typeof createDb>, work
       userId: users.id,
 
       displayName: users.displayName,
+
+      firstName: users.firstName,
+
+      lastName: users.lastName,
     })
     .from(projectMembers)
     .innerJoin(users, eq(users.id, projectMembers.userId))
@@ -1022,7 +1028,7 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage("The selected Discord user is not an available Flow Project member."));
     }
 
-    const responseContent = `Task lead updated to ${target.displayName}.`;
+    const responseContent = `Task lead updated to ${resolvePersonName(target)}.`;
     const result = await persistDiscordTaskMutation(
       db,
       taskContext.workspaceId,
@@ -1058,8 +1064,8 @@ discordInteractionRoutes.post("/", async (c) => {
     if (!target) {
       return c.json(interactionMessage("The selected Discord user is not an available Flow Project member."));
     }
-    const successResponseContent = action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`;
-    const unchangedResponseContent = action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`;
+    const successResponseContent = action === "add" ? `${resolvePersonName(target)} assigned to this Task.` : `${resolvePersonName(target)} removed from this Task.`;
+    const unchangedResponseContent = action === "add" ? `${resolvePersonName(target)} is already assigned to this Task.` : `${resolvePersonName(target)} is not assigned to this Task.`;
     const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action, receiptFor(successResponseContent), receiptFor(unchangedResponseContent));
 
     if (result.status === "duplicate") {
@@ -1169,7 +1175,7 @@ discordInteractionRoutes.post("/", async (c) => {
     return c.json(interactionMessage("Due date cannot be before the current start date."));
   }
 
-  const responseContent = dueDate ? `Task due date updated to ${dueDate}.` : "Task due date cleared.";
+  const responseContent = dueDate ? `Task due date updated to ${formatDisplayDate(dueDate)}.` : "Task due date cleared.";
   const result = await persistDiscordTaskMutation(
     db,
     taskContext.workspaceId,

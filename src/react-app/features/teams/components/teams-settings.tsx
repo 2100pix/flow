@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckIcon, DotsThreeIcon, MagnifyingGlassIcon, PlusIcon, UsersThreeIcon, XIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,10 +16,12 @@ import { useAddTeamMember, useCreateTeam, useDeleteTeam, useRemoveTeamMember, us
 import { useTeams } from "@/features/teams/hooks/use-teams";
 
 import type { TeamDto } from "@/features/teams/types";
+import { getErrorMessage } from "@/lib/errors";
+import { resolvePersonName } from "@/lib/person-name";
 
-function getInitials(displayName: string) {
+function getInitials(name: string) {
   return (
-    displayName
+    name
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -26,6 +29,24 @@ function getInitials(displayName: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+type PersonLike = {
+  firstName?: string | null;
+
+  lastName?: string | null;
+
+  displayName: string;
+};
+
+function getName(person: PersonLike) {
+  return resolvePersonName({
+    firstName: person.firstName,
+
+    lastName: person.lastName,
+
+    displayName: person.displayName,
+  });
 }
 
 function formatCreatedAt(value: string) {
@@ -36,8 +57,9 @@ function formatCreatedAt(value: string) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(date);
 }
 
@@ -116,9 +138,15 @@ function CreateTeamDialog({
               },
               {
                 onSuccess: () => {
+                  toast.success("Team created.");
+
                   reset();
 
                   onClose();
+                },
+
+                onError: (error) => {
+                  toast.error(getErrorMessage(error, "Failed to create team."));
                 },
               },
             );
@@ -163,8 +191,6 @@ function CreateTeamDialog({
                 disabled:opacity-50
               "
             />
-
-            {createTeam.isError ? <p className="mt-2 text-xs text-destructive">{createTeam.error.message}</p> : null}
           </div>
 
           <div className="flex justify-end gap-2">
@@ -258,11 +284,22 @@ function ManageTeamDialog({
                     return;
                   }
 
-                  updateTeam.mutate({
-                    teamId: team.id,
+                  updateTeam.mutate(
+                    {
+                      teamId: team.id,
 
-                    name: normalizedName,
-                  });
+                      name: normalizedName,
+                    },
+                    {
+                      onSuccess: () => {
+                        toast.success("Team renamed.");
+                      },
+
+                      onError: (error) => {
+                        toast.error(getErrorMessage(error, "Failed to rename team."));
+                      },
+                    },
+                  );
                 }}
               >
                 Save
@@ -282,11 +319,11 @@ function ManageTeamDialog({
                     <Avatar size="sm" aria-hidden="true">
                       {member.user.avatarUrl ? <AvatarImage src={member.user.avatarUrl} alt="" /> : null}
 
-                      <AvatarFallback>{getInitials(member.user.displayName)}</AvatarFallback>
+                      <AvatarFallback>{getInitials(getName(member.user))}</AvatarFallback>
                     </Avatar>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{member.user.displayName}</p>
+                      <p className="truncate text-sm font-medium">{getName(member.user)}</p>
 
                       <p className="text-xs capitalize text-muted-foreground">{member.user.role}</p>
                     </div>
@@ -295,15 +332,26 @@ function ManageTeamDialog({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={`Remove ${member.user.displayName}`}
+                      aria-label={`Remove ${getName(member.user)}`}
                       title="Remove from team"
                       disabled={removeMember.isPending}
                       onClick={() => {
-                        removeMember.mutate({
-                          teamId: team.id,
+                        removeMember.mutate(
+                          {
+                            teamId: team.id,
 
-                          userId: member.user.id,
-                        });
+                            userId: member.user.id,
+                          },
+                          {
+                            onSuccess: () => {
+                              toast.success("Member removed from team.");
+                            },
+
+                            onError: (error) => {
+                              toast.error(getErrorMessage(error, "Failed to remove member."));
+                            },
+                          },
+                        );
                       }}
                     >
                       <XIcon aria-hidden="true" />
@@ -322,10 +370,10 @@ function ManageTeamDialog({
                         <Avatar size="sm" className="size-5" aria-hidden="true">
                           {selectedMember.avatarUrl ? <AvatarImage src={selectedMember.avatarUrl} alt="" /> : null}
 
-                          <AvatarFallback className="text-[9px]">{getInitials(selectedMember.displayName)}</AvatarFallback>
+                          <AvatarFallback className="text-[9px]">{getInitials(getName(selectedMember))}</AvatarFallback>
                         </Avatar>
 
-                        <span className="truncate">{selectedMember.displayName}</span>
+                        <span className="truncate">{getName(selectedMember)}</span>
                       </span>
                     ) : (
                       <span className="text-muted-foreground">Add member</span>
@@ -367,10 +415,10 @@ function ManageTeamDialog({
                               <Avatar size="sm" className="size-5" aria-hidden="true">
                                 {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
 
-                                <AvatarFallback className="text-[9px]">{getInitials(member.displayName)}</AvatarFallback>
+                                <AvatarFallback className="text-[9px]">{getInitials(getName(member))}</AvatarFallback>
                               </Avatar>
 
-                              <span className="min-w-0 flex-1 truncate">{member.displayName}</span>
+                              <span className="min-w-0 flex-1 truncate">{getName(member)}</span>
 
                               {selected ? <CheckIcon className="absolute right-2 size-4" aria-hidden="true" /> : null}
                             </button>
@@ -398,7 +446,13 @@ function ManageTeamDialog({
                       },
                       {
                         onSuccess: () => {
+                          toast.success("Member added to team.");
+
                           setSelectedUserId("");
+                        },
+
+                        onError: (error) => {
+                          toast.error(getErrorMessage(error, "Failed to add member."));
                         },
                       },
                     );
@@ -512,7 +566,13 @@ function TeamRow({
               onClick={() => {
                 deleteTeam.mutate(team.id, {
                   onSuccess: () => {
+                    toast.success("Team deleted.");
+
                     setDeleteOpen(false);
+                  },
+
+                  onError: (error) => {
+                    toast.error(getErrorMessage(error, "Failed to delete team."));
                   },
                 });
               }}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toast } from "sonner";
 
+import { getErrorMessage } from "@/lib/errors";
+
 import type { TaskDto, TaskPriority, TaskStatus, UpdateTaskInput } from "../types";
 
 import { useUpdateTask } from "./use-update-task";
@@ -47,8 +49,8 @@ function createDraft(task: TaskDto): TaskDetailDraft {
   };
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error && error.message ? error.message : "Failed to save task.";
+function getTaskSaveErrorMessage(error: unknown) {
+  return getErrorMessage(error, "Failed to save task.");
 }
 
 export function useTaskDetailAutosave(task: TaskDto) {
@@ -102,7 +104,7 @@ export function useTaskDetailAutosave(task: TaskDto) {
             setSaveState("error");
           }
 
-          toast.error(getErrorMessage(error));
+          toast.error(getTaskSaveErrorMessage(error));
 
           throw error;
         }

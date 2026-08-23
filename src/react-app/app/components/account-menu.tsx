@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useLogout } from "@/features/auth/hooks/use-logout";
 import type { AuthContext } from "@/features/auth/types";
 import { type ThemePreference, useTheme } from "@/features/appearance/theme";
+import { resolvePersonName } from "@/lib/person-name";
 import { cn } from "@/lib/utils";
 
 const themeOptions: Array<{
@@ -37,6 +38,14 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
   const [open, setOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const personName = resolvePersonName({
+    firstName: auth.user.firstName,
+
+    lastName: auth.user.lastName,
+
+    displayName: auth.user.displayName,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -81,10 +90,10 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
         {auth.user.avatarUrl ? (
           <img src={auth.user.avatarUrl} alt="" className="size-6 rounded-full" />
         ) : (
-          <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium">{auth.user.displayName.charAt(0).toUpperCase()}</div>
+          <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium">{personName.charAt(0).toUpperCase()}</div>
         )}
 
-        <span className="hidden max-w-36 truncate text-sm sm:block">{auth.user.displayName}</span>
+        <span className="hidden max-w-36 truncate text-sm sm:block">{personName}</span>
 
         <CaretDownIcon size={12} className="text-muted-foreground" />
       </Button>
@@ -92,7 +101,7 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
       {open && (
         <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg">
           <div className="px-2 py-2">
-            <p className="truncate text-sm font-medium">{auth.user.displayName}</p>
+            <p className="truncate text-sm font-medium">{personName}</p>
 
             <p className="mt-0.5 text-xs capitalize text-muted-foreground">{auth.workspace.customRole?.name ?? auth.workspace.role}</p>
           </div>

@@ -5,6 +5,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createDb } from "../db";
 import { sessions, users, workspaceAccessRequestSessions, workspaceAccessRequests, workspaceMembers } from "../db/schema";
 import type { PendingAccessContinueResponse } from "../../shared/contracts/auth";
+import { getDiscordAvatarUrl, resolveDiscordDisplayName, type DiscordProfileUser } from "../lib/discord-profile";
 import { createId } from "../lib/id";
 import { createSessionToken, getSessionExpiresAt, hashSessionToken, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../lib/session";
 import { createPendingSessionToken, getPendingSessionExpiresAt, hashPendingSessionToken, PENDING_SESSION_COOKIE, PENDING_SESSION_TTL_SECONDS } from "../lib/pending-session";
@@ -19,23 +20,6 @@ type DiscordTokenResponse = {
   refresh_token: string;
   scope: string;
 };
-
-type DiscordUser = {
-  id: string;
-  username: string;
-  global_name: string | null;
-  avatar: string | null;
-};
-
-function getDiscordAvatarUrl(user: DiscordUser) {
-  if (!user.avatar) {
-    return null;
-  }
-
-  const animated = user.avatar.startsWith("a_") ? "&animated=true" : "";
-
-  return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=128${animated}`;
-}
 
 export const authRoutes = new Hono<{
   Bindings: AppBindings;
@@ -152,11 +136,11 @@ authRoutes.get("/discord/callback", async (c) => {
     );
   }
 
-  const discordUser = (await userResponse.json()) as DiscordUser;
+  const discordUser = (await userResponse.json()) as DiscordProfileUser;
   const db = createDb(c.env.flow_db);
   const workspaceId = c.env.FLOW_WORKSPACE_ID;
   const now = new Date();
-  const displayName = discordUser.global_name ?? discordUser.username;
+  const displayName = resolveDiscordDisplayName(discordUser);
   const avatarUrl = getDiscordAvatarUrl(discordUser);
 
   await db
@@ -174,6 +158,7 @@ authRoutes.get("/discord/callback", async (c) => {
       target: users.discordUserId,
 
       set: {
+        displayName,
         avatarUrl,
         updatedAt: now,
         lastLoginAt: now,

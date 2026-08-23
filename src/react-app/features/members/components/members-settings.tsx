@@ -21,16 +21,17 @@ import { useMembers } from "@/features/members/hooks/use-members";
 import { useRejectMemberAccessRequest } from "@/features/members/hooks/use-reject-member-access-request";
 import { useUpdateMemberRole } from "@/features/members/hooks/use-update-member-role";
 import { useAddTeamMember, useRemoveTeamMember } from "@/features/teams/hooks/use-team-mutations";
-import { useRemoveWorkspaceMember, useUpdateWorkspaceMember } from "@/features/members/hooks/use-workspace-member-mutations";
+import { useRemoveWorkspaceMember } from "@/features/members/hooks/use-workspace-member-mutations";
 import { useTeams } from "@/features/teams/hooks/use-teams";
 import { useCreateWorkspaceExpertise, useUpdateMemberExpertise, useWorkspaceExpertise } from "@/features/members/hooks/use-workspace-expertise";
+import { resolvePersonName } from "@/lib/person-name";
 
 import type { MemberAccessRequestDto, MemberDto } from "@/features/members/types";
 import type { TeamDto } from "@/features/teams/types";
 
-function getInitials(displayName: string) {
+function getInitials(name: string) {
   return (
-    displayName
+    name
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -38,6 +39,16 @@ function getInitials(displayName: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+function getMemberLabel(member: Pick<MemberDto, "firstName" | "lastName" | "displayName">) {
+  return resolvePersonName({
+    firstName: member.firstName,
+
+    lastName: member.lastName,
+
+    displayName: member.displayName,
+  });
 }
 
 function formatJoinedAt(value: string | undefined) {
@@ -52,9 +63,11 @@ function formatJoinedAt(value: string | undefined) {
   }
 
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
+    day: "2-digit",
 
-    month: "short",
+    month: "2-digit",
+
+    year: "numeric",
   }).format(date);
 }
 
@@ -132,10 +145,10 @@ function PendingMembersDialog({
               <Avatar size="sm" aria-hidden="true">
                 {request.avatarUrl ? <AvatarImage src={request.avatarUrl} alt="" /> : null}
 
-                <AvatarFallback>{getInitials(request.displayName)}</AvatarFallback>
+                <AvatarFallback>{getInitials(getMemberLabel(request))}</AvatarFallback>
               </Avatar>
 
-              <p className="min-w-0 flex-1 truncate text-sm">{request.displayName}</p>
+              <p className="min-w-0 flex-1 truncate text-sm">{getMemberLabel(request)}</p>
 
               <Button
                 type="button"
@@ -177,7 +190,6 @@ function PendingMembersDialog({
 }
 
 function EditMemberDialog({ member, teams, open, onOpenChange }: { member: MemberDto; teams: TeamDto[]; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const updateMember = useUpdateWorkspaceMember();
   const updateRole = useUpdateMemberRole();
   const updateExpertise = useUpdateMemberExpertise();
   const createExpertise = useCreateWorkspaceExpertise();
@@ -190,7 +202,6 @@ function EditMemberDialog({ member, teams, open, onOpenChange }: { member: Membe
   const initialRoleValue = member.customRole ? `custom:${member.customRole.id}` : `built_in:${member.role}`;
   const initialTeamIds = teams.filter((team) => team.members.some((teamMember) => teamMember.user.id === member.id)).map((team) => team.id);
   const initialExpertiseIds = (member.expertise ?? []).map((item) => item.id);
-  const [displayName, setDisplayName] = useState(() => member.displayName);
   const [roleValue, setRoleValue] = useState(() => initialRoleValue);
   const [teamIds, setTeamIds] = useState<string[]>(() => initialTeamIds);
   const [expertiseIds, setExpertiseIds] = useState<string[]>(() => initialExpertiseIds);
@@ -226,10 +237,6 @@ function EditMemberDialog({ member, teams, open, onOpenChange }: { member: Membe
       },
     );
   }
-  const normalizedName = displayName.trim();
-
-  const displayNameChanged = normalizedName !== member.displayName;
-
   const roleChanged = roleValue !== initialRoleValue;
 
   const teamChanged = !haveSameIds(teamIds, initialTeamIds);
@@ -240,29 +247,17 @@ function EditMemberDialog({ member, teams, open, onOpenChange }: { member: Membe
 
   const teamIdsToRemove = initialTeamIds.filter((teamId) => !teamIds.includes(teamId));
 
-  const hasChanges = Boolean(normalizedName) && (displayNameChanged || roleChanged || teamChanged || expertiseChanged);
+  const hasChanges = roleChanged || teamChanged || expertiseChanged;
 
-  const isSaving = updateMember.isPending || updateRole.isPending || updateExpertise.isPending || addTeamMember.isPending || removeTeamMember.isPending;
+  const isSaving = updateRole.isPending || updateExpertise.isPending || addTeamMember.isPending || removeTeamMember.isPending;
 
   async function saveMember() {
-    if (!normalizedName || !hasChanges || isSaving) {
+    if (!hasChanges || isSaving) {
       return;
     }
 
     try {
       const operations: Promise<unknown>[] = [];
-
-      if (displayNameChanged) {
-        operations.push(
-          updateMember.mutateAsync({
-            userId: member.id,
-
-            input: {
-              displayName: normalizedName,
-            },
-          }),
-        );
-      }
 
       if (roleChanged) {
         if (roleValue.startsWith("custom:")) {
@@ -357,29 +352,29 @@ function EditMemberDialog({ member, teams, open, onOpenChange }: { member: Membe
         <div className="space-y-6">
           <div>
             <label htmlFor="edit-member-display-name" className="text-sm text-muted-foreground">
-              Display name
+              Display Name
             </label>
 
             <input
               id="edit-member-display-name"
-              value={displayName}
-              maxLength={120}
-              disabled={isSaving}
-              onChange={(event) => {
-                setDisplayName(event.target.value);
-              }}
+              value={getMemberLabel(member)}
+              readOnly
+              disabled
+              title="Synced from Discord and personal profile settings"
               className="
                 mt-3 h-9 w-full
                 rounded-lg border
                 border-input
-                bg-background
+                bg-muted
                 px-3 text-sm
+                text-muted-foreground
                 outline-none
-                focus-visible:border-ring
-                focus-visible:ring-3
-                focus-visible:ring-ring/50
+                disabled:cursor-not-allowed
+                disabled:opacity-60
               "
             />
+
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Synced from Discord &amp; profile settings.</p>
           </div>
 
           <div>
@@ -645,10 +640,10 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
           <Avatar size="sm" aria-hidden="true">
             {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt="" /> : null}
 
-            <AvatarFallback>{getInitials(member.displayName)}</AvatarFallback>
+            <AvatarFallback>{getInitials(getMemberLabel(member))}</AvatarFallback>
           </Avatar>
 
-          <span className="min-w-0 truncate">{member.displayName}</span>
+          <span className="min-w-0 truncate">{getMemberLabel(member)}</span>
 
           {member.role === "owner" ? (
             <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -670,7 +665,7 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Actions for ${member.displayName}`}
+                    aria-label={`Actions for ${getMemberLabel(member)}`}
                     className="
                       opacity-0
                       transition-opacity
@@ -799,7 +794,7 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
           <AlertDialogHeader>
             <AlertDialogTitle>Remove member?</AlertDialogTitle>
 
-            <AlertDialogDescription>{member.displayName} will be removed from this workspace, its projects, teams and task assignments. The Flow user account itself will not be deleted.</AlertDialogDescription>
+            <AlertDialogDescription>{getMemberLabel(member)} will be removed from this workspace, its projects, teams and task assignments. The Flow user account itself will not be deleted.</AlertDialogDescription>
           </AlertDialogHeader>
 
           <AlertDialogFooter>
@@ -882,7 +877,7 @@ export function MembersSettings() {
 
           const expertiseNames = (member.expertise ?? []).map((item) => item.name);
 
-          return [member.displayName, getRoleLabel(member), ...teamNames, ...expertiseNames].some((value) => value.toLowerCase().includes(normalizedQuery));
+          return [getMemberLabel(member), getRoleLabel(member), ...teamNames, ...expertiseNames].some((value) => value.toLowerCase().includes(normalizedQuery));
         })
       : [...members];
 
@@ -893,7 +888,7 @@ export function MembersSettings() {
         return roleDifference;
       }
 
-      return first.displayName.localeCompare(second.displayName);
+      return getMemberLabel(first).localeCompare(getMemberLabel(second));
     });
   }, [members, normalizedQuery, teamsByUserId, roleOrder]);
 

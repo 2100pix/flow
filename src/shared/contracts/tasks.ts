@@ -95,12 +95,16 @@ export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type TaskAssigneeDto = {
   id: string;
   displayName: string;
+  firstName: string | null;
+  lastName: string | null;
   avatarUrl: string | null;
 };
 
 export type TaskLeadDto = {
   id: string;
   displayName: string;
+  firstName: string | null;
+  lastName: string | null;
   avatarUrl: string | null;
 };
 

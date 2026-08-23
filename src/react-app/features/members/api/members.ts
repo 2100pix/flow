@@ -10,7 +10,6 @@ import type {
   RejectMemberAccessRequestResponse,
   RemoveProjectMemberResponse,
   RemoveWorkspaceMemberResponse,
-  UpdateWorkspaceMemberInput,
   CreateWorkspaceExpertiseInput,
   UpdateMemberExpertiseInput,
   WorkspaceExpertiseItemResponse,
@@ -53,20 +52,6 @@ export async function updateMemberExpertise(userId: string, input: UpdateMemberE
 
     body: JSON.stringify(input),
   });
-}
-
-export async function updateWorkspaceMember(userId: string, input: UpdateWorkspaceMemberInput) {
-  const response = await apiFetch<MemberResponse>(`/api/members/${userId}`, {
-    method: "PATCH",
-
-    headers: {
-      "Content-Type": "application/json",
-    },
-
-    body: JSON.stringify(input),
-  });
-
-  return response.data;
 }
 
 export async function removeWorkspaceMember(userId: string) {

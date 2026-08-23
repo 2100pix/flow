@@ -218,6 +218,10 @@ async function loadTaskAssigneeMap(db: Db, taskIds: readonly string[]) {
 
       displayName: users.displayName,
 
+      firstName: users.firstName,
+
+      lastName: users.lastName,
+
       avatarUrl: users.avatarUrl,
 
       createdAt: taskAssignees.createdAt,
@@ -233,6 +237,8 @@ async function loadTaskAssigneeMap(db: Db, taskIds: readonly string[]) {
     existing.push({
       id: row.userId,
       displayName: row.displayName,
+      firstName: row.firstName,
+      lastName: row.lastName,
       avatarUrl: row.avatarUrl,
     });
 
@@ -257,6 +263,10 @@ async function loadTaskLeadMap(db: Db, taskIds: readonly string[]) {
 
       displayName: users.displayName,
 
+      firstName: users.firstName,
+
+      lastName: users.lastName,
+
       avatarUrl: users.avatarUrl,
     })
     .from(tasks)
@@ -277,6 +287,10 @@ async function loadTaskLeadMap(db: Db, taskIds: readonly string[]) {
 
       displayName: row.displayName,
 
+      firstName: row.firstName,
+
+      lastName: row.lastName,
+
       avatarUrl: row.avatarUrl,
     });
   }
@@ -293,6 +307,8 @@ async function resolveAvailableAssignees(db: Db, auth: AuthContext, projectId: s
     .select({
       id: users.id,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       avatarUrl: users.avatarUrl,
     })
     .from(projectMembers)
