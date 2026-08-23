@@ -1,4 +1,5 @@
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { and, eq, isNull, max, sql } from "drizzle-orm";
+
 import { Hono } from "hono";
 
 import { taskDateSchema, taskPrioritySchema, taskStatusSchema, type TaskPriority, type TaskStatus } from "../../shared/contracts/tasks";
@@ -464,73 +465,122 @@ async function resolveDiscordInteractionBatchFailure(db: ReturnType<typeof creat
   throw error;
 }
 
-async function persistDiscordAssigneeMutation(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string, taskId: string, targetUserId: string, action: DiscordAssigneeAction, receipt: DiscordInteractionReceiptInput) {
-  const currentAssignments = await db
+async function persistDiscordAssigneeMutation(
+  db: ReturnType<typeof createDb>,
+  workspaceId: string,
+  projectId: string,
+  taskId: string,
+  targetUserId: string,
+  action: DiscordAssigneeAction,
+  successReceipt: DiscordInteractionReceiptInput,
+  unchangedReceipt: DiscordInteractionReceiptInput,
+) {
+  const [currentAssignment] = await db
     .select({
       userId: taskAssignees.userId,
-
-      createdAt: taskAssignees.createdAt,
     })
     .from(taskAssignees)
-    .where(eq(taskAssignees.taskId, taskId))
-    .orderBy(asc(taskAssignees.createdAt), asc(taskAssignees.userId));
+    .where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, targetUserId)))
+    .limit(1);
 
-  const alreadyAssigned = currentAssignments.some((assignment) => assignment.userId === targetUserId);
+  const alreadyAssigned = Boolean(currentAssignment);
 
   if ((action === "add" && alreadyAssigned) || (action === "remove" && !alreadyAssigned)) {
-    const existing = await findDiscordInteractionReceipt(db, receipt.interactionId);
+    const now = new Date();
 
-    if (existing) {
-      return {
-        status: "duplicate",
+    const receiptInsert = createDiscordInteractionReceiptInsert(db, unchangedReceipt, now);
 
-        responseContent: existing.responseContent,
-      } as const;
+    try {
+      await receiptInsert;
+    } catch (error) {
+      return resolveDiscordInteractionBatchFailure(db, unchangedReceipt.interactionId, error);
     }
 
     return {
       status: "unchanged",
+
+      responseContent: unchangedReceipt.responseContent,
     } as const;
   }
 
   const now = new Date();
-  const receiptInsert = createDiscordInteractionReceiptInsert(db, receipt, now);
-  const remainingAssignments = action === "remove" ? currentAssignments.filter((assignment) => assignment.userId !== targetUserId) : currentAssignments;
 
-  const legacyAssigneeId = action === "add" ? (currentAssignments[0]?.userId ?? targetUserId) : (remainingAssignments[0]?.userId ?? null);
+  const receiptInsert = createDiscordInteractionReceiptInsert(db, successReceipt, now);
 
   const syncIntent = createDiscordTaskSyncIntent(db, workspaceId, taskId, now);
 
+  /*
+   * tasks.assignee_id is legacy compatibility
+   * state. task_assignees remains canonical.
+   *
+   * Recompute the legacy value after the
+   * assignment mutation inside the same D1
+   * batch instead of deriving it from a
+   * stale pre-mutation read.
+   */
   const taskUpdate = db
     .update(tasks)
     .set({
-      assigneeId: legacyAssigneeId,
+      assigneeId: sql<string | null>`(
+        SELECT
+          ${taskAssignees.userId}
+
+        FROM ${taskAssignees}
+
+        WHERE
+          ${taskAssignees.taskId} = ${taskId}
+
+        ORDER BY
+          ${taskAssignees.createdAt} ASC,
+          ${taskAssignees.userId} ASC
+
+        LIMIT 1
+      )`,
 
       updatedAt: now,
     })
-    .where(and(eq(tasks.id, taskId), eq(tasks.projectId, projectId), isNull(tasks.archivedAt)));
+    .where(
+      and(
+        eq(tasks.id, taskId),
+
+        eq(tasks.projectId, projectId),
+
+        isNull(tasks.archivedAt),
+      ),
+    );
 
   if (action === "add") {
-    const assignmentInsert = db.insert(taskAssignees).values({
-      taskId,
+    const assignmentInsert = db
+      .insert(taskAssignees)
+      .values({
+        taskId,
 
-      userId: targetUserId,
+        userId: targetUserId,
 
-      createdAt: now,
-    });
+        createdAt: now,
+      })
+      .onConflictDoNothing({
+        target: [taskAssignees.taskId, taskAssignees.userId],
+      });
 
     try {
-      await db.batch([receiptInsert, taskUpdate, assignmentInsert, syncIntent.deletePrevious, syncIntent.insertLatest]);
+      await db.batch([receiptInsert, assignmentInsert, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
     } catch (error) {
-      return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+      return resolveDiscordInteractionBatchFailure(db, successReceipt.interactionId, error);
     }
   } else {
-    const assignmentDelete = db.delete(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, targetUserId)));
+    const assignmentDelete = db.delete(taskAssignees).where(
+      and(
+        eq(taskAssignees.taskId, taskId),
+
+        eq(taskAssignees.userId, targetUserId),
+      ),
+    );
 
     try {
-      await db.batch([receiptInsert, taskUpdate, assignmentDelete, syncIntent.deletePrevious, syncIntent.insertLatest]);
+      await db.batch([receiptInsert, assignmentDelete, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
     } catch (error) {
-      return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+      return resolveDiscordInteractionBatchFailure(db, successReceipt.interactionId, error);
     }
   }
 
@@ -1010,13 +1060,13 @@ discordInteractionRoutes.post("/", async (c) => {
     }
     const successResponseContent = action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`;
     const unchangedResponseContent = action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`;
-    const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action, receiptFor(successResponseContent));
+    const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action, receiptFor(successResponseContent), receiptFor(unchangedResponseContent));
 
     if (result.status === "duplicate") {
       return c.json(interactionMessage(result.responseContent));
     }
     if (result.status === "unchanged") {
-      return c.json(interactionMessage(unchangedResponseContent));
+      return c.json(interactionMessage(result.responseContent));
     }
 
     c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));

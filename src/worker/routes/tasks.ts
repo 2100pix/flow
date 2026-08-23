@@ -1394,6 +1394,7 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
         DELETE FROM discord_outbox_events
         WHERE aggregate_id = ?
           AND event_type = 'task_thread.sync'
+          AND status = 'pending'
       `,
         )
         .bind(taskId),
