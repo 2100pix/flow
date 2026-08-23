@@ -1010,14 +1010,18 @@ discordInteractionRoutes.post("/", async (c) => {
     }
     const successResponseContent = action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`;
     const unchangedResponseContent = action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`;
-
     const result = await persistDiscordAssigneeMutation(db, taskContext.workspaceId, taskContext.projectId, taskContext.taskId, target.userId, action, receiptFor(successResponseContent));
-    if (!result.changed || !result.eventId) {
-      return c.json(interactionMessage(action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`));
+
+    if (result.status === "duplicate") {
+      return c.json(interactionMessage(result.responseContent));
+    }
+    if (result.status === "unchanged") {
+      return c.json(interactionMessage(unchangedResponseContent));
     }
 
     c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
-    return c.json(interactionMessage(action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`));
+
+    return c.json(interactionMessage(successResponseContent));
   }
 
   if (commandName === "setstartdate") {
