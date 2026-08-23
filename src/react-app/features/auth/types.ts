@@ -7,6 +7,15 @@ export type AuthContext = {
     id: string;
     displayName: string;
     avatarUrl: string | null;
+
+    firstName: string | null;
+    lastName: string | null;
+    timeZone: string | null;
+
+    expertise: {
+      id: string;
+      name: string;
+    }[];
   };
 
   workspace: {
@@ -33,5 +42,7 @@ export type LogoutResponse = {
     success: true;
   };
 };
+
+export type { ProfileExpertiseItem, UpdateProfileInput, UpdateProfileResponse, UserProfileDto } from "../../../shared/contracts/me";
 
 export type { PendingAccessContinueResponse } from "../../../shared/contracts/auth";

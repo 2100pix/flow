@@ -1,11 +1,11 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 import { deleteCookie, getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { parsePermissionKeys, type PermissionKey } from "../../shared/permissions";
 import { builtInRoleDefinitions } from "../../shared/roles";
 import { createDb } from "../db";
 
-import { sessions, users, workspaceMembers, workspaceRolePermissions, workspaceRoles, workspaces } from "../db/schema";
+import { memberExpertise, sessions, users, workspaceExpertise, workspaceMembers, workspaceRolePermissions, workspaceRoles, workspaces } from "../db/schema";
 import { hashSessionToken, SESSION_COOKIE } from "../lib/session";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -65,6 +65,9 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       discordUserId: users.discordUserId,
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      timeZone: users.timeZone,
       role: workspaceMembers.role,
       customRoleId: workspaceMembers.customRoleId,
       workspaceName: workspaces.name,
@@ -135,6 +138,17 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     }
   }
 
+  const expertiseRows = await db
+    .select({
+      id: workspaceExpertise.id,
+
+      name: workspaceExpertise.name,
+    })
+    .from(memberExpertise)
+    .innerJoin(workspaceExpertise, eq(memberExpertise.expertiseId, workspaceExpertise.id))
+    .where(and(eq(memberExpertise.userId, result.userId), eq(workspaceExpertise.workspaceId, workspaceId)))
+    .orderBy(asc(workspaceExpertise.name));
+
   c.set("auth", {
     user: {
       id: result.userId,
@@ -142,6 +156,14 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
       displayName: result.displayName,
 
       avatarUrl: result.avatarUrl,
+
+      firstName: result.firstName,
+
+      lastName: result.lastName,
+
+      timeZone: result.timeZone,
+
+      expertise: expertiseRows,
     },
 
     workspace: {

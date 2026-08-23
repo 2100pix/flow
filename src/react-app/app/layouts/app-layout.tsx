@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowLeftIcon, BriefcaseIcon, BuildingsIcon, CaretDownIcon, FolderIcon, GearSixIcon, HouseIcon, KeyIcon, ListChecksIcon, PlusIcon, SidebarSimpleIcon, SquaresFourIcon, UsersIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, BriefcaseIcon, BuildingsIcon, CaretDownIcon, FolderIcon, GearSixIcon, HouseIcon, KeyIcon, ListChecksIcon, PlusIcon, SidebarSimpleIcon, SquaresFourIcon, UserIcon, UsersIcon } from "@phosphor-icons/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { AccountMenu } from "@/app/components/account-menu";
@@ -284,7 +284,7 @@ function WorkspaceNavigation({ canViewClients, canViewProjects, expanded, onTogg
   );
 }
 
-type SettingsSectionId = "general" | "teams" | "members" | "roles" | "integrations";
+type SettingsSectionId = "personal" | "general" | "teams" | "members" | "roles" | "integrations";
 
 function SettingsSidebarNavigation({
   auth,
@@ -298,6 +298,13 @@ function SettingsSidebarNavigation({
   onNavigate?: () => void;
 }) {
   const items = [
+    {
+      id: "personal",
+      label: "Personal",
+      href: "/settings?section=personal",
+      icon: UserIcon,
+      visible: true,
+    },
     {
       id: "general",
       label: "General",
@@ -341,6 +348,35 @@ function SettingsSidebarNavigation({
     visible: boolean;
   }>;
 
+  const visibleItems = items.filter((item) => item.visible);
+
+  const personalItems = visibleItems.filter((item) => item.id === "personal");
+
+  const administrationItems = visibleItems.filter((item) => item.id !== "personal");
+
+  const renderItem = (item: (typeof items)[number]) => {
+    const Icon = item.icon;
+
+    const active = activeSection === item.id;
+
+    return (
+      <Link
+        key={item.id}
+        to={item.href}
+        className={cn(
+          "flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors",
+          "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+
+          active && "bg-sidebar-accent text-sidebar-accent-foreground",
+        )}
+      >
+        <Icon size={15} weight="regular" className="shrink-0" aria-hidden="true" />
+
+        <span className="min-w-0 truncate">{item.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <nav
       className="flex-1 overflow-y-auto px-3 py-4"
@@ -371,35 +407,12 @@ function SettingsSidebarNavigation({
         <span>Back to workspace</span>
       </Link>
 
-      <div className="mt-5">
+      <div className="mt-5 space-y-0.5">{personalItems.map(renderItem)}</div>
+
+      <div className="mt-4">
         <p className="mb-1 px-2 text-[10px] font-medium text-sidebar-foreground/40">Administration</p>
 
-        <div className="space-y-0.5">
-          {items
-            .filter((item) => item.visible)
-            .map((item) => {
-              const Icon = item.icon;
-
-              const active = activeSection === item.id;
-
-              return (
-                <Link
-                  key={item.id}
-                  to={item.href}
-                  className={cn(
-                    "flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors",
-                    "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-
-                    active && "bg-sidebar-accent text-sidebar-accent-foreground",
-                  )}
-                >
-                  <Icon size={15} weight="regular" className="shrink-0" aria-hidden="true" />
-
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-        </div>
+        <div className="space-y-0.5">{administrationItems.map(renderItem)}</div>
       </div>
     </nav>
   );
@@ -409,7 +422,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const location = useLocation();
   const settingsMode = location.pathname === "/settings";
   const rawSettingsSection = new URLSearchParams(location.search).get("section");
-  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "teams" || rawSettingsSection === "members" || rawSettingsSection === "roles" || rawSettingsSection === "integrations" ? rawSettingsSection : "general";
+  const activeSettingsSection: SettingsSectionId = rawSettingsSection === "personal" || rawSettingsSection === "teams" || rawSettingsSection === "members" || rawSettingsSection === "roles" || rawSettingsSection === "integrations" ? rawSettingsSection : "general";
   const activeProjectId = getActiveProjectId(location.pathname);
   const canViewHome = hasPermission(auth, "dashboard.view");
   const canViewClients = hasPermission(auth, "clients.view");

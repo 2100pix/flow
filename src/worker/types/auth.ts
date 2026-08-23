@@ -11,6 +11,15 @@ export type AuthContext = {
     id: string;
     displayName: string;
     avatarUrl: string | null;
+
+    firstName: string | null;
+    lastName: string | null;
+    timeZone: string | null;
+
+    expertise: {
+      id: string;
+      name: string;
+    }[];
   };
 
   workspace: {

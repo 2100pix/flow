@@ -9,8 +9,13 @@ import { MembersSettings } from "@/features/members/components/members-settings"
 import { DiscordIntegrationSettings } from "@/features/integrations/discord/components/discord-integration-settings";
 
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
+import { PersonalSettings } from "@/features/profile/components/personal-settings";
 
 const settingsSections = [
+  {
+    id: "personal",
+    label: "Personal",
+  },
   {
     id: "general",
     label: "General",
@@ -191,6 +196,10 @@ export function SettingsPage() {
   }
 
   const canViewSettings = hasPermission(auth, "settings.view");
+
+  if (requestedSection === "personal") {
+    return <PersonalSettings />;
+  }
 
   if (!canViewSettings) {
     return (

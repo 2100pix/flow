@@ -27,6 +27,12 @@ export const users = sqliteTable("users", {
 
   displayName: text("display_name").notNull(),
 
+  firstName: text("first_name"),
+
+  lastName: text("last_name"),
+
+  timeZone: text("time_zone"),
+
   avatarUrl: text("avatar_url"),
 
   createdAt: integer("created_at", {
