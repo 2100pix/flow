@@ -1,0 +1,2 @@
+DROP INDEX `discord_outbox_events_event_aggregate_unique`;--> statement-breakpoint
+CREATE UNIQUE INDEX `discord_outbox_events_event_aggregate_unique` ON `discord_outbox_events` (`event_type`,`aggregate_id`) WHERE "discord_outbox_events"."status" = 'pending';

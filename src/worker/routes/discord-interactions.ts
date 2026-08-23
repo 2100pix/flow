@@ -850,7 +850,7 @@ discordInteractionRoutes.post("/", async (c) => {
       return c.json(interactionMessage(action === "add" ? `${target.displayName} is already assigned to this Task.` : `${target.displayName} is not assigned to this Task.`));
     }
 
-    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, outboxEventId));
+    c.executionCtx.waitUntil(dispatchDiscordCommandTaskSync(db, c.env.FLOW_DISCORD_QUEUE, commandName, taskContext.taskId, result.eventId));
     return c.json(interactionMessage(action === "add" ? `${target.displayName} assigned to this Task.` : `${target.displayName} removed from this Task.`));
   }
   if (commandName === "setstartdate") {
@@ -916,7 +916,15 @@ discordInteractionRoutes.post("/", async (c) => {
       startDate: tasks.startDate,
     })
     .from(tasks)
-    .where(and(eq(tasks.id, taskContext.taskId), isNull(tasks.archivedAt)))
+    .where(
+      and(
+        eq(tasks.id, taskContext.taskId),
+
+        eq(tasks.projectId, taskContext.projectId),
+
+        isNull(tasks.archivedAt),
+      ),
+    )
     .limit(1);
 
   if (!currentTask) {

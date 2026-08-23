@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { hasPermission } from "@/features/auth/permissions";
@@ -75,17 +74,16 @@ export function DiscordIntegrationSettings() {
   const { data: categories = [], isPending: categoriesPending, isError: categoriesError } = useDiscordCategories(connected);
   const updateCategory = useUpdateDiscordProjectCategory();
   const updateReminders = useUpdateDiscordReminderSettings();
-  const [reminderTimeZone, setReminderTimeZone] = useState("UTC");
-  const [reminderHourLocal, setReminderHourLocal] = useState(9);
+
+  const [reminderTimeZoneDraft, setReminderTimeZoneDraft] = useState<string | null>(null);
+
+  const [reminderHourLocalDraft, setReminderHourLocalDraft] = useState<number | null>(null);
+
   const statusLabel = !connected ? "Not connected" : integration.enabled ? "Enabled" : "Connected";
 
-  useEffect(() => {
-    if (!integration) {
-      return;
-    }
-    setReminderTimeZone(integration.reminders.timeZone);
-    setReminderHourLocal(integration.reminders.hourLocal);
-  }, [integration]);
+  const reminderTimeZone = reminderTimeZoneDraft ?? integration?.reminders.timeZone ?? "UTC";
+
+  const reminderHourLocal = reminderHourLocalDraft ?? integration?.reminders.hourLocal ?? 9;
 
   const reminderSettingsDirty = integration ? reminderTimeZone !== integration.reminders.timeZone || reminderHourLocal !== integration.reminders.hourLocal : false;
 
@@ -293,13 +291,21 @@ export function DiscordIntegrationSettings() {
                             variant={integration.reminders.enabled ? "outline" : "default"}
                             disabled={updateReminders.isPending || disconnectDiscord.isPending}
                             onClick={() => {
-                              updateReminders.mutate({
-                                enabled: !integration.reminders.enabled,
+                              updateReminders.mutate(
+                                {
+                                  enabled: integration.reminders.enabled,
 
-                                timeZone: reminderTimeZone.trim(),
+                                  timeZone: reminderTimeZone.trim(),
 
-                                hourLocal: reminderHourLocal,
-                              });
+                                  hourLocal: reminderHourLocal,
+                                },
+                                {
+                                  onSuccess: () => {
+                                    setReminderTimeZoneDraft(null);
+                                    setReminderHourLocalDraft(null);
+                                  },
+                                },
+                              );
                             }}
                           >
                             {updateReminders.isPending ? "Saving…" : integration.reminders.enabled ? "Disable" : "Enable"}
@@ -322,48 +328,48 @@ export function DiscordIntegrationSettings() {
                               value={reminderTimeZone}
                               disabled={updateReminders.isPending || disconnectDiscord.isPending}
                               onChange={(event) => {
-                                setReminderTimeZone(event.target.value);
+                                setReminderTimeZoneDraft(event.target.value);
                               }}
                               aria-label="Reminder timezone"
                               placeholder="Asia/Jakarta"
                               className="
-            h-8
-            w-36
-            rounded-md
-            border border-input
-            bg-background
-            px-2.5
-            text-xs
-            outline-none
-            focus-visible:border-ring
-            focus-visible:ring-3
-            focus-visible:ring-ring/50
-            disabled:cursor-not-allowed
-            disabled:opacity-60
-          "
+                              h-8
+                              w-36
+                              rounded-md
+                              border border-input
+                              bg-background
+                              px-2.5
+                              text-xs
+                              outline-none
+                              focus-visible:border-ring
+                              focus-visible:ring-3
+                              focus-visible:ring-ring/50
+                              disabled:cursor-not-allowed
+                              disabled:opacity-60
+                            "
                             />
 
                             <select
                               value={reminderHourLocal}
                               disabled={updateReminders.isPending || disconnectDiscord.isPending}
                               onChange={(event) => {
-                                setReminderHourLocal(Number(event.target.value));
+                                setReminderHourLocalDraft(Number(event.target.value));
                               }}
                               aria-label="Reminder delivery hour"
                               className="
-            h-8
-            rounded-md
-            border border-input
-            bg-background
-            px-2.5
-            text-xs
-            outline-none
-            focus-visible:border-ring
-            focus-visible:ring-3
-            focus-visible:ring-ring/50
-            disabled:cursor-not-allowed
-            disabled:opacity-60
-          "
+                              h-8
+                              rounded-md
+                              border border-input
+                              bg-background
+                              px-2.5
+                              text-xs
+                              outline-none
+                              focus-visible:border-ring
+                              focus-visible:ring-3
+                              focus-visible:ring-ring/50
+                              disabled:cursor-not-allowed
+                              disabled:opacity-60
+                            "
                             >
                               {Array.from({ length: 24 }, (_, hour) => (
                                 <option key={hour} value={hour}>
@@ -379,13 +385,21 @@ export function DiscordIntegrationSettings() {
                               variant="outline"
                               disabled={!reminderSettingsDirty || updateReminders.isPending || disconnectDiscord.isPending || !reminderTimeZone.trim()}
                               onClick={() => {
-                                updateReminders.mutate({
-                                  enabled: integration.reminders.enabled,
+                                updateReminders.mutate(
+                                  {
+                                    enabled: !integration.reminders.enabled,
 
-                                  timeZone: reminderTimeZone.trim(),
+                                    timeZone: reminderTimeZone.trim(),
 
-                                  hourLocal: reminderHourLocal,
-                                });
+                                    hourLocal: reminderHourLocal,
+                                  },
+                                  {
+                                    onSuccess: () => {
+                                      setReminderTimeZoneDraft(null);
+                                      setReminderHourLocalDraft(null);
+                                    },
+                                  },
+                                );
                               }}
                             >
                               {updateReminders.isPending ? "Saving…" : "Save"}
