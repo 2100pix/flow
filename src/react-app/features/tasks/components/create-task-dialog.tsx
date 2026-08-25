@@ -220,12 +220,12 @@ function TaskPriorityIcon({ priority }: { priority: TaskPriority | null }) {
   }
 }
 
-const priorityLabels: Record<TaskPriority, string> = {
+const priorityLabels = {
   urgent: "Urgent",
   low: "Low Priority",
   medium: "Medium Priority",
   high: "High Priority",
-};
+} satisfies Record<TaskPriority, string>;
 
 const NO_PRIORITY = "__flow_no_priority__";
 
@@ -720,3 +720,4 @@ export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onC
     </Dialog>
   );
 }
+

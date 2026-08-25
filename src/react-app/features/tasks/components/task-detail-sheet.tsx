@@ -92,6 +92,7 @@ export function TaskDetailSheet({
         aria-hidden={!open}
         inert={!open}
         style={
+          // SAFETY: React's CSSProperties type predates CSS custom property support; "--task-detail-sheet-width" is a valid inline style key at runtime.
           {
             "--task-detail-sheet-width": open ? "clamp(420px, 45%, 640px)" : "0px",
           } as CSSProperties

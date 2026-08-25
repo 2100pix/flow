@@ -341,6 +341,7 @@ discordIntegrationRoutes.post("/commands/register", requireAuth, requirePermissi
     );
   }
 
+  // SAFETY: I/O boundary — the application commands response shape is fixed by Discord's documented API contract.
   const registered = (await response.json()) as Array<{
     id: string;
 
@@ -436,6 +437,7 @@ discordIntegrationRoutes.get("/callback", requireAuth, requirePermission("settin
     return c.redirect(getIntegrationSettingsUrl("token_exchange_failed"));
   }
 
+  // SAFETY: I/O boundary — the OAuth token response shape is fixed by Discord's documented API contract.
   const token = (await tokenResponse.json()) as DiscordIntegrationTokenResponse;
 
   const guildId = token.guild?.id ?? hintedGuildId;
@@ -462,6 +464,7 @@ discordIntegrationRoutes.get("/callback", requireAuth, requirePermission("settin
     return c.redirect(getIntegrationSettingsUrl("bot_verification_failed"));
   }
 
+  // SAFETY: I/O boundary — the guild response shape is fixed by Discord's documented API contract.
   const guild = (await guildResponse.json()) as DiscordGuild;
 
   const db = createDb(c.env.flow_db);
@@ -634,6 +637,7 @@ discordIntegrationRoutes.get("/categories", requireAuth, requirePermission("sett
     );
   }
 
+  // SAFETY: I/O boundary — the guild channels response shape is fixed by Discord's documented API contract.
   const channels = (await channelsResponse.json()) as DiscordGuildChannel[];
 
   const data: DiscordCategoryDto[] = channels
@@ -731,6 +735,7 @@ discordIntegrationRoutes.patch(
         );
       }
 
+      // SAFETY: I/O boundary — the guild channels response shape is fixed by Discord's documented API contract.
       const channels = (await channelsResponse.json()) as DiscordGuildChannel[];
 
       const categoryExists = channels.some((channel) => channel.id === input.projectCategoryId && channel.type === DISCORD_GUILD_CATEGORY_TYPE);

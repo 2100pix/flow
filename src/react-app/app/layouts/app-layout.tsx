@@ -438,18 +438,10 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const { data: projects = [] } = useProjects(canViewProjects);
 
   const [sidebarHidden, setSidebarHidden] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
     return window.localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "true";
   });
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    if (typeof window === "undefined") {
-      return SIDEBAR_DEFAULT_WIDTH;
-    }
-
     const storedValue = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
 
     if (storedValue === null) {

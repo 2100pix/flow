@@ -150,6 +150,7 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
     }
 
     function handlePointerDown(event: PointerEvent) {
+      // SAFETY: pointerdown targets inside a document are always DOM nodes, which is all contains() requires.
       const target = event.target as Node;
 
       if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) {

@@ -24,14 +24,21 @@ import type { ReorderTasksInput, TaskDto, TaskStatus } from "@/features/tasks/ty
 
 type TaskBoardState = Record<TaskStatus, TaskDto[]>;
 
-function buildBoard(tasks: TaskDto[]): TaskBoardState {
-  const board: TaskBoardState = {
-    backlog: [],
-    todo: [],
-    in_progress: [],
-    review: [],
-    done: [],
-    cancelled: [],
+function buildBoard(tasks: TaskDto[]) {
+  const backlog: TaskDto[] = [];
+  const todo: TaskDto[] = [];
+  const inProgress: TaskDto[] = [];
+  const review: TaskDto[] = [];
+  const done: TaskDto[] = [];
+  const cancelled: TaskDto[] = [];
+
+  const board = {
+    backlog,
+    todo,
+    in_progress: inProgress,
+    review,
+    done,
+    cancelled,
   };
 
   for (const task of tasks) {
@@ -46,10 +53,12 @@ function buildBoard(tasks: TaskDto[]): TaskBoardState {
 }
 
 function cloneBoard(board: TaskBoardState): TaskBoardState {
+  // SAFETY: entries of a fully-populated TaskBoardState are exactly [TaskStatus, TaskDto[]] pairs, and rebuilding them preserves every key.
   return Object.fromEntries((Object.entries(board) as [TaskStatus, TaskDto[]][]).map(([status, tasks]) => [status, [...tasks]])) as TaskBoardState;
 }
 
 function findTaskStatus(board: TaskBoardState, taskId: string): TaskStatus | null {
+  // SAFETY: entries of a fully-populated TaskBoardState are exactly [TaskStatus, TaskDto[]] pairs.
   for (const [status, tasks] of Object.entries(board) as [TaskStatus, TaskDto[]][]) {
     if (tasks.some((task) => task.id === taskId)) {
       return status;
@@ -68,12 +77,13 @@ export function ProjectBoardPage() {
   const view: TaskWorkspaceView = searchParams.get("view") === "board" ? "board" : "list";
 
   const activeTaskId = view === "list" ? searchParams.get("task") : null;
-  const requestedStatus = searchParams.get("status") as TaskStatus | null;
+  const requestedStatus = searchParams.get("status");
   const { data: project, isPending: projectPending, isError: projectError } = useProject(projectId);
   const { data: tasks = [], isPending: tasksPending, isError: tasksError } = useProjectTasks(projectId);
   const { data: workflow, isPending: workflowPending, isError: workflowError } = useProjectTaskWorkflow(projectId);
   const reorderTasks = useReorderTasks();
   const serverBoard = useMemo(() => buildBoard(tasks), [tasks]);
+  // SAFETY: serverBoard holds every TaskStatus key, so entries map one-to-one onto a full Record<TaskStatus, number>.
   const stableTaskCounts = useMemo(() => Object.fromEntries((Object.entries(serverBoard) as [TaskStatus, TaskDto[]][]).map(([status, statusTasks]) => [status, statusTasks.length])) as Record<TaskStatus, number>, [serverBoard]);
   const [dragBoard, setDragBoard] = useState<TaskBoardState | null>(null);
   const board = dragBoard ?? serverBoard;
@@ -84,7 +94,7 @@ export function ProjectBoardPage() {
   const canEditTask = hasPermission(auth, "tasks.edit");
   const canAssignTask = hasPermission(auth, "tasks.assign");
   const columns = useMemo(() => (workflow?.statuses ?? []).filter((status) => status.enabled).sort((first, second) => first.position - second.position), [workflow]);
-  const activeStatus = requestedStatus && columns.some((column) => column.statusKey === requestedStatus) ? requestedStatus : null;
+  const activeStatus = columns.find((column) => column.statusKey === requestedStatus)?.statusKey ?? null;
   const visibleColumns = activeStatus ? columns.filter((column) => column.statusKey === activeStatus) : columns;
 
   if (!projectId) {
@@ -247,6 +257,7 @@ export function ProjectBoardPage() {
         setDragBoard((current) => {
           const base = current ?? boardRef.current ?? board;
 
+          // SAFETY: base is a TaskBoardState and dnd-kit move() only reorders its existing entries, preserving the board shape.
           const next = move(base, event) as TaskBoardState;
 
           boardRef.current = next;

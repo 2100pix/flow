@@ -43,8 +43,8 @@ export type DispatchDiscordOutboxResult =
       message: string;
     };
 
-function resolveDispatchError(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Discord outbox dispatch error";
+function resolveDispatchError(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown Discord outbox dispatch error";
 
   return message.slice(0, MAX_DISPATCH_ERROR_LENGTH);
 }
@@ -148,8 +148,8 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
 
       dispatchAttemptCount: claimed.attemptCount,
     });
-  } catch (error) {
-    const message = resolveDispatchError(error);
+  } catch (cause) {
+    const message = resolveDispatchError(cause);
 
     await db
       .update(discordOutboxEvents)

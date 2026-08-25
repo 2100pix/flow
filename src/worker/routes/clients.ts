@@ -200,20 +200,20 @@ clientsRoutes.patch(
 
     const now = new Date();
 
+    const updates: Partial<Pick<typeof clients.$inferInsert, "name" | "status">> = {};
+
+    if (input.name !== undefined) {
+      updates.name = input.name;
+    }
+
+    if (input.status !== undefined) {
+      updates.status = input.status;
+    }
+
     await db
       .update(clients)
       .set({
-        ...(input.name !== undefined
-          ? {
-              name: input.name,
-            }
-          : {}),
-
-        ...(input.status !== undefined
-          ? {
-              status: input.status,
-            }
-          : {}),
+        ...updates,
 
         updatedAt: now,
       })

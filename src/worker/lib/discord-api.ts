@@ -79,6 +79,7 @@ async function discordFetch<T>(botToken: string, path: string, init: RequestInit
 
   if (text) {
     try {
+      // SAFETY: this is the I/O boundary for every Discord API response; payloads are not schema-validated here and each caller owns its declared contract.
       body = JSON.parse(text) as T | DiscordErrorResponse;
     } catch {
       body = null;
@@ -86,11 +87,13 @@ async function discordFetch<T>(botToken: string, path: string, init: RequestInit
   }
 
   if (!response.ok) {
+    // SAFETY: same untrusted payload parsed above; DiscordErrorResponse fields are optional so a mismatch degrades to a generic message.
     const error = body as DiscordErrorResponse | null;
 
     throw new DiscordApiError(response.status, error?.code ?? null, error?.message ? `Discord API ${response.status}: ${error.message}` : `Discord API request failed with status ${response.status}`);
   }
 
+  // SAFETY: on 2xx the payload is trusted to match the contract declared by the calling wrapper function.
   return body as T;
 }
 
@@ -122,13 +125,18 @@ type CreateDiscordForumChannelInput = {
   auditReason: string;
 };
 
+type CreateDiscordForumChannelBody = {
+  name: string;
+
+  type: number;
+
+  topic: string;
+
+  parent_id?: string;
+};
+
 export function createDiscordForumChannel(botToken: string, input: CreateDiscordForumChannelInput) {
-  const body: {
-    name: string;
-    type: number;
-    topic: string;
-    parent_id?: string;
-  } = {
+  const body: CreateDiscordForumChannelBody = {
     name: input.name,
 
     type: DISCORD_GUILD_FORUM_TYPE,

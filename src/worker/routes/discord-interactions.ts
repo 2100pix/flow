@@ -1,6 +1,7 @@
 import { and, eq, isNull, max, sql } from "drizzle-orm";
 
 import { Hono } from "hono";
+import { z } from "zod";
 
 import { taskDateSchema, taskPrioritySchema, taskStatusSchema, type TaskPriority, type TaskStatus } from "../../shared/contracts/tasks";
 import { parsePermissionKeys, type PermissionKey } from "../../shared/permissions";
@@ -154,6 +155,9 @@ type DiscordInteractionReceiptInput = {
   responseContent: string;
 };
 
+/** Decodes a raw Discord command option value into the string form Flow expects. */
+const discordStringOptionSchema = z.string();
+
 function hexToBytes(value: string) {
   if (value.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(value)) {
     throw new Error("Invalid hexadecimal value");
@@ -232,7 +236,9 @@ function interactionMessage(content: string) {
 function findStringOption(interaction: DiscordInteraction, name: string) {
   const option = interaction.data?.options?.find((item) => item.name === name);
 
-  return typeof option?.value === "string" ? option.value : null;
+  const parsed = discordStringOptionSchema.safeParse(option?.value);
+
+  return parsed.success ? parsed.data : null;
 }
 
 async function resolveDiscordTaskContext(db: ReturnType<typeof createDb>, guildId: string, channelId: string): Promise<DiscordTaskContext> {
@@ -457,7 +463,7 @@ function createDiscordInteractionReceiptInsert(db: ReturnType<typeof createDb>, 
   });
 }
 
-async function resolveDiscordInteractionBatchFailure(db: ReturnType<typeof createDb>, interactionId: string, error: unknown) {
+async function resolveDiscordInteractionBatchFailure(db: ReturnType<typeof createDb>, interactionId: string, cause: unknown) {
   const existing = await findDiscordInteractionReceipt(db, interactionId);
 
   if (existing) {
@@ -468,7 +474,7 @@ async function resolveDiscordInteractionBatchFailure(db: ReturnType<typeof creat
     } as const;
   }
 
-  throw error;
+  throw cause;
 }
 
 async function persistDiscordAssigneeMutation(
@@ -709,17 +715,19 @@ async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, works
   }
   const updateValues =
     mutation.kind === "status"
-      ? {
-          status: mutation.value,
+      ? nextSortOrder !== undefined
+        ? {
+            status: mutation.value,
 
-          ...(nextSortOrder !== undefined
-            ? {
-                sortOrder: nextSortOrder,
-              }
-            : {}),
+            sortOrder: nextSortOrder,
 
-          updatedAt: now,
-        }
+            updatedAt: now,
+          }
+        : {
+            status: mutation.value,
+
+            updatedAt: now,
+          }
       : mutation.kind === "priority"
         ? {
             priority: mutation.value,
@@ -759,8 +767,8 @@ async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, works
    */
   try {
     await db.batch([receiptInsert, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
-  } catch (error) {
-    return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, error);
+  } catch (cause) {
+    return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, cause);
   }
 
   return {
@@ -788,6 +796,7 @@ discordInteractionRoutes.post("/", async (c) => {
   let interaction: DiscordInteraction;
 
   try {
+    // SAFETY: the raw body's Ed25519 signature was verified against Discord's public key above, so it originates from Discord; fields are optional-read downstream.
     interaction = JSON.parse(rawBody) as DiscordInteraction;
   } catch {
     return c.json(
@@ -890,6 +899,7 @@ discordInteractionRoutes.post("/", async (c) => {
 
     actorUserId: actor.userId,
 
+    // SAFETY: every non-task command returns earlier; reaching this receipt means the membership checks at editsTask/assignsTask matched one of the six task commands.
     commandName: commandName as DiscordTaskCommandName,
 
     responseContent,

@@ -94,14 +94,14 @@ export type SyncTaskDiscordThreadResult =
 
       message: string;
     };
-function resolveErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Discord task thread provisioning error";
+function resolveErrorMessage(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown Discord task thread provisioning error";
 
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
 }
 
-function resolveSyncErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Discord task message sync error";
+function resolveSyncErrorMessage(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown Discord task message sync error";
 
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
 }
@@ -793,8 +793,8 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
 
       recovered,
     };
-  } catch (error) {
-    const message = resolveErrorMessage(error);
+  } catch (cause) {
+    const message = resolveErrorMessage(cause);
 
     await db
       .update(taskDiscordThreads)
@@ -1022,13 +1022,13 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
 
       initialMessageId: message.id,
     };
-  } catch (error) {
+  } catch (cause) {
     return {
       status: "error",
 
       taskId,
 
-      message: resolveSyncErrorMessage(error),
+      message: resolveSyncErrorMessage(cause),
     };
   }
 }

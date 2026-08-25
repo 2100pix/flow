@@ -35,17 +35,17 @@ import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 import { useUpdateProjectLeads } from "@/features/projects/hooks/use-update-project-leads";
 import { type ProjectDetailDto, type ProjectDto, type ProjectStatus } from "@/features/projects/types";
 
-const statusLabels: Record<ProjectStatus, string> = {
+const statusLabels = {
   planning: "Planning",
   active: "Active",
   on_hold: "On hold",
   completed: "Completed",
-};
+} satisfies Record<ProjectStatus, string>;
 
-const engagementLabels: Record<ProjectDto["engagementType"], string> = {
+const engagementLabels = {
   project: "Project",
   retainer: "Retainer",
-};
+} satisfies Record<ProjectDto["engagementType"], string>;
 
 const DESCRIPTION_PLACEHOLDER = "What are we building, and what does success look like?";
 

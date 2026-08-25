@@ -480,11 +480,13 @@ function ProjectSettingsContent({ project, canEdit, canManageVisibility, canView
                 value={status}
                 disabled={!canEdit || updateProject.isPending}
                 onValueChange={(nextValue) => {
-                  if (!nextValue) {
+                  const matched = statusItems.find((item) => item.value === nextValue)?.value;
+
+                  if (!matched) {
                     return;
                   }
 
-                  setStatus(nextValue as ProjectStatus);
+                  setStatus(matched);
                 }}
               >
                 <SelectTrigger className="h-9 w-full rounded-lg px-3 text-sm font-normal shadow-xs">

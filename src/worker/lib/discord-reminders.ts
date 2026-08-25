@@ -359,8 +359,8 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
   };
 }
 
-function resolveReminderError(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Discord reminder delivery error";
+function resolveReminderError(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown Discord reminder delivery error";
 
   return message.slice(0, MAX_REMINDER_ERROR_LENGTH);
 }
@@ -602,8 +602,8 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
       reminderId,
     };
-  } catch (error) {
-    const message = resolveReminderError(error);
+  } catch (cause) {
+    const message = resolveReminderError(cause);
 
     /*
      * 403 is normally a user-level DM
@@ -612,7 +612,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
      * Retrying it every five minutes would
      * create permanent queue churn.
      */
-    if (error instanceof DiscordApiError && error.status === 403) {
+    if (cause instanceof DiscordApiError && cause.status === 403) {
       await cancelReminder(db, reminderId, message);
 
       return {

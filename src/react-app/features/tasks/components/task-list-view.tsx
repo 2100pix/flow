@@ -81,6 +81,10 @@ function formatTaskDate(value: string | null) {
   }).format(date);
 }
 
+function isTaskPriority(value: string): value is TaskPriority {
+  return value === "low" || value === "medium" || value === "high" || value === "urgent";
+}
+
 function getInitials(name: string) {
   return (
     name
@@ -257,12 +261,12 @@ function TaskStatusControl({ task, statuses, disabled }: { task: TaskDto; status
   );
 }
 
-const priorityLabels: Record<TaskPriority, string> = {
+const priorityLabels = {
   low: "Low Priority",
   medium: "Medium Priority",
   high: "High Priority",
   urgent: "Urgent",
-};
+} satisfies Record<TaskPriority, string>;
 
 function TaskPriorityControl({ task, disabled }: { task: TaskDto; disabled: boolean }) {
   const updateTask = useUpdateTask();
@@ -302,7 +306,7 @@ function TaskPriorityControl({ task, disabled }: { task: TaskDto; disabled: bool
           <DropdownMenuRadioGroup
             value={currentValue}
             onValueChange={(value) => {
-              const nextPriority = value === "none" ? null : (value as TaskPriority);
+              const nextPriority = isTaskPriority(value) ? value : null;
 
               if (nextPriority === task.priority) {
                 return;
@@ -736,3 +740,4 @@ export function TaskListView({ projectId, statuses, workflowStatuses, board, dra
     </div>
   );
 }
+

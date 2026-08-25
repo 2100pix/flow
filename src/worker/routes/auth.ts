@@ -116,6 +116,7 @@ authRoutes.get("/discord/callback", async (c) => {
     );
   }
 
+  // SAFETY: I/O boundary — the OAuth token response shape is fixed by Discord's documented API contract.
   const token = (await tokenResponse.json()) as DiscordTokenResponse;
 
   const userResponse = await fetch("https://discord.com/api/v10/users/@me", {
@@ -136,6 +137,7 @@ authRoutes.get("/discord/callback", async (c) => {
     );
   }
 
+  // SAFETY: I/O boundary — the /users/@me response shape is fixed by Discord's documented API contract.
   const discordUser = (await userResponse.json()) as DiscordProfileUser;
   const db = createDb(c.env.flow_db);
   const workspaceId = c.env.FLOW_WORKSPACE_ID;

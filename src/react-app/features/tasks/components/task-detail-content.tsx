@@ -45,12 +45,12 @@ const NO_PRIORITY = "__flow_no_priority__";
 
 const NO_LEAD = "__flow_no_lead__";
 
-const priorityLabels: Record<TaskPriority, string> = {
+const priorityLabels = {
   urgent: "Urgent",
   low: "Low Priority",
   medium: "Medium Priority",
   high: "High Priority",
-};
+} satisfies Record<TaskPriority, string>;
 
 function TaskStatusIcon({ status }: { status: TaskStatus }) {
   const className = "size-4 shrink-0";
@@ -173,6 +173,10 @@ function getMemberInitials(name: string) {
       .map((part) => part.charAt(0).toUpperCase())
       .join("") || "?"
   );
+}
+
+function isTaskStatus(value: string): value is TaskStatus {
+  return value === "backlog" || value === "todo" || value === "in_progress" || value === "review" || value === "done" || value === "cancelled";
 }
 
 type PersonLike = {
@@ -607,11 +611,11 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
                 onValueChange={(value) => {
                   const nextStatus = editableWorkflowStatuses.find((workflowStatus) => workflowStatus.statusKey === value);
 
-                  if (!nextStatus) {
+                  if (!nextStatus || !isTaskStatus(nextStatus.statusKey)) {
                     return;
                   }
 
-                  autosave.setStatus(nextStatus.statusKey as TaskStatus);
+                  autosave.setStatus(nextStatus.statusKey);
                 }}
               >
                 <SelectTrigger className="h-8 w-auto min-w-0 gap-1.5 rounded-lg px-2.5 text-xs">
@@ -757,3 +761,4 @@ export function TaskDetailContent({ task, workflowStatuses, presentation = "shee
     </div>
   );
 }
+

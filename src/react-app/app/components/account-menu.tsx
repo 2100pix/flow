@@ -53,6 +53,7 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
     }
 
     function handlePointerDown(event: PointerEvent) {
+      // SAFETY: pointerdown targets inside a document are always DOM nodes, which is all contains() requires.
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }

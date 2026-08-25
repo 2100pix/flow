@@ -11,6 +11,7 @@ function Toaster(props: ToasterProps) {
       theme={theme}
       className="toaster group"
       style={
+        // SAFETY: React's CSSProperties type predates CSS custom property support; these "--normal-*" keys are valid inline style keys at runtime.
         {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",

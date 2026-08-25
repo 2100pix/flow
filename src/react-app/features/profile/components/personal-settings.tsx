@@ -35,15 +35,16 @@ type TimeZoneOption = {
 };
 
 function getTimeZoneOptions(): TimeZoneOption[] {
+  if (!("supportedValuesOf" in Intl)) {
+    return [];
+  }
+
+  // SAFETY: feature-detected above — this runtime exposes Intl.supportedValuesOf even though the project lib target predates ES2022.
+  const supportedValuesOf = (Intl as typeof Intl & { supportedValuesOf: (key: "timeZone") => string[] }).supportedValuesOf;
+
   let zones: string[];
 
   try {
-    const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
-
-    if (typeof supportedValuesOf !== "function") {
-      return [];
-    }
-
     zones = supportedValuesOf("timeZone");
   } catch {
     return [];

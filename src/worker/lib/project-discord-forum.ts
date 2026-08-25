@@ -95,8 +95,8 @@ function resolveDiscordForumMarker(projectId: string) {
   return `Managed by Flow. Project ID: ${projectId}`;
 }
 
-function resolveErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown Discord forum provisioning error";
+function resolveErrorMessage(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown Discord forum provisioning error";
 
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
 }
@@ -506,8 +506,8 @@ export async function provisionProjectDiscordForum(db: Db, botToken: string, pro
 
       recovered,
     };
-  } catch (error) {
-    const message = resolveErrorMessage(error);
+  } catch (cause) {
+    const message = resolveErrorMessage(cause);
 
     /*
      * Do not overwrite a ready state if a

@@ -48,7 +48,7 @@ type ProcessDiscordQueueResult =
     };
 
 async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: DiscordOutboxQueueMessage): Promise<ProcessDiscordQueueResult> {
-  if (!body || typeof body.outboxEventId !== "string" || !body.outboxEventId || typeof body.dispatchAttemptCount !== "number" || !Number.isInteger(body.dispatchAttemptCount) || body.dispatchAttemptCount < 1) {
+  if (!body || !body.outboxEventId || !Number.isInteger(body.dispatchAttemptCount) || body.dispatchAttemptCount < 1) {
     return {
       status: "ignored",
 

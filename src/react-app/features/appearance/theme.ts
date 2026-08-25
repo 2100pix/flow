@@ -11,20 +11,12 @@ function isThemePreference(value: string | null): value is ThemePreference {
 }
 
 export function getThemePreference(): ThemePreference {
-  if (typeof window === "undefined") {
-    return "system";
-  }
-
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
 
   return isThemePreference(stored) ? stored : "system";
 }
 
 export function applyTheme(theme: ThemePreference) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
   const resolvedDark = theme === "dark" || (theme === "system" && window.matchMedia(DARK_MEDIA_QUERY).matches);
 
   document.documentElement.classList.toggle("dark", resolvedDark);

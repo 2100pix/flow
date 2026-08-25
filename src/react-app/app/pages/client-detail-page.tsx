@@ -60,7 +60,11 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
               value={status}
               disabled={!canEdit}
               onChange={(event) => {
-                setStatus(event.target.value as ClientStatus);
+                const nextStatus = event.target.value;
+
+                if (nextStatus === "active" || nextStatus === "inactive") {
+                  setStatus(nextStatus);
+                }
               }}
               className="h-8 w-full max-w-xs rounded-lg border border-input bg-background px-2.5 text-sm outline-none disabled:opacity-60"
             >

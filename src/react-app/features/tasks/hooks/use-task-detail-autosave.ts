@@ -49,8 +49,8 @@ function createDraft(task: TaskDto): TaskDetailDraft {
   };
 }
 
-function getTaskSaveErrorMessage(error: unknown) {
-  return getErrorMessage(error, "Failed to save task.");
+function getTaskSaveErrorMessage(cause: unknown) {
+  return getErrorMessage(cause, "Failed to save task.");
 }
 
 export function useTaskDetailAutosave(task: TaskDto) {

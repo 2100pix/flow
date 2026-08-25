@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { createMyExpertise, getMyExpertise, updateMyExpertise } from "../api/auth";
 import type { AuthContext, ProfileExpertiseItem } from "../types";
+import type { WorkspaceExpertiseDto } from "../../../../shared/contracts/members";
 
 import { meQueryKey } from "./use-me";
 
@@ -29,13 +30,12 @@ export function useCreateMyExpertise() {
   });
 }
 
-function toProfileExpertise(tags: unknown, expertiseIds: string[]): ProfileExpertiseItem[] {
-  if (!Array.isArray(tags)) {
+function toProfileExpertise(tags: WorkspaceExpertiseDto[] | undefined, expertiseIds: string[]): ProfileExpertiseItem[] {
+  if (!tags) {
     return [];
   }
 
   return tags
-    .filter((tag): tag is ProfileExpertiseItem & { name: string } => Boolean(tag) && typeof tag === "object" && typeof (tag as ProfileExpertiseItem).id === "string" && typeof (tag as ProfileExpertiseItem).name === "string")
     .filter((tag) => expertiseIds.includes(tag.id))
     .map((tag) => ({
       id: tag.id,
@@ -54,7 +54,7 @@ export function useUpdateMyExpertise() {
       }),
 
     onSuccess: (_data, variables) => {
-      const tags = queryClient.getQueryData(myExpertiseQueryKey);
+      const tags = queryClient.getQueryData<WorkspaceExpertiseDto[]>(myExpertiseQueryKey);
 
       const expertise = toProfileExpertise(tags, variables.expertiseIds);
 

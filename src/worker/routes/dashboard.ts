@@ -168,14 +168,14 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
           )
       : [];
 
-  const taskStatus: Record<TaskStatus, number> = {
+  const taskStatus = {
     backlog: Number(taskSummary?.backlog ?? 0),
     todo: Number(taskSummary?.todo ?? 0),
     in_progress: Number(taskSummary?.inProgress ?? 0),
     review: Number(taskSummary?.review ?? 0),
     done: Number(taskSummary?.done ?? 0),
     cancelled: Number(taskSummary?.cancelled ?? 0),
-  };
+  } satisfies Record<TaskStatus, number>;
 
   const myTaskRows =
     accessibleProjectIds.length > 0

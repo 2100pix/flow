@@ -767,6 +767,7 @@ export function RolesSettings() {
                       return base;
                     }
 
+                    // SAFETY: base is a RoleDragBoard and dnd-kit move() only reorders its existing entries, preserving the board shape.
                     const next = move(base, event) as RoleDragBoard;
 
                     roleBoardRef.current = next;
