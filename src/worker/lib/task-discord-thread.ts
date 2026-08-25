@@ -1,6 +1,7 @@
 import { and, asc, eq, ne } from "drizzle-orm";
 
 import { resolveProjectCode } from "../../shared/project-code";
+import { taskPrioritySchema, taskStatusSchema, type TaskPriority, type TaskStatus } from "../../shared/contracts/tasks";
 
 import { createDb } from "../db";
 
@@ -10,6 +11,7 @@ import { resolvePersonName } from "./person-name";
 import { projectDiscordForums, projects, taskAssignees, taskDiscordThreads, taskResources, tasks, users, workspaceDiscordIntegrations } from "../db/schema";
 
 import {
+  addDiscordMessageReaction,
   createDiscordForumThread,
   DiscordApiError,
   DISCORD_PUBLIC_THREAD_TYPE,
@@ -19,6 +21,7 @@ import {
   modifyDiscordThread,
   listActiveDiscordGuildThreads,
   listArchivedDiscordPublicThreads,
+  removeDiscordMessageReaction,
   type DiscordGuildChannel,
   type DiscordMessage,
 } from "./discord-api";
@@ -29,6 +32,49 @@ const PROVISION_LEASE_MS = 60_000;
 const MAX_LAST_ERROR_LENGTH = 1_000;
 
 const MAX_DISCORD_MESSAGE_LENGTH = 2_000;
+
+// ════════════════════════════════════════════════════════════════════
+//  KONFIGURASI FORMAT PESAN DISCORD — silakan ubah sesuai selera Anda
+// ════════════════════════════════════════════════════════════════════
+
+// Domain aplikasi Flow, dipakai untuk link "buka task di Flow" pada pesan Discord.
+const FLOW_APP_BASE_URL = "https://flow.normalbase.workers.dev";
+
+// Emoji lingkaran warna untuk tiap status task (muncul juga sebagai reaksi di post).
+const STATUS_EMOJI = {
+  backlog: "⬜",
+  todo: "🔵",
+  in_progress: "🟡",
+  review: "🟣",
+  done: "🟢",
+  cancelled: "🔴",
+} satisfies Record<TaskStatus, string>;
+
+// Tulisan cantik untuk tiap status task.
+const STATUS_LABEL = {
+  backlog: "Backlog",
+  todo: "Todo",
+  in_progress: "In Progress",
+  review: "Review",
+  done: "Done",
+  cancelled: "Cancelled",
+} satisfies Record<TaskStatus, string>;
+
+// Emoji untuk tiap priority task.
+const PRIORITY_EMOJI = {
+  low: "🐌",
+  medium: "⚡",
+  high: "🔥",
+  urgent: "🚨",
+} satisfies Record<TaskPriority, string>;
+
+// Tulisan cantik untuk tiap priority task.
+const PRIORITY_LABEL = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
+} satisfies Record<TaskPriority, string>;
 
 export type ProvisionTaskDiscordThreadResult =
   | {
@@ -106,8 +152,55 @@ function resolveSyncErrorMessage(cause: unknown) {
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
 }
 
-function resolveTaskMarker(taskId: string) {
-  return `Flow Task ID: \`${taskId}\``;
+/*
+ * Link menuju halaman task di Flow.
+ * Dipasang di pesan Discord sekaligus
+ * dipakai sebagai marker unik untuk
+ * crash-recovery (URL memuat taskId).
+ */
+function resolveTaskLink(projectId: string, taskId: string) {
+  return `${FLOW_APP_BASE_URL}/projects/${projectId}/tasks/${taskId}`;
+}
+
+/*
+ * Marker teks yang dicari di isi post
+ * Discord untuk menemukan task yang
+ * thread-nya sudah terlanjur dibuat.
+ */
+function resolveTaskMarker(projectId: string, taskId: string) {
+  return resolveTaskLink(projectId, taskId);
+}
+
+// Emoji + label untuk status; fallback aman kalau nilai tak dikenal.
+function resolveStatusEmoji(status: string) {
+  const parsed = taskStatusSchema.safeParse(status);
+
+  return parsed.success ? STATUS_EMOJI[parsed.data] : "⬜";
+}
+
+function resolveStatusLabel(status: string) {
+  const parsed = taskStatusSchema.safeParse(status);
+
+  return parsed.success ? STATUS_LABEL[parsed.data] : status;
+}
+
+// Emoji + label untuk priority; null kalau task memang tanpa priority.
+function resolvePriorityParts(priority: string | null) {
+  if (!priority) {
+    return null;
+  }
+
+  const parsed = taskPrioritySchema.safeParse(priority);
+
+  if (!parsed.success) {
+    return null;
+  }
+
+  return {
+    emoji: PRIORITY_EMOJI[parsed.data],
+
+    label: PRIORITY_LABEL[parsed.data],
+  };
 }
 
 function resolveTaskThreadName(projectName: string, projectCodeOverride: string | null, taskNumber: number, title: string) {
@@ -127,6 +220,10 @@ async function buildCanonicalTaskMessage(
   task: {
     id: string;
 
+    projectId: string;
+
+    taskCode: string;
+
     description: string | null;
 
     status: string;
@@ -138,8 +235,6 @@ async function buildCanonicalTaskMessage(
     startDate: string | null;
 
     dueDate: string | null;
-
-    updatedAt: Date;
   },
 ) {
   let lead: {
@@ -194,71 +289,103 @@ async function buildCanonicalTaskMessage(
 
   const lines: string[] = [];
 
-  if (task.description) {
-    lines.push(`Description: ${task.description}`);
+  /*
+   * ── KODE TASK ──
+   * Baris paling atas: kode task dalam tebal,
+   * contoh: **FLOW-12**
+   */
+  lines.push(`**${task.taskCode}**`);
+
+  /*
+   * ── DESCRIPTION ──
+   * Judul sebagai heading Discord, lalu isi
+   * description pada baris baru di bawahnya.
+   */
+  const description = task.description?.trim();
+
+  if (description) {
+    lines.push("");
+
+    lines.push("### 📝 Description");
+
+    lines.push(description);
   }
 
-  lines.push(`Status: ${task.status}`);
+  /*
+   * ── ATRIBUT TASK ──
+   * Status (ber-emoji warna), priority
+   * (ber-emoji), tanggal, lead, assignees.
+   */
+  lines.push("");
 
-  if (task.priority) {
-    lines.push(`Priority: ${task.priority}`);
+  lines.push(`**Status:** ${resolveStatusEmoji(task.status)} ${resolveStatusLabel(task.status)}`);
+
+  const priorityParts = resolvePriorityParts(task.priority);
+
+  if (priorityParts) {
+    lines.push(`**Priority:** ${priorityParts.emoji} ${priorityParts.label}`);
   }
 
   if (task.startDate) {
-    lines.push(`Start Date: ${formatDisplayDate(task.startDate)}`);
+    lines.push(`📅 **Start Date:** ${formatDisplayDate(task.startDate)}`);
   }
 
   if (task.dueDate) {
-    lines.push(`Due Date: ${formatDisplayDate(task.dueDate)}`);
+    lines.push(`⏳ **Due Date:** ${formatDisplayDate(task.dueDate)}`);
   }
 
   if (lead) {
-    lines.push(`Lead: ${lead.discordUserId ? `<@${lead.discordUserId}>` : resolvePersonName(lead)}`);
+    lines.push(`👤 **Lead:** ${lead.discordUserId ? `<@${lead.discordUserId}>` : resolvePersonName(lead)}`);
   }
 
   if (assignees.length > 0) {
-    lines.push(`Assigned: ${assignees.map((assignee) => (assignee.discordUserId ? `<@${assignee.discordUserId}>` : resolvePersonName(assignee))).join(", ")}`);
+    lines.push(`👥 **Assignees:** ${assignees.map((assignee) => (assignee.discordUserId ? `<@${assignee.discordUserId}>` : resolvePersonName(assignee))).join(", ")}`);
   }
 
-  if (resources.length > 0) {
-    const briefs = resources.filter((resource) => resource.type === "document_brief");
+  /*
+   * ── RESOURCES ──
+   * Brief (dokumen): tiap brief jadi heading +
+   * isinya di baris baru, seperti Description.
+   *
+   * Link: cukup satu bullet titik per link.
+   */
+  const briefs = resources.filter((resource) => resource.type === "document_brief");
 
-    const links = resources.filter((resource) => resource.type === "link");
+  const links = resources.filter((resource) => resource.type === "link");
 
-    const resourceLines: string[] = ["Resources:"];
+  for (const brief of briefs) {
+    const content = brief.content?.trim();
 
-    if (briefs.length > 0) {
-      resourceLines.push("Brief:");
-
-      resourceLines.push(
-        ...briefs.map((resource) => {
-          const title = resource.title?.trim() || "Brief";
-
-          const content = resource.content?.trim();
-
-          return content ? `- ${title}: ${content}` : `- ${title}`;
-        }),
-      );
+    if (!content) {
+      continue;
     }
 
-    if (links.length > 0) {
-      resourceLines.push("Links:");
+    const title = brief.title?.trim() || "Brief";
 
-      resourceLines.push(
-        ...links.map((resource) => {
-          const title = resource.title?.trim() || "Link";
+    lines.push("");
 
-          return resource.url ? `- ${title}: ${resource.url}` : `- ${title}`;
-        }),
-      );
-    }
+    lines.push(`### 📚 ${title}`);
 
-    lines.push(resourceLines.join("\n"));
+    lines.push(content);
   }
 
-  const marker = resolveTaskMarker(task.id);
+  if (links.length > 0) {
+    lines.push("");
 
-  const suffix = [`Last Updated: ${task.updatedAt.toISOString()}`, marker].join("\n");
+    for (const link of links) {
+      const title = link.title?.trim() || "Link";
+
+      lines.push(link.url ? `• ${title}: ${link.url}` : `• ${title}`);
+    }
+  }
+
+  /*
+   * ── LINK KE FLOW ──
+   * Baris penutup berisi URL task di Flow.
+   * Sekaligus menjadi marker unik untuk
+   * crash-recovery (menggantikan Flow Task ID).
+   */
+  const suffix = resolveTaskMarker(task.projectId, task.id);
 
   const prefix = lines.join("\n");
 
@@ -273,11 +400,42 @@ async function buildCanonicalTaskMessage(
   }
 
   const allowedUserIds = [lead?.discordUserId ?? null, ...assignees.map((assignee) => assignee.discordUserId)].filter((value): value is string => Boolean(value));
+
   return {
     content: safePrefix ? `${safePrefix}\n${suffix}` : suffix,
 
     allowedUserIds: [...new Set(allowedUserIds)],
   };
+}
+
+/*
+ * Memasang reaksi emoji sesuai status task,
+ * lalu membersihkan emoji status lama milik
+ * bot supaya post selalu punya tepat satu
+ * lingkaran warna.
+ *
+ * Bersifat kosmetik: kegagalan di sini tidak
+ * boleh menggagalkan provisioning/sinkronisasi.
+ */
+async function applyStatusReaction(botToken: string, channelId: string, messageId: string, status: string) {
+  try {
+    const targetEmoji = resolveStatusEmoji(status);
+
+    const message = await getDiscordMessage(botToken, channelId, messageId);
+
+    const staleEmojis = (message.reactions ?? [])
+      .filter((reaction) => reaction.me && reaction.emoji.id === null && reaction.emoji.name !== null)
+      .map((reaction) => reaction.emoji.name)
+      .filter((name): name is string => name !== null && name !== targetEmoji && Object.values(STATUS_EMOJI).includes(name));
+
+    for (const emoji of staleEmojis) {
+      await removeDiscordMessageReaction(botToken, channelId, messageId, emoji);
+    }
+
+    await addDiscordMessageReaction(botToken, channelId, messageId, targetEmoji);
+  } catch {
+    // Kosmetik saja — biarkan gagal senyap.
+  }
 }
 
 async function findExistingTaskThread(botToken: string, guildId: string, forumChannelId: string, marker: string) {
@@ -604,10 +762,16 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   try {
     const threadName = resolveTaskThreadName(mapping.projectName, mapping.projectCodeOverride, mapping.taskNumber, mapping.title);
 
-    const marker = resolveTaskMarker(taskId);
+    const taskCode = `${resolveProjectCode(mapping.projectName, mapping.projectCodeOverride)}-${mapping.taskNumber}`;
+
+    const marker = resolveTaskMarker(mapping.projectId, taskId);
 
     const canonicalMessage = await buildCanonicalTaskMessage(db, {
       id: taskId,
+
+      projectId: mapping.projectId,
+
+      taskCode,
 
       description: mapping.description,
 
@@ -620,8 +784,6 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       startDate: mapping.startDate,
 
       dueDate: mapping.dueDate,
-
-      updatedAt: mapping.taskUpdatedAt,
     });
 
     let thread: DiscordGuildChannel;
@@ -775,6 +937,8 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
         taskId,
       };
     }
+
+    await applyStatusReaction(botToken, persisted.threadId, persisted.initialMessageId, mapping.status);
 
     return {
       status: "ready",
@@ -973,8 +1137,14 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
         throw new Error("Discord returned an unexpected Task thread after renaming");
       }
     }
+    const taskCode = `${resolveProjectCode(mapping.projectName, mapping.projectCodeOverride)}-${mapping.taskNumber}`;
+
     const canonicalMessage = await buildCanonicalTaskMessage(db, {
       id: taskId,
+
+      projectId: mapping.projectId,
+
+      taskCode,
 
       description: mapping.description,
 
@@ -987,8 +1157,6 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
       startDate: mapping.startDate,
 
       dueDate: mapping.dueDate,
-
-      updatedAt: mapping.taskUpdatedAt,
     });
 
     const message = await editDiscordMessage(botToken, {
@@ -1008,6 +1176,8 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
     if (message.id !== mapping.initialMessageId || message.channel_id !== mapping.threadId) {
       throw new Error("Discord returned an unexpected Task message while syncing");
     }
+
+    await applyStatusReaction(botToken, mapping.threadId, message.id, mapping.status);
 
     return {
       status: "synced",

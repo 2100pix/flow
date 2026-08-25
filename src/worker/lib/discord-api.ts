@@ -24,6 +24,20 @@ export type DiscordMessage = {
   channel_id: string;
 
   content: string;
+
+  reactions?: DiscordMessageReaction[];
+};
+
+export type DiscordMessageReaction = {
+  count: number;
+
+  me: boolean;
+
+  emoji: {
+    id: string | null;
+
+    name: string | null;
+  };
 };
 
 export type DiscordDmChannel = {
@@ -290,6 +304,28 @@ export function editDiscordMessage(botToken: string, input: EditDiscordMessageIn
         users: input.allowedUserIds,
       },
     }),
+  });
+}
+
+/*
+ * Menambahkan reaksi emoji milik bot
+ * pada sebuah pesan. Respons sukses
+ * adalah 204 tanpa body, sehingga
+ * discordFetch mengembalikan null.
+ */
+export function addDiscordMessageReaction(botToken: string, channelId: string, messageId: string, emoji: string) {
+  return discordFetch<null>(botToken, `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}/@me`, {
+    method: "PUT",
+  });
+}
+
+/*
+ * Menghapus reaksi milik bot sendiri
+ * pada sebuah pesan (endpoint @me).
+ */
+export function removeDiscordMessageReaction(botToken: string, channelId: string, messageId: string, emoji: string) {
+  return discordFetch<null>(botToken, `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}/@me`, {
+    method: "DELETE",
   });
 }
 
