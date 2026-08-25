@@ -23,6 +23,8 @@ import {
   workspaceExpertise,
 } from "../db/schema";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
+import { insertForumAccessSyncForWorkspace } from "../lib/project-discord-forum";
 import { permissionKeySchema } from "../../shared/permissions";
 
 import { builtInRoleDefinitions } from "../../shared/roles";
@@ -1148,6 +1150,19 @@ membersRoutes.patch(
 
       customRole: nextCustomRole,
     };
+
+    /*
+     * Role member berubah → daftar pemegang
+     * projects.private.view_all bisa bergeser.
+     * Sinkronkan akses seluruh forum Discord.
+     */
+    const accessSyncEvents = await insertForumAccessSyncForWorkspace(db, auth.workspace.id);
+
+    for (const syncEvent of accessSyncEvents) {
+      c.executionCtx.waitUntil(
+        dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, syncEvent.eventId).catch(() => undefined),
+      );
+    }
 
     return c.json({
       data,

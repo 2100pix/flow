@@ -7,6 +7,8 @@ import { builtInRoleDefinitions, getPermissionWeight, hasFullControl, isReserved
 import { createDb } from "../db";
 import { workspaceMembers, workspaceRolePermissions, workspaceRoles } from "../db/schema";
 import { createId } from "../lib/id";
+import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
+import { insertForumAccessSyncForWorkspace } from "../lib/project-discord-forum";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../types/auth";
 import type { AppBindings } from "../types/app-env";
@@ -479,6 +481,19 @@ rolesRoutes.patch(
       ]);
     } else {
       await db.batch([roleUpdate, permissionsDelete]);
+    }
+
+    /*
+     * Daftar izin custom role disunting →
+     * pemegang projects.private.view_all bisa
+     * bergeser. Sinkronkan akses seluruh forum.
+     */
+    const accessSyncEvents = await insertForumAccessSyncForWorkspace(db, auth.workspace.id);
+
+    for (const syncEvent of accessSyncEvents) {
+      c.executionCtx.waitUntil(
+        dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, syncEvent.eventId).catch(() => undefined),
+      );
     }
 
     const data: RoleDto = {

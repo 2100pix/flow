@@ -886,6 +886,99 @@ discordIntegrationRoutes.patch(
 );
 
 /*
+ * Resync manual seluruh forum project di
+ * workspace ini:
+ * - forum belum ready → dikirim ulang
+ *   provisioning-nya (termasuk pemulihan
+ *   kanal yang terlanjur dibuat)
+ * - forum sudah ready → cukup disinkronkan
+ *   overwrites-nya
+ *
+ * Berguna setelah perbaikan izin bot,
+ * pembersihan data, atau perubahan aturan
+ * akses — tanpa menunggu cron sweeper.
+ */
+discordIntegrationRoutes.post("/resync-forums", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const db = createDb(c.env.flow_db);
+
+  const targets = await db
+    .select({
+      projectId: projectDiscordForums.projectId,
+
+      provisioningStatus: projectDiscordForums.provisioningStatus,
+    })
+    .from(projectDiscordForums)
+    .innerJoin(projects, eq(projects.id, projectDiscordForums.projectId))
+    .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
+
+  const now = new Date();
+
+  let queued = 0;
+
+  for (const target of targets) {
+    const eventType = target.provisioningStatus === "ready" ? "project_forum.access" : "project_forum.provision";
+
+    const eventId = createId("obx");
+
+    /*
+     * Hapus dulu event pending lama untuk
+     * pasangan yang sama — tabel outbox punya
+     * unique index pada (event_type, aggregate_id).
+     * Pola yang sama dengan task_thread.sync.
+     */
+    const deletePrevious = db.delete(discordOutboxEvents).where(
+      and(
+        eq(discordOutboxEvents.aggregateId, target.projectId),
+
+        eq(discordOutboxEvents.eventType, eventType),
+
+        eq(discordOutboxEvents.status, "pending"),
+      ),
+    );
+
+    const insertLatest = db.insert(discordOutboxEvents).values({
+      id: eventId,
+
+      workspaceId: auth.workspace.id,
+
+      aggregateType: "project_forum",
+
+      aggregateId: target.projectId,
+
+      eventType,
+
+      status: "pending",
+
+      dispatchAttemptCount: 0,
+
+      lastDispatchError: null,
+
+      dispatchedAt: null,
+
+      createdAt: now,
+
+      updatedAt: now,
+    });
+
+    await db.batch([deletePrevious, insertLatest]);
+
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, eventId).catch(() => undefined),
+    );
+
+    queued += 1;
+  }
+
+  return c.json({
+    data: {
+      queued,
+    },
+  });
+});
+
+/*
  * Menyimpan role Discord yang boleh melihat
  * forum project workspace-visible. Setelah
  * tersimpan, semua forum project non-private

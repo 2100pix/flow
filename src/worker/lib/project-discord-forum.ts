@@ -1,10 +1,12 @@
-import { and, eq, isNotNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 
 import { builtInRoleDefinitions } from "../../shared/roles";
 
 import { createDb } from "../db";
 
-import { projectDiscordForums, projectMembers, projects, users, workspaceDiscordIntegrations, workspaceMembers, workspaceRolePermissions } from "../db/schema";
+import { createId } from "../lib/id";
+
+import { discordOutboxEvents, projectDiscordForums, projectMembers, projects, users, workspaceDiscordIntegrations, workspaceMembers, workspaceRolePermissions } from "../db/schema";
 
 import {
   createDiscordForumChannel,
@@ -118,6 +120,19 @@ function resolveErrorMessage(cause: unknown) {
 // ════════════════════════════════════════════════════════════════════
 
 const FORUM_ACCESS_BITS = DISCORD_VIEW_CHANNEL | DISCORD_SEND_MESSAGES | DISCORD_READ_MESSAGE_HISTORY;
+
+/*
+ * Pola ID Discord (snowflake) yang valid.
+ *
+ * User seed/demo bisa saja memiliki nilai
+ * discord_user_id palsu (mis. "discord_abc").
+ * Entri seperti itu DILEWATI — kalau tidak,
+ * satu ID buruk akan membuat seluruh
+ * permission overwrites ditolak Discord
+ * dengan 400 Invalid Form Body, sehingga
+ * kanal terlanjur dibuat tapi tetap publik.
+ */
+const DISCORD_USER_ID_SNOWFLAKE = /^\d{15,21}$/;
 
 /*
  * Rencana akses forum:
@@ -267,9 +282,19 @@ async function resolveForumAccessPlan(db: Db, projectId: string): Promise<ForumA
   const allowedDiscordUserIds = new Set<string>();
 
   for (const member of memberRows) {
-    if (member.discordUserId) {
-      allowedDiscordUserIds.add(member.discordUserId);
+    if (!member.discordUserId) {
+      continue;
     }
+
+    if (!DISCORD_USER_ID_SNOWFLAKE.test(member.discordUserId)) {
+      console.warn("Skipping invalid Discord user id in project forum access", {
+        discordUserId: member.discordUserId,
+      });
+
+      continue;
+    }
+
+    allowedDiscordUserIds.add(member.discordUserId);
   }
 
   for (const holder of holderRows) {
@@ -282,6 +307,14 @@ async function resolveForumAccessPlan(db: Db, projectId: string): Promise<ForumA
     const isCustomHolder = holder.customPermissionKey === "projects.private.view_all";
 
     if (isBuiltinHolder || isCustomHolder) {
+      if (!DISCORD_USER_ID_SNOWFLAKE.test(holder.discordUserId)) {
+        console.warn("Skipping invalid Discord user id in project forum access", {
+          discordUserId: holder.discordUserId,
+        });
+
+        continue;
+      }
+
       allowedDiscordUserIds.add(holder.discordUserId);
     }
   }
@@ -308,6 +341,70 @@ export type ApplyProjectForumAccessResult =
 
       restricted: boolean;
     };
+
+export type ForumAccessSyncEvent = {
+  eventId: string;
+};
+
+/*
+ * Mengantri resync akses untuk SEMUA forum
+ * ready di sebuah workspace.
+ *
+ * Dipakai ketika perubahan global mengubah
+ * daftar yang berhak akses — contohnya role
+ * seorang member diganti, atau daftar izin
+ * custom role disunting.
+ *
+ * Event tetap pending di D1 bila dispatch
+ * pemanggil gagal; sweeper cron memulihkannya.
+ */
+export async function insertForumAccessSyncForWorkspace(db: Db, workspaceId: string): Promise<ForumAccessSyncEvent[]> {
+  const targets = await db
+    .select({
+      projectId: projectDiscordForums.projectId,
+    })
+    .from(projectDiscordForums)
+    .innerJoin(projects, eq(projects.id, projectDiscordForums.projectId))
+    .where(and(eq(projects.workspaceId, workspaceId), isNull(projects.archivedAt), eq(projectDiscordForums.provisioningStatus, "ready")));
+
+  const events: ForumAccessSyncEvent[] = [];
+
+  const now = new Date();
+
+  for (const target of targets) {
+    const eventId = createId("obx");
+
+    await db.insert(discordOutboxEvents).values({
+      id: eventId,
+
+      workspaceId,
+
+      aggregateType: "project_forum",
+
+      aggregateId: target.projectId,
+
+      eventType: "project_forum.access",
+
+      status: "pending",
+
+      dispatchAttemptCount: 0,
+
+      lastDispatchError: null,
+
+      dispatchedAt: null,
+
+      createdAt: now,
+
+      updatedAt: now,
+    });
+
+    events.push({
+      eventId,
+    });
+  }
+
+  return events;
+}
 
 /*
  * Menerapkan rencana akses ke kanal forum
