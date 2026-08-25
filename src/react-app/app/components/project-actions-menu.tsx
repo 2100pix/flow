@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { DotsThreeIcon, GearSixIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { ArchiveIcon, DotsThreeIcon, GearSixIcon, PencilSimpleIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
-import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
+
+import { ArchiveProjectDialog, DeleteProjectDialog } from "@/features/projects/components/project-danger-dialogs";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 
 import type { ProjectDto } from "@/features/projects/types";
@@ -16,6 +17,7 @@ type ProjectActionsMenuProps = {
   project: ProjectDto;
   canEdit: boolean;
   canArchive: boolean;
+  canDelete: boolean;
 };
 
 function RenameProjectDialog({ project, onClose }: { project: ProjectDto; onClose: () => void }) {
@@ -129,9 +131,11 @@ function RenameProjectDialog({ project, onClose }: { project: ProjectDto; onClos
   );
 }
 
-export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActionsMenuProps) {
+export function ProjectActionsMenu({ project, canEdit, canArchive, canDelete }: ProjectActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [position, setPosition] = useState<{
     top: number;
     left: number;
@@ -142,7 +146,6 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
 
   const location = useLocation();
   const navigate = useNavigate();
-  const archiveProject = useArchiveProject();
 
   useEffect(() => {
     if (!open) {
@@ -183,6 +186,16 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
     };
   }, [open]);
 
+  function leaveProjectRoutes() {
+    const basePath = `/projects/${project.id}`;
+
+    if (location.pathname === basePath || location.pathname.startsWith(`${basePath}/`)) {
+      void navigate("/", {
+        replace: true,
+      });
+    }
+  }
+
   function toggleMenu() {
     if (open) {
       setOpen(false);
@@ -196,7 +209,7 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
     }
 
     const menuWidth = 208;
-    const estimatedHeight = 112;
+    const estimatedHeight = 144;
 
     const left = Math.min(window.innerWidth - menuWidth - 8, Math.max(8, rect.right - menuWidth));
 
@@ -273,44 +286,36 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
                 <span>Project Settings</span>
               </Link>
 
+              {canArchive || canDelete ? <div className="my-1 border-t border-border" /> : null}
+
               {canArchive ? (
-                <>
-                  <div className="my-1 border-t border-border" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => {
+                    setOpen(false);
+                    setArchiveOpen(true);
+                  }}
+                >
+                  <ArchiveIcon size={15} />
+                  <span>Archive Project</span>
+                </button>
+              ) : null}
 
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={archiveProject.isPending}
-                    className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                    onClick={() => {
-                      setOpen(false);
-
-                      const confirmed = window.confirm(`Delete ${project.name}? This removes the project from active project views.`);
-
-                      if (!confirmed) {
-                        return;
-                      }
-
-                      archiveProject.mutate(project.id, {
-                        onSuccess: () => {
-                          const basePath = `/projects/${project.id}`;
-
-                          if (location.pathname === basePath || location.pathname.startsWith(`${basePath}/`)) {
-                            void navigate("/", {
-                              replace: true,
-                            });
-                          }
-                        },
-                        onError: (error) => {
-                          window.alert(error.message);
-                        },
-                      });
-                    }}
-                  >
-                    <TrashIcon size={15} />
-                    <span>{archiveProject.isPending ? "Deleting…" : "Delete Project"}</span>
-                  </button>
-                </>
+              {canDelete ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                  onClick={() => {
+                    setOpen(false);
+                    setDeleteOpen(true);
+                  }}
+                >
+                  <TrashIcon size={15} />
+                  <span>Delete Project</span>
+                </button>
               ) : null}
             </div>,
             document.body,
@@ -325,6 +330,20 @@ export function ProjectActionsMenu({ project, canEdit, canArchive }: ProjectActi
           }}
         />
       ) : null}
+
+      <ArchiveProjectDialog
+        project={project}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        onArchived={leaveProjectRoutes}
+      />
+
+      <DeleteProjectDialog
+        project={project}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={leaveProjectRoutes}
+      />
     </>
   );
 }

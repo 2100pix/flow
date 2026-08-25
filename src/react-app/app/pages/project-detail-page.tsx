@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link, useNavigate, useParams } from "react-router";
 
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
@@ -14,9 +12,8 @@ import { hasPermission } from "@/features/auth/permissions";
 import { getErrorMessage } from "@/lib/errors";
 import { useClients } from "@/features/clients/hooks/use-clients";
 import { ProjectAccessPicker } from "@/features/projects/components/project-access-picker";
+import { ArchiveProjectDialog, DeleteProjectDialog } from "@/features/projects/components/project-danger-dialogs";
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from "@/features/projects/constants";
-import { useArchiveProject } from "@/features/projects/hooks/use-archive-project";
-import { useDeleteProject } from "@/features/projects/hooks/use-delete-project";
 import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 import { ProjectSettingsTeam } from "@/features/projects/components/project-settings-team";
@@ -84,15 +81,9 @@ type DangerZoneProps = {
 function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
   const navigate = useNavigate();
 
-  const archiveProject = useArchiveProject();
-
-  const deleteProject = useDeleteProject();
-
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   if (!canArchive && !canDelete) {
     return null;
@@ -111,46 +102,9 @@ function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Archiving this project removes it from normal navigation while retaining its project data.</p>
             </div>
 
-            <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
-              <AlertDialogTrigger render={<Button type="button" variant="outline" size="sm" className="shrink-0" />}>Archive</AlertDialogTrigger>
-
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Archive {project.name}?</AlertDialogTitle>
-
-                  <AlertDialogDescription>The project will be removed from active navigation. Its members, leads, resources, tasks, workflow, and metadata remain stored.</AlertDialogDescription>
-                </AlertDialogHeader>
-
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={archiveProject.isPending}>Cancel</AlertDialogCancel>
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={archiveProject.isPending}
-                    onClick={() => {
-                      archiveProject.mutate(project.id, {
-                        onSuccess: () => {
-                          setArchiveOpen(false);
-
-                          toast.success("Project archived.");
-
-                          void navigate("/projects", {
-                            replace: true,
-                          });
-                        },
-
-                        onError: (error) => {
-                          toast.error(getErrorMessage(error, "Failed to archive project."));
-                        },
-                      });
-                    }}
-                  >
-                    {archiveProject.isPending ? "Archiving…" : "Archive"}
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => { setArchiveOpen(true); }}>
+              Archive
+            </Button>
           </div>
         ) : null}
 
@@ -162,75 +116,34 @@ function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Permanently remove this project and all project-owned data. This action cannot be recovered.</p>
             </div>
 
-            <AlertDialog
-              open={deleteOpen}
-              onOpenChange={(nextOpen) => {
-                setDeleteOpen(nextOpen);
-
-                if (!nextOpen) {
-                  setDeleteConfirmation("");
-                }
-              }}
-            >
-              <AlertDialogTrigger render={<Button type="button" variant="destructive" size="sm" className="shrink-0" />}>Delete</AlertDialogTrigger>
-
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Permanently delete {project.name}?</AlertDialogTitle>
-
-                  <AlertDialogDescription>This permanently removes the project, members, project leads, resources, tasks, workflow, and project metadata. There is no restore.</AlertDialogDescription>
-                </AlertDialogHeader>
-
-                <div className="space-y-2">
-                  <label htmlFor="delete-project-confirmation" className="text-sm font-medium">
-                    Type <span className="font-semibold">{project.name}</span> to confirm
-                  </label>
-
-                  <input
-                    id="delete-project-confirmation"
-                    value={deleteConfirmation}
-                    autoComplete="off"
-                    disabled={deleteProject.isPending}
-                    onChange={(event) => {
-                      setDeleteConfirmation(event.target.value);
-                    }}
-                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                  />
-                </div>
-
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={deleteProject.isPending}>Cancel</AlertDialogCancel>
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={deleteConfirmation !== project.name || deleteProject.isPending}
-                    onClick={() => {
-                      deleteProject.mutate(project.id, {
-                        onSuccess: () => {
-                          setDeleteOpen(false);
-
-                          toast.success("Project deleted.");
-
-                          void navigate("/projects", {
-                            replace: true,
-                          });
-                        },
-
-                        onError: (error) => {
-                          toast.error(getErrorMessage(error, "Failed to delete project."));
-                        },
-                      });
-                    }}
-                  >
-                    {deleteProject.isPending ? "Deleting…" : "Delete permanently"}
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button type="button" variant="destructive" size="sm" className="shrink-0" onClick={() => { setDeleteOpen(true); }}>
+              Delete
+            </Button>
           </div>
         ) : null}
       </div>
+
+      <ArchiveProjectDialog
+        project={project}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        onArchived={() => {
+          void navigate("/projects", {
+            replace: true,
+          });
+        }}
+      />
+
+      <DeleteProjectDialog
+        project={project}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => {
+          void navigate("/projects", {
+            replace: true,
+          });
+        }}
+      />
     </section>
   );
 }

@@ -129,7 +129,7 @@ function CollapsibleRegion({ open, children }: { open: boolean; children: ReactN
   );
 }
 
-function ProjectNavigation({ project, expanded, active, canEdit, canArchive, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; canEdit: boolean; canArchive: boolean; onToggle: () => void }) {
+function ProjectNavigation({ project, expanded, active, canEdit, canArchive, canDelete, onToggle }: { project: ProjectDto; expanded: boolean; active: boolean; canEdit: boolean; canArchive: boolean; canDelete: boolean; onToggle: () => void }) {
   return (
     <div className="space-y-0.5">
       <div
@@ -145,7 +145,7 @@ function ProjectNavigation({ project, expanded, active, canEdit, canArchive, onT
           <span className="min-w-0 flex-1 truncate">{project.name}</span>
         </button>
 
-        <ProjectActionsMenu project={project} canEdit={canEdit} canArchive={canArchive} />
+        <ProjectActionsMenu project={project} canEdit={canEdit} canArchive={canArchive} canDelete={canDelete} />
 
         <button
           type="button"
@@ -202,6 +202,7 @@ function SpaceNavigation({
   canCreateProjects,
   canEditProjects,
   canArchiveProjects,
+  canDeleteProjects,
   expanded,
   onToggle,
   activeProjectId,
@@ -213,6 +214,7 @@ function SpaceNavigation({
   canCreateProjects: boolean;
   canEditProjects: boolean;
   canArchiveProjects: boolean;
+  canDeleteProjects: boolean;
   expanded: boolean;
   onToggle: () => void;
   activeProjectId: string | null;
@@ -242,6 +244,7 @@ function SpaceNavigation({
                 active={active}
                 canEdit={canEditProjects}
                 canArchive={canArchiveProjects}
+                canDelete={canDeleteProjects}
                 onToggle={() => {
                   onToggleProject(project.id);
                 }}
@@ -432,6 +435,8 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
   const canEditProjects = hasPermission(auth, "projects.edit");
 
   const canArchiveProjects = hasPermission(auth, "projects.archive");
+
+  const canDeleteProjects = hasPermission(auth, "projects.delete");
 
   const workspaceInitial = auth.workspace.name.trim().charAt(0).toUpperCase() || "?";
 
@@ -648,6 +653,7 @@ export function AppLayout({ auth }: { auth: AuthContext }) {
           onToggleProject={toggleProject}
           canEditProjects={canEditProjects}
           canArchiveProjects={canArchiveProjects}
+          canDeleteProjects={canDeleteProjects}
         />
       </nav>
     );
