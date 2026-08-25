@@ -13,6 +13,8 @@ import { useDiscordIntegration } from "../hooks/use-discord-integration";
 import { useDisconnectDiscordIntegration } from "../hooks/use-disconnect-discord-integration";
 import { useDiscordCategories } from "../hooks/use-discord-categories";
 import { useUpdateDiscordProjectCategory } from "../hooks/use-update-discord-project-category";
+import { useDiscordRoles } from "../hooks/use-discord-roles";
+import { useUpdateDiscordWorkspaceRole } from "../hooks/use-update-discord-workspace-role";
 import { useUpdateDiscordReminderSettings } from "../hooks/use-update-discord-reminder-settings";
 
 function getDiscordConnectionFeedback(value: string | null) {
@@ -75,6 +77,8 @@ export function DiscordIntegrationSettings() {
   const connected = integration?.connectionStatus === "connected";
   const { data: categories = [], isPending: categoriesPending, isError: categoriesError } = useDiscordCategories(connected);
   const updateCategory = useUpdateDiscordProjectCategory();
+  const { data: roles = [], isPending: rolesPending, isError: rolesError } = useDiscordRoles(connected && canManageIntegration);
+  const updateWorkspaceRole = useUpdateDiscordWorkspaceRole();
   const updateReminders = useUpdateDiscordReminderSettings();
 
   const [reminderTimeZoneDraft, setReminderTimeZoneDraft] = useState<string | null>(null);
@@ -260,6 +264,72 @@ export function DiscordIntegrationSettings() {
                           </select>
                         ) : (
                           <span className="text-xs font-medium">{categories.find((category) => category.id === integration.projectCategoryId)?.name ?? "No category"}</span>
+                        )
+                      ) : (
+                        <span className="text-xs font-medium">Not available</span>
+                      )}
+                    </div>
+
+                    <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Roles workspace</p>
+
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Discord role that can view project forums. Private projects are always restricted to their Flow members.</p>
+                      </div>
+
+                      {connected ? (
+                        rolesPending ? (
+                          <span className="text-xs text-muted-foreground">Loading…</span>
+                        ) : rolesError ? (
+                          <span className="text-xs text-destructive">Unable to load</span>
+                        ) : canManageIntegration ? (
+                          <select
+                            value={integration.workspaceDiscordRoleId ?? ""}
+                            disabled={updateWorkspaceRole.isPending || disconnectDiscord.isPending}
+                            onChange={(event) => {
+                              const value = event.target.value;
+
+                              updateWorkspaceRole.mutate(
+                                {
+                                  workspaceDiscordRoleId: value || null,
+                                },
+                                {
+                                  onSuccess: () => {
+                                    toast.success("Workspace role updated. Project forums are syncing.");
+                                  },
+
+                                  onError: (error) => {
+                                    toast.error(getErrorMessage(error, "Failed to update workspace role."));
+                                  },
+                                },
+                              );
+                            }}
+                            className="
+                            h-8
+                            w-52
+                            rounded-md
+                            border border-input
+                            bg-background
+                            px-2.5
+                            text-xs
+                            outline-none
+                            focus-visible:border-ring
+                            focus-visible:ring-3
+                            focus-visible:ring-ring/50
+                            disabled:cursor-not-allowed
+                            disabled:opacity-60
+                          "
+                          >
+                            <option value="">Everyone (open)</option>
+
+                            {roles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs font-medium">{roles.find((role) => role.id === integration.workspaceDiscordRoleId)?.name ?? "Everyone"}</span>
                         )
                       ) : (
                         <span className="text-xs font-medium">Not available</span>

@@ -1,17 +1,21 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
   updateDiscordIntegrationSchema,
   updateDiscordProjectCategorySchema,
   updateDiscordReminderSettingsSchema,
+  updateDiscordWorkspaceRoleSchema,
   type DiscordCategoriesResponse,
   type DiscordCategoryDto,
   type DiscordIntegrationDto,
   type DiscordIntegrationResponse,
+  type DiscordRolesResponse,
 } from "../../shared/contracts/discord-integration";
 import { createDb } from "../db";
-import { workspaceDiscordIntegrations } from "../db/schema";
+import { discordOutboxEvents, projectDiscordForums, projects, workspaceDiscordIntegrations } from "../db/schema";
+import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
+import { createId } from "../lib/id";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { zValidator } from "@hono/zod-validator";
 import { taskPrioritySchema, taskStatusSchema } from "../../shared/contracts/tasks";
@@ -21,7 +25,7 @@ import type { AuthContext } from "../types/auth";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const DISCORD_INTEGRATION_STATE_COOKIE = "flow_discord_integration_state";
-const DISCORD_BOT_PERMISSIONS = "292057779216";
+const DISCORD_BOT_PERMISSIONS = "292057779248";
 type DiscordIntegrationTokenResponse = {
   access_token: string;
   token_type: string;
@@ -574,6 +578,8 @@ discordIntegrationRoutes.delete("/", requireAuth, requirePermission("settings.ma
 
     projectCategoryId: null,
 
+    workspaceDiscordRoleId: null,
+
     reminders: {
       enabled: false,
 
@@ -658,6 +664,84 @@ discordIntegrationRoutes.get("/categories", requireAuth, requirePermission("sett
   return c.json(response);
 });
 
+/*
+ * Daftar role di server Discord untuk
+ * dropdown "Roles workspace" pada
+ * pengaturan integrasi.
+ */
+discordIntegrationRoutes.get("/roles", requireAuth, requirePermission("settings.manage"), async (c) => {
+  const auth = c.var.auth;
+
+  const db = createDb(c.env.flow_db);
+
+  const [integration] = await db
+    .select({
+      guildId: workspaceDiscordIntegrations.guildId,
+    })
+    .from(workspaceDiscordIntegrations)
+    .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+    .limit(1);
+
+  if (!integration?.guildId) {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_NOT_CONNECTED",
+
+          message: "Connect a Discord server before loading roles",
+        },
+      },
+      409,
+    );
+  }
+
+  const rolesResponse = await fetch(`${DISCORD_API_BASE}/guilds/${encodeURIComponent(integration.guildId)}/roles`, {
+    headers: {
+      Authorization: `Bot ${c.env.DISCORD_BOT_TOKEN}`,
+    },
+  });
+
+  if (!rolesResponse.ok) {
+    return c.json(
+      {
+        error: {
+          code: "DISCORD_ROLES_FETCH_FAILED",
+
+          message: "Failed to load Discord server roles",
+        },
+      },
+      502,
+    );
+  }
+
+  // SAFETY: I/O boundary — the guild roles response shape is fixed by Discord's documented API contract.
+  const roles = (await rolesResponse.json()) as Array<{
+    id: string;
+
+    name: string;
+
+    managed: boolean;
+  }>;
+
+  const data = roles
+    /*
+     * @everyone (id === guild id) dan role
+     * terkelola bot tidak masuk pilihan.
+     */
+    .filter((role) => role.id !== integration.guildId && !role.managed)
+    .map((role) => ({
+      id: role.id,
+
+      name: role.name,
+    }));
+
+  const response: DiscordRolesResponse = {
+    data,
+  };
+
+  return c.json(response);
+});
+
 discordIntegrationRoutes.patch(
   "/category",
   requireAuth,
@@ -690,6 +774,8 @@ discordIntegrationRoutes.patch(
         guildId: workspaceDiscordIntegrations.guildId,
 
         guildName: workspaceDiscordIntegrations.guildName,
+
+        workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
 
         connectedAt: workspaceDiscordIntegrations.connectedAt,
         remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
@@ -779,6 +865,175 @@ discordIntegrationRoutes.patch(
         : null,
 
       projectCategoryId: input.projectCategoryId,
+
+      workspaceDiscordRoleId: integration.workspaceRoleId ?? null,
+      reminders: {
+        enabled: integration.remindersEnabled,
+
+        timeZone: integration.reminderTimeZone,
+
+        hourLocal: integration.reminderHourLocal,
+      },
+      connectedAt: integration.connectedAt?.toISOString() ?? null,
+    };
+
+    const response: DiscordIntegrationResponse = {
+      data,
+    };
+
+    return c.json(response);
+  },
+);
+
+/*
+ * Menyimpan role Discord yang boleh melihat
+ * forum project workspace-visible. Setelah
+ * tersimpan, semua forum project non-private
+ * yang ready di-resync agar role langsung
+ * berlaku.
+ */
+discordIntegrationRoutes.patch(
+  "/workspace-role",
+  requireAuth,
+  requirePermission("settings.manage"),
+  zValidator("json", updateDiscordWorkspaceRoleSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+
+            message: "Invalid Discord workspace role",
+          },
+        },
+        400,
+      );
+    }
+  }),
+  async (c) => {
+    const auth = c.var.auth;
+
+    const input = c.req.valid("json");
+
+    const db = createDb(c.env.flow_db);
+
+    const [integration] = await db
+      .select({
+        enabled: workspaceDiscordIntegrations.enabled,
+
+        guildId: workspaceDiscordIntegrations.guildId,
+
+        guildName: workspaceDiscordIntegrations.guildName,
+
+        projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
+
+        workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
+
+        connectedAt: workspaceDiscordIntegrations.connectedAt,
+        remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
+
+        reminderTimeZone: workspaceDiscordIntegrations.reminderTimeZone,
+
+        reminderHourLocal: workspaceDiscordIntegrations.reminderHourLocal,
+      })
+      .from(workspaceDiscordIntegrations)
+      .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id))
+      .limit(1);
+
+    if (!integration?.guildId) {
+      return c.json(
+        {
+          error: {
+            code: "DISCORD_NOT_CONNECTED",
+
+            message: "Connect a Discord server before selecting a workspace role",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+
+    await db
+      .update(workspaceDiscordIntegrations)
+      .set({
+        workspaceRoleId: input.workspaceDiscordRoleId,
+
+        updatedAt: now,
+      })
+      .where(eq(workspaceDiscordIntegrations.workspaceId, auth.workspace.id));
+
+    /*
+     * Resync akses untuk semua project
+     * workspace-visible yang forum-nya ready.
+     * Event dibiarkan pending di D1 bila
+     * dispatch gagal — sweeper cron memulihkan.
+     */
+    const syncTargets = await db
+      .select({
+        projectId: projects.id,
+      })
+      .from(projects)
+      .innerJoin(projectDiscordForums, eq(projectDiscordForums.projectId, projects.id))
+      .where(
+        and(
+          eq(projects.workspaceId, auth.workspace.id),
+
+          eq(projects.visibility, "workspace"),
+
+          isNull(projects.archivedAt),
+
+          eq(projectDiscordForums.provisioningStatus, "ready"),
+        ),
+      );
+
+    for (const target of syncTargets) {
+      const eventId = createId("obx");
+
+      await db.insert(discordOutboxEvents).values({
+        id: eventId,
+
+        workspaceId: auth.workspace.id,
+
+        aggregateType: "project_forum",
+
+        aggregateId: target.projectId,
+
+        eventType: "project_forum.access",
+
+        status: "pending",
+
+        dispatchAttemptCount: 0,
+
+        lastDispatchError: null,
+
+        dispatchedAt: null,
+
+        createdAt: now,
+
+        updatedAt: now,
+      });
+
+      c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, eventId).catch(() => undefined));
+    }
+
+    const data: DiscordIntegrationDto = {
+      enabled: integration.enabled,
+
+      connectionStatus: "connected",
+
+      guild: integration.guildName
+        ? {
+            id: integration.guildId,
+
+            name: integration.guildName,
+          }
+        : null,
+
+      projectCategoryId: integration.projectCategoryId,
+
+      workspaceDiscordRoleId: input.workspaceDiscordRoleId,
       reminders: {
         enabled: integration.remindersEnabled,
 
@@ -845,6 +1100,8 @@ discordIntegrationRoutes.patch(
 
         projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
 
+        workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
+
         connectedAt: workspaceDiscordIntegrations.connectedAt,
       })
       .from(workspaceDiscordIntegrations)
@@ -908,6 +1165,7 @@ discordIntegrationRoutes.patch(
 
       projectCategoryId: integration.projectCategoryId,
 
+      workspaceDiscordRoleId: integration.workspaceRoleId ?? null,
       reminders: {
         enabled: input.enabled,
 
@@ -955,6 +1213,7 @@ discordIntegrationRoutes.patch(
         guildId: workspaceDiscordIntegrations.guildId,
         guildName: workspaceDiscordIntegrations.guildName,
         projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
+        workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
         connectedAt: workspaceDiscordIntegrations.connectedAt,
         remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
         reminderTimeZone: workspaceDiscordIntegrations.reminderTimeZone,
@@ -1016,6 +1275,8 @@ discordIntegrationRoutes.patch(
           : null,
 
       projectCategoryId: integration.projectCategoryId,
+
+      workspaceDiscordRoleId: integration.workspaceRoleId ?? null,
       reminders: {
         enabled: integration.remindersEnabled,
 
@@ -1049,6 +1310,8 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
 
       projectCategoryId: workspaceDiscordIntegrations.projectCategoryId,
 
+      workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
+
       connectedAt: workspaceDiscordIntegrations.connectedAt,
       remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
 
@@ -1075,6 +1338,8 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
             : null,
 
         projectCategoryId: integration.projectCategoryId,
+
+        workspaceDiscordRoleId: integration.workspaceRoleId ?? null,
         reminders: {
           enabled: integration.remindersEnabled,
 
@@ -1092,6 +1357,8 @@ discordIntegrationRoutes.get("/", requireAuth, requirePermission("settings.view"
         guild: null,
 
         projectCategoryId: null,
+
+        workspaceDiscordRoleId: null,
         reminders: {
           enabled: false,
 

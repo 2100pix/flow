@@ -110,6 +110,47 @@ async function resolveEffectiveProjectDueDate(db: ReturnType<typeof createDb>, p
   return result?.dueDate ?? storedDueDate;
 }
 
+/*
+ * Membuat event outbox resync akses forum
+ * Discord untuk sebuah project.
+ *
+ * Mengembalikan id event agar pemanggil bisa
+ * mendispatch via waitUntil. Bila dispatch
+ * gagal, event tetap pending di D1 dan akan
+ * dikirim ulang oleh sweeper cron.
+ */
+async function insertProjectForumAccessEvent(db: ReturnType<typeof createDb>, workspaceId: string, projectId: string) {
+  const eventId = createId("obx");
+
+  const now = new Date();
+
+  await db.insert(discordOutboxEvents).values({
+    id: eventId,
+
+    workspaceId,
+
+    aggregateType: "project_forum",
+
+    aggregateId: projectId,
+
+    eventType: "project_forum.access",
+
+    status: "pending",
+
+    dispatchAttemptCount: 0,
+
+    lastDispatchError: null,
+
+    dispatchedAt: null,
+
+    createdAt: now,
+
+    updatedAt: now,
+  });
+
+  return eventId;
+}
+
 projectsRoutes.get("/", requireAuth, requirePermission("projects.view"), async (c) => {
   const auth = c.var.auth;
   const db = createDb(c.env.flow_db);
@@ -951,7 +992,9 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
 
   const visibility = input.visibility ?? project.visibility;
 
-  if (visibility !== project.visibility && !canManageProjectVisibility(auth.workspace.permissions)) {
+  const visibilityChanged = visibility !== project.visibility;
+
+  if (visibilityChanged && !canManageProjectVisibility(auth.workspace.permissions)) {
     return c.json(
       {
         error: {
@@ -1088,6 +1131,14 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
 
     updatedAt: now.toISOString(),
   };
+
+  if (visibilityChanged) {
+    const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
+
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
+    );
+  }
 
   return c.json({
     data,
@@ -1452,6 +1503,12 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.ass
     leadPosition: membership.leadPosition,
   };
 
+  const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
+
+  c.executionCtx.waitUntil(
+    dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
+  );
+
   return c.json({
     data,
   });
@@ -1598,6 +1655,12 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
   if (!removedLead) {
     await db.batch([taskAssignmentDelete, legacyAssigneeClear, taskLeadClear, projectMemberDelete]);
 
+    const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
+
+    c.executionCtx.waitUntil(
+      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
+    );
+
     return c.json({
       data: {
         success: true as const,
@@ -1642,6 +1705,12 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
 
     projectMemberDelete,
   ]);
+
+  const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
+
+  c.executionCtx.waitUntil(
+    dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
+  );
 
   return c.json({
     data: {

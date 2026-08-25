@@ -1,9 +1,29 @@
 import { apiFetch } from "@/lib/api";
 
-import type { UpdateDiscordReminderSettingsInput, DiscordCategoriesResponse, DiscordIntegrationResponse, UpdateDiscordIntegrationInput, UpdateDiscordProjectCategoryInput } from "../types";
+import type { UpdateDiscordReminderSettingsInput, DiscordCategoriesResponse, DiscordIntegrationResponse, DiscordRolesResponse, UpdateDiscordIntegrationInput, UpdateDiscordProjectCategoryInput, UpdateDiscordWorkspaceRoleInput } from "../types";
 
 export async function getDiscordCategories() {
   const response = await apiFetch<DiscordCategoriesResponse>("/api/integrations/discord/categories");
+
+  return response.data;
+}
+
+export async function getDiscordRoles() {
+  const response = await apiFetch<DiscordRolesResponse>("/api/integrations/discord/roles");
+
+  return response.data;
+}
+
+export async function updateDiscordWorkspaceRole(input: UpdateDiscordWorkspaceRoleInput) {
+  const response = await apiFetch<DiscordIntegrationResponse>("/api/integrations/discord/workspace-role", {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(input),
+  });
 
   return response.data;
 }

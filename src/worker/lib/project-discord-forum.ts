@@ -1,10 +1,22 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
+
+import { builtInRoleDefinitions } from "../../shared/roles";
 
 import { createDb } from "../db";
 
-import { projectDiscordForums, projects, workspaceDiscordIntegrations } from "../db/schema";
+import { projectDiscordForums, projectMembers, projects, users, workspaceDiscordIntegrations, workspaceMembers, workspaceRolePermissions } from "../db/schema";
 
-import { createDiscordForumChannel, DISCORD_GUILD_CATEGORY_TYPE, DISCORD_GUILD_FORUM_TYPE, listDiscordGuildChannels } from "./discord-api";
+import {
+  createDiscordForumChannel,
+  DISCORD_GUILD_CATEGORY_TYPE,
+  DISCORD_GUILD_FORUM_TYPE,
+  DISCORD_READ_MESSAGE_HISTORY,
+  DISCORD_SEND_MESSAGES,
+  DISCORD_VIEW_CHANNEL,
+  listDiscordGuildChannels,
+  modifyDiscordChannelOverwrites,
+  type DiscordOverwrite,
+} from "./discord-api";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -99,6 +111,257 @@ function resolveErrorMessage(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "Unknown Discord forum provisioning error";
 
   return message.slice(0, MAX_LAST_ERROR_LENGTH);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  AKSES FORUM DISCORD — sinkron dengan visibilitas project di Flow
+// ════════════════════════════════════════════════════════════════════
+
+const FORUM_ACCESS_BITS = DISCORD_VIEW_CHANNEL | DISCORD_SEND_MESSAGES | DISCORD_READ_MESSAGE_HISTORY;
+
+/*
+ * Rencana akses forum:
+ * - private       → kunci total, hanya anggota
+ *                   project + pemegang izin
+ *                   projects.private.view_all
+ * - workspaceRole → kunci, tapi role Discord
+ *                   yang dipilih di pengaturan
+ *                   integrasi tetap bisa akses
+ * - open          → tanpa overwrite (default)
+ */
+type ForumAccessPlan =
+  | {
+      mode: "private";
+
+      discordUserIds: string[];
+    }
+  | {
+      mode: "workspaceRole";
+
+      discordRoleId: string;
+    }
+  | {
+      mode: "open";
+    };
+
+function buildForumOverwrites(plan: ForumAccessPlan, guildId: string): DiscordOverwrite[] {
+  if (plan.mode === "private") {
+    return [
+      {
+        id: guildId,
+
+        type: 0,
+
+        allow: 0,
+
+        deny: FORUM_ACCESS_BITS,
+      },
+
+      ...plan.discordUserIds.map((discordUserId) => ({
+        id: discordUserId,
+
+        type: 1 as const,
+
+        allow: FORUM_ACCESS_BITS,
+
+        deny: 0,
+      })),
+    ];
+  }
+
+  if (plan.mode === "workspaceRole") {
+    return [
+      {
+        id: guildId,
+
+        type: 0,
+
+        allow: 0,
+
+        deny: FORUM_ACCESS_BITS,
+      },
+
+      {
+        id: plan.discordRoleId,
+
+        type: 0,
+
+        allow: FORUM_ACCESS_BITS,
+
+        deny: 0,
+      },
+    ];
+  }
+
+  return [];
+}
+
+/*
+ * Menghitung rencana akses dari data D1.
+ * Dipisah dari pemanggilan Discord agar
+ * provisioning (channel id belum tersimpan)
+ * dan resync (event member/visibility) bisa
+ * memakai logika yang sama.
+ */
+async function resolveForumAccessPlan(db: Db, projectId: string): Promise<ForumAccessPlan> {
+  const [context] = await db
+    .select({
+      visibility: projects.visibility,
+
+      workspaceId: projects.workspaceId,
+
+      workspaceRoleId: workspaceDiscordIntegrations.workspaceRoleId,
+    })
+    .from(projects)
+    .leftJoin(workspaceDiscordIntegrations, eq(workspaceDiscordIntegrations.workspaceId, projects.workspaceId))
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  if (!context || context.visibility !== "private") {
+    if (context?.workspaceRoleId) {
+      return {
+        mode: "workspaceRole",
+
+        discordRoleId: context.workspaceRoleId,
+      };
+    }
+
+    return {
+      mode: "open",
+    };
+  }
+
+  /*
+   * Anggota project yang punya akun Discord
+   * ter-link. Yang belum ter-link dilewati —
+   * mereka tetap bisa lewat web Flow.
+   */
+  const memberRows = await db
+    .select({
+      discordUserId: users.discordUserId,
+    })
+    .from(projectMembers)
+    .innerJoin(users, eq(users.id, projectMembers.userId))
+    .where(and(eq(projectMembers.projectId, projectId), isNotNull(users.discordUserId)));
+
+  /*
+   * Pemegang izin projects.private.view_all:
+   * role bawaan (owner/admin) + role kustom
+   * yang punya permission tersebut.
+   */
+  const builtinKeysWithViewAll = builtInRoleDefinitions.filter((role) => role.permissions.includes("projects.private.view_all")).map((role) => role.key);
+
+  const holderRows = await db
+    .select({
+      discordUserId: users.discordUserId,
+
+      builtinRole: workspaceMembers.role,
+
+      customPermissionKey: workspaceRolePermissions.permissionKey,
+    })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(users.id, workspaceMembers.userId))
+    .leftJoin(workspaceRolePermissions, eq(workspaceRolePermissions.roleId, workspaceMembers.customRoleId))
+    .where(eq(workspaceMembers.workspaceId, context.workspaceId));
+
+  const allowedDiscordUserIds = new Set<string>();
+
+  for (const member of memberRows) {
+    if (member.discordUserId) {
+      allowedDiscordUserIds.add(member.discordUserId);
+    }
+  }
+
+  for (const holder of holderRows) {
+    if (!holder.discordUserId) {
+      continue;
+    }
+
+    const isBuiltinHolder = holder.builtinRole !== null && builtinKeysWithViewAll.includes(holder.builtinRole);
+
+    const isCustomHolder = holder.customPermissionKey === "projects.private.view_all";
+
+    if (isBuiltinHolder || isCustomHolder) {
+      allowedDiscordUserIds.add(holder.discordUserId);
+    }
+  }
+
+  return {
+    mode: "private",
+
+    discordUserIds: [...allowedDiscordUserIds],
+  };
+}
+
+export type ApplyProjectForumAccessResult =
+  | {
+      status: "skipped";
+
+      reason: "mapping_missing" | "forum_not_ready" | "guild_not_configured";
+    }
+  | {
+      status: "applied";
+
+      projectId: string;
+
+      forumChannelId: string;
+
+      restricted: boolean;
+    };
+
+/*
+ * Menerapkan rencana akses ke kanal forum
+ * yang sudah ready. Dipanggil oleh consumer
+ * untuk event project_forum.access.
+ */
+export async function applyProjectForumAccess(db: Db, botToken: string, projectId: string): Promise<ApplyProjectForumAccessResult> {
+  const [mapping] = await db
+    .select({
+      forumChannelId: projectDiscordForums.forumChannelId,
+
+      provisioningStatus: projectDiscordForums.provisioningStatus,
+
+      guildId: projectDiscordForums.guildId,
+    })
+    .from(projectDiscordForums)
+    .where(eq(projectDiscordForums.projectId, projectId))
+    .limit(1);
+
+  if (!mapping) {
+    return {
+      status: "skipped",
+
+      reason: "mapping_missing",
+    };
+  }
+
+  if (mapping.provisioningStatus !== "ready" || !mapping.forumChannelId || !mapping.guildId) {
+    return {
+      status: "skipped",
+
+      reason: "forum_not_ready",
+    };
+  }
+
+  const plan = await resolveForumAccessPlan(db, projectId);
+
+  await modifyDiscordChannelOverwrites(botToken, {
+    channelId: mapping.forumChannelId,
+
+    overwrites: buildForumOverwrites(plan, mapping.guildId),
+
+    auditReason: `Flow project forum access sync: ${projectId}`,
+  });
+
+  return {
+    status: "applied",
+
+    projectId,
+
+    forumChannelId: mapping.forumChannelId,
+
+    restricted: plan.mode !== "open",
+  };
 }
 
 export async function ensureProjectDiscordForumPending(db: Db, workspaceId: string, projectId: string) {
@@ -475,6 +738,24 @@ export async function provisionProjectDiscordForum(db: Db, botToken: string, pro
     if (forum.type !== DISCORD_GUILD_FORUM_TYPE) {
       throw new Error("Discord returned an unexpected channel type while provisioning the project Forum");
     }
+
+    /*
+     * Terapkan akses SEBELUM status ready.
+     *
+     * Kalau penerapan overwrites gagal,
+     * provisioning dianggap gagal dan antrean
+     * akan mencoba ulang — forum tidak pernah
+     * tertinggal dalam keadaan publik.
+     */
+    const accessPlan = await resolveForumAccessPlan(db, projectId);
+
+    await modifyDiscordChannelOverwrites(botToken, {
+      channelId: forum.id,
+
+      overwrites: buildForumOverwrites(accessPlan, currentGuildId),
+
+      auditReason: `Flow project forum provisioning: ${projectId}`,
+    });
 
     const readyAt = new Date();
 

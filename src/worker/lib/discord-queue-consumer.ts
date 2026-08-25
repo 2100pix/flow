@@ -11,7 +11,7 @@ import type { AppBindings } from "../types/app-env";
 
 import type { DiscordOutboxQueueMessage } from "../types/discord-queue";
 
-import { provisionProjectDiscordForum } from "./project-discord-forum";
+import { applyProjectForumAccess, provisionProjectDiscordForum } from "./project-discord-forum";
 import { markDiscordOutboxEventDispatched, reconcileDiscordOutboxEventDispatched, returnDiscordOutboxEventToPending } from "./discord-outbox";
 
 type Db = ReturnType<typeof createDb>;
@@ -338,6 +338,50 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
       eventId,
 
       reason: "mapping_missing",
+    };
+  }
+
+  if (event.aggregateType === "project_forum" && event.eventType === "project_forum.access") {
+    await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+    const accessResult = await applyProjectForumAccess(db, botToken, event.aggregateId);
+
+    if (accessResult.status === "applied") {
+      await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
+
+      return {
+        status: "processed",
+
+        eventId,
+
+        aggregateType: "project_forum",
+
+        aggregateId: accessResult.projectId,
+      };
+    }
+
+    if (accessResult.reason === "forum_not_ready") {
+      await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because project forum is not ready yet");
+
+      return {
+        status: "deferred",
+
+        eventId,
+
+        reason: "forum_not_ready",
+      };
+    }
+
+    await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Project forum access skipped: ${accessResult.reason}`);
+
+    return {
+      status: "processed",
+
+      eventId,
+
+      aggregateType: "project_forum",
+
+      aggregateId: event.aggregateId,
     };
   }
 

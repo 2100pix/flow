@@ -8,6 +8,14 @@ export const DISCORD_PUBLIC_THREAD_TYPE = 11;
 type DiscordErrorResponse = {
   code?: number;
   message?: string;
+
+  /*
+   * Detail validasi per-field dari Discord,
+   * contohnya saat Invalid Form Body (400).
+   * Bentuknya bervariasi, jadi hanya
+   * di-stringify untuk pesan error.
+   */
+  errors?: unknown;
 };
 
 export type DiscordGuildChannel = {
@@ -101,10 +109,32 @@ async function discordFetch<T>(botToken: string, path: string, init: RequestInit
   }
 
   if (!response.ok) {
-    // SAFETY: same untrusted payload parsed above; DiscordErrorResponse fields are optional so a mismatch degrades to a generic message.
-    const error = body as DiscordErrorResponse | null;
+      // SAFETY: same untrusted payload parsed above; DiscordErrorResponse fields are optional so a mismatch degrades to a generic message.
+      const error = body as DiscordErrorResponse | null;
 
-    throw new DiscordApiError(response.status, error?.code ?? null, error?.message ? `Discord API ${response.status}: ${error.message}` : `Discord API request failed with status ${response.status}`);
+      /*
+       * Sertakan detail errors per-field dari
+       * Discord bila ada (mis. Invalid Form Body)
+       * supaya penyebab kegagalan langsung terlihat
+       * di lastError tanpa perlu debugging manual.
+       */
+      let detail = "";
+
+      if (error?.errors) {
+        try {
+          detail = ` :: ${JSON.stringify(error.errors).slice(0, 500)}`;
+        } catch {
+          detail = "";
+        }
+      }
+
+      throw new DiscordApiError(
+        response.status,
+        error?.code ?? null,
+        error?.message
+          ? `Discord API ${response.status}: ${error.message}${detail}`
+          : `Discord API request failed with status ${response.status}${detail}`,
+      );
   }
 
   // SAFETY: on 2xx the payload is trusted to match the contract declared by the calling wrapper function.
@@ -136,8 +166,35 @@ type CreateDiscordForumChannelInput = {
   name: string;
   topic: string;
   parentId: string | null;
+  permissionOverwrites?: DiscordOverwrite[];
   auditReason: string;
 };
+
+/*
+ * Overwrite izin kanal Discord.
+ * type: 0 = role, 1 = member.
+ * allow/deny berupa bitmask angka yang
+ * diserialisasi Discord sebagai string.
+ */
+export type DiscordOverwrite = {
+  id: string;
+
+  type: 0 | 1;
+
+  allow: number;
+
+  deny: number;
+};
+
+/*
+ * Bitmask izin yang dipakai Flow untuk
+ * mengunci akses Forum project.
+ */
+export const DISCORD_VIEW_CHANNEL = 1 << 10;
+
+export const DISCORD_SEND_MESSAGES = 1 << 11;
+
+export const DISCORD_READ_MESSAGE_HISTORY = 1 << 16;
 
 type CreateDiscordForumChannelBody = {
   name: string;
@@ -147,6 +204,16 @@ type CreateDiscordForumChannelBody = {
   topic: string;
 
   parent_id?: string;
+
+  permission_overwrites?: Array<{
+    id: string;
+
+    type: 0 | 1;
+
+    allow: string;
+
+    deny: string;
+  }>;
 };
 
 export function createDiscordForumChannel(botToken: string, input: CreateDiscordForumChannelInput) {
@@ -162,6 +229,18 @@ export function createDiscordForumChannel(botToken: string, input: CreateDiscord
     body.parent_id = input.parentId;
   }
 
+  if (input.permissionOverwrites && input.permissionOverwrites.length > 0) {
+    body.permission_overwrites = input.permissionOverwrites.map((overwrite) => ({
+      id: overwrite.id,
+
+      type: overwrite.type,
+
+      allow: String(overwrite.allow),
+
+      deny: String(overwrite.deny),
+    }));
+  }
+
   return discordFetch<DiscordGuildChannel>(botToken, `/guilds/${encodeURIComponent(input.guildId)}/channels`, {
     method: "POST",
 
@@ -173,6 +252,47 @@ export function createDiscordForumChannel(botToken: string, input: CreateDiscord
 
     body: JSON.stringify(body),
   });
+}
+
+/*
+ * Mengganti seluruh permission overwrites
+ * sebuah kanal (semantik Discord: full
+ * replace). Dipakai untuk mengunci/membuka
+ * Forum project sesuai visibilitas Flow.
+ */
+export function modifyDiscordChannelOverwrites(botToken: string, input: { channelId: string; overwrites: DiscordOverwrite[]; auditReason: string }) {
+  return discordFetch<DiscordGuildChannel>(botToken, `/channels/${encodeURIComponent(input.channelId)}`, {
+    method: "PATCH",
+
+    headers: {
+      "Content-Type": "application/json",
+
+      "X-Audit-Log-Reason": encodeURIComponent(input.auditReason),
+    },
+
+    body: JSON.stringify({
+      permission_overwrites: input.overwrites.map((overwrite) => ({
+        id: overwrite.id,
+
+        type: overwrite.type,
+
+        allow: String(overwrite.allow),
+
+        deny: String(overwrite.deny),
+      })),
+    }),
+  });
+}
+
+export type DiscordRole = {
+  id: string;
+
+  name: string;
+};
+
+// Daftar role di server Discord — untuk dropdown pengaturan integrasi.
+export function listDiscordGuildRoles(botToken: string, guildId: string) {
+  return discordFetch<DiscordRole[]>(botToken, `/guilds/${encodeURIComponent(guildId)}/roles`);
 }
 
 export function listActiveDiscordGuildThreads(botToken: string, guildId: string) {

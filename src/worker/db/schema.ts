@@ -69,6 +69,8 @@ export const workspaceDiscordIntegrations = sqliteTable(
 
     projectCategoryId: text("project_category_id"),
 
+    workspaceRoleId: text("workspace_role_id"),
+
     remindersEnabled: integer("reminders_enabled", {
       mode: "boolean",
     })
@@ -1036,7 +1038,7 @@ export const discordOutboxEvents = sqliteTable(
     aggregateId: text("aggregate_id").notNull(),
 
     eventType: text("event_type", {
-      enum: ["project_forum.provision", "task_thread.provision", "task_thread.sync", "task_reminder.send"],
+      enum: ["project_forum.provision", "project_forum.access", "task_thread.provision", "task_thread.sync", "task_reminder.send"],
     }).notNull(),
 
     status: text("status", {

@@ -20,6 +20,8 @@ export type DiscordIntegrationDto = {
 
   projectCategoryId: string | null;
 
+  workspaceDiscordRoleId: string | null;
+
   reminders: DiscordReminderSettingsDto;
 
   connectedAt: string | null;
@@ -37,9 +39,7 @@ export type UpdateDiscordIntegrationInput = z.infer<typeof updateDiscordIntegrat
 
 export const updateDiscordReminderSettingsSchema = z.object({
   enabled: z.boolean(),
-
   timeZone: z.string().trim().min(1).max(100),
-
   hourLocal: z.number().int().min(0).max(23),
 });
 
@@ -60,3 +60,19 @@ export const updateDiscordProjectCategorySchema = z.object({
 });
 
 export type UpdateDiscordProjectCategoryInput = z.infer<typeof updateDiscordProjectCategorySchema>;
+
+export type DiscordRoleDto = {
+  id: string;
+
+  name: string;
+};
+
+export type DiscordRolesResponse = {
+  data: DiscordRoleDto[];
+};
+
+export const updateDiscordWorkspaceRoleSchema = z.object({
+  workspaceDiscordRoleId: z.string().trim().regex(/^\d+$/).nullable(),
+});
+
+export type UpdateDiscordWorkspaceRoleInput = z.infer<typeof updateDiscordWorkspaceRoleSchema>;
