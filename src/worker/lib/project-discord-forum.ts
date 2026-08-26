@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { builtInRoleDefinitions } from "../../shared/roles";
 
@@ -257,7 +257,7 @@ async function resolveForumAccessPlan(db: Db, projectId: string): Promise<ForumA
     })
     .from(projectMembers)
     .innerJoin(users, eq(users.id, projectMembers.userId))
-    .where(and(eq(projectMembers.projectId, projectId), isNotNull(users.discordUserId)));
+    .where(and(eq(projectMembers.projectId, projectId), isNotNull(users.discordUserId), sql`${users.discordUserId} GLOB '[0-9]*'`));
 
   /*
    * Pemegang izin projects.private.view_all:
@@ -277,7 +277,7 @@ async function resolveForumAccessPlan(db: Db, projectId: string): Promise<ForumA
     .from(workspaceMembers)
     .innerJoin(users, eq(users.id, workspaceMembers.userId))
     .leftJoin(workspaceRolePermissions, eq(workspaceRolePermissions.roleId, workspaceMembers.customRoleId))
-    .where(eq(workspaceMembers.workspaceId, context.workspaceId));
+    .where(and(eq(workspaceMembers.workspaceId, context.workspaceId), sql`${users.discordUserId} GLOB '[0-9]*'`));
 
   const allowedDiscordUserIds = new Set<string>();
 
@@ -374,7 +374,27 @@ export async function insertForumAccessSyncForWorkspace(db: Db, workspaceId: str
   for (const target of targets) {
     const eventId = createId("obx");
 
-    await db.insert(discordOutboxEvents).values({
+    /*
+     * Hapus dulu event access pending lama untuk
+     * project yang sama (unique index pada
+     * event_type + aggregate_id).
+     *
+     * Inilah koalesensi burst: sepuluh perubahan
+     * role berturut-turut hanya menyisakan SATU
+     * event terbaru per forum — tidak menumpuk
+     * panggilan Discord yang redundan.
+     */
+    const deletePrevious = db.delete(discordOutboxEvents).where(
+      and(
+        eq(discordOutboxEvents.aggregateId, target.projectId),
+
+        eq(discordOutboxEvents.eventType, "project_forum.access"),
+
+        eq(discordOutboxEvents.status, "pending"),
+      ),
+    );
+
+    const insertLatest = db.insert(discordOutboxEvents).values({
       id: eventId,
 
       workspaceId,
@@ -397,6 +417,8 @@ export async function insertForumAccessSyncForWorkspace(db: Db, workspaceId: str
 
       updatedAt: now,
     });
+
+    await db.batch([deletePrevious, insertLatest]);
 
     events.push({
       eventId,
