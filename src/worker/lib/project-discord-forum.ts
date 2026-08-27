@@ -3,11 +3,9 @@ import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { builtInRoleDefinitions } from "../../shared/roles";
 
 import { createDb } from "../db";
-
 import { createId } from "../lib/id";
 
 import { discordOutboxEvents, projectDiscordForums, projectMembers, projects, users, workspaceDiscordIntegrations, workspaceMembers, workspaceRolePermissions } from "../db/schema";
-
 import {
   createDiscordForumChannel,
   DISCORD_GUILD_CATEGORY_TYPE,
@@ -23,7 +21,6 @@ import {
 type Db = ReturnType<typeof createDb>;
 
 const PROVISION_LEASE_MS = 60_000;
-
 const MAX_LAST_ERROR_LENGTH = 1_000;
 
 export type EnsureProjectDiscordForumResult =

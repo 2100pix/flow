@@ -18,15 +18,10 @@ const MAX_REMINDER_ERROR_LENGTH = 1_000;
 function resolveLocalClock(now: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
-
     year: "numeric",
-
     month: "2-digit",
-
     day: "2-digit",
-
     hour: "2-digit",
-
     hourCycle: "h23",
   }).formatToParts(now);
 
@@ -50,15 +45,12 @@ function resolveLocalClock(now: Date, timeZone: string) {
 
 function addDaysToIsoDate(value: string, amount: number) {
   const [year, month, day] = value.split("-").map(Number);
-
   const date = new Date(Date.UTC(year, month - 1, day + amount));
-
   return date.toISOString().slice(0, 10);
 }
 
 async function resolveStableId(prefix: string, value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 
   return `${prefix}_${hex.slice(0, 32)}`;
@@ -68,22 +60,15 @@ async function createReminderIntent(
   db: Db,
   input: {
     workspaceId: string;
-
     taskId: string;
-
     userId: string;
-
     dueDate: string;
-
     kind: ReminderKind;
   },
 ) {
   const identity = [input.taskId, input.userId, input.dueDate, input.kind].join(":");
-
   const reminderId = await resolveStableId("drm", identity);
-
   const outboxEventId = await resolveStableId("obx", `task_reminder.send:${reminderId}`);
-
   const now = new Date();
 
   await db.batch([
@@ -91,25 +76,15 @@ async function createReminderIntent(
       .insert(taskDiscordReminders)
       .values({
         id: reminderId,
-
         workspaceId: input.workspaceId,
-
         taskId: input.taskId,
-
         userId: input.userId,
-
         dueDate: input.dueDate,
-
         kind: input.kind,
-
         deliveryStatus: "pending",
-
         lastError: null,
-
         sentAt: null,
-
         createdAt: now,
-
         updatedAt: now,
       })
       .onConflictDoNothing(),
@@ -118,25 +93,15 @@ async function createReminderIntent(
       .insert(discordOutboxEvents)
       .values({
         id: outboxEventId,
-
         workspaceId: input.workspaceId,
-
         aggregateType: "task_reminder",
-
         aggregateId: reminderId,
-
         eventType: "task_reminder.send",
-
         status: "pending",
-
         dispatchAttemptCount: 0,
-
         lastDispatchError: null,
-
         dispatchedAt: null,
-
         createdAt: now,
-
         updatedAt: now,
       })
       .onConflictDoNothing(),
@@ -144,24 +109,19 @@ async function createReminderIntent(
 
   return {
     reminderId,
-
     outboxEventId,
   };
 }
 
 type ReminderWindow = {
   hourReached: boolean;
-
   dueToday: string;
-
   dueTomorrow: string;
 };
 
 type ReminderCandidate = {
   taskId: string;
-
   dueDate: string;
-
   leadUserId: string | null;
 };
 
@@ -169,16 +129,13 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
   const integrations = await db
     .select({
       workspaceId: workspaceDiscordIntegrations.workspaceId,
-
       timeZone: workspaceDiscordIntegrations.reminderTimeZone,
-
       hourLocal: workspaceDiscordIntegrations.reminderHourLocal,
     })
     .from(workspaceDiscordIntegrations)
     .where(
       and(
         eq(workspaceDiscordIntegrations.enabled, true),
-
         eq(workspaceDiscordIntegrations.remindersEnabled, true),
 
         isNotNull(workspaceDiscordIntegrations.guildId),
@@ -204,7 +161,6 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
       .where(eq(workspaceMembers.workspaceId, integration.workspaceId));
 
     const zoneByUserId = new Map<string, string>();
-
     const userIdsByZone = new Map<string, Set<string>>();
 
     for (const member of memberRows) {
@@ -217,15 +173,11 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
       if (bucket) {
         bucket.add(member.userId);
       } else {
-        userIdsByZone.set(
-          zone,
-          new Set([member.userId]),
-        );
+        userIdsByZone.set(zone, new Set([member.userId]));
       }
     }
 
     const windowsByZone = new Map<string, ReminderWindow>();
-
     const candidatesByDateRange = new Map<string, ReminderCandidate[]>();
 
     for (const [zone] of userIdsByZone) {
@@ -275,17 +227,13 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
           .where(
             and(
               eq(projects.workspaceId, integration.workspaceId),
-
               isNull(projects.archivedAt),
-
               isNull(tasks.archivedAt),
 
               ne(tasks.status, "done"),
-
               ne(tasks.status, "cancelled"),
 
               isNotNull(tasks.dueDate),
-
               inArray(tasks.dueDate, [window.dueToday, window.dueTomorrow]),
             ),
           );
@@ -294,7 +242,6 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
           taskId: row.taskId,
 
           dueDate: row.dueDate ?? "",
-
           leadUserId: row.leadUserId,
         }));
 
@@ -338,13 +285,9 @@ export async function materializeDiscordTaskReminders(db: Db, now = new Date()) 
         for (const userId of zoneRecipients) {
           await createReminderIntent(db, {
             workspaceId: integration.workspaceId,
-
             taskId: task.taskId,
-
             userId,
-
             dueDate: task.dueDate,
-
             kind,
           });
 
@@ -370,7 +313,6 @@ async function cancelReminder(db: Db, reminderId: string, reason: string) {
     .update(taskDiscordReminders)
     .set({
       deliveryStatus: "cancelled",
-
       lastError: reason.slice(0, MAX_REMINDER_ERROR_LENGTH),
 
       updatedAt: new Date(),
@@ -381,21 +323,16 @@ async function cancelReminder(db: Db, reminderId: string, reason: string) {
 export type DeliverDiscordTaskReminderResult =
   | {
       status: "sent";
-
       reminderId: string;
     }
   | {
       status: "cancelled";
-
       reminderId: string;
-
       reason: string;
     }
   | {
       status: "error";
-
       reminderId: string;
-
       message: string;
     };
 
@@ -403,55 +340,38 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
   const [reminder] = await db
     .select({
       id: taskDiscordReminders.id,
-
       workspaceId: taskDiscordReminders.workspaceId,
-
       taskId: taskDiscordReminders.taskId,
-
       userId: taskDiscordReminders.userId,
 
       dueDate: taskDiscordReminders.dueDate,
-
       kind: taskDiscordReminders.kind,
-
       deliveryStatus: taskDiscordReminders.deliveryStatus,
-
       discordUserId: users.discordUserId,
-
       userTimeZone: users.timeZone,
 
       taskTitle: tasks.title,
-
       taskNumber: tasks.taskNumber,
-
       taskDueDate: tasks.dueDate,
-
       taskStatus: tasks.status,
-
       taskArchivedAt: tasks.archivedAt,
 
       taskLeadUserId: tasks.leadUserId,
-
       projectId: projects.id,
 
       projectName: projects.name,
-
       projectCodeOverride: projects.projectCodeOverride,
 
       projectArchivedAt: projects.archivedAt,
 
       threadGuildId: taskDiscordThreads.guildId,
-
       threadId: taskDiscordThreads.threadId,
 
       timeZone: workspaceDiscordIntegrations.reminderTimeZone,
-
       hourLocal: workspaceDiscordIntegrations.reminderHourLocal,
 
       integrationEnabled: workspaceDiscordIntegrations.enabled,
-
       remindersEnabled: workspaceDiscordIntegrations.remindersEnabled,
-
       integrationGuildId: workspaceDiscordIntegrations.guildId,
     })
     .from(taskDiscordReminders)
@@ -466,9 +386,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
   if (!reminder) {
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "reminder_missing",
     };
   }
@@ -476,7 +394,6 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
   if (reminder.deliveryStatus === "sent") {
     return {
       status: "sent",
-
       reminderId,
     };
   }
@@ -484,9 +401,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
   if (reminder.deliveryStatus === "cancelled") {
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "already_cancelled",
     };
   }
@@ -496,9 +411,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "reminders_disabled",
     };
   }
@@ -508,9 +421,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "task_no_longer_eligible",
     };
   }
@@ -536,17 +447,13 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "recipient_no_longer_eligible",
     };
   }
 
   const effectiveZone = reminder.userTimeZone?.trim() || reminder.timeZone;
-
   const local = resolveLocalClock(now, effectiveZone);
-
   const expectedDate = reminder.kind === "due_today" ? reminder.dueDate : addDaysToIsoDate(reminder.dueDate, -1);
 
   if (local.date !== expectedDate || local.hour < reminder.hourLocal) {
@@ -554,17 +461,13 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
     return {
       status: "cancelled",
-
       reminderId,
-
       reason: "delivery_window_expired",
     };
   }
 
   const taskCode = `${resolveProjectCode(reminder.projectName, reminder.projectCodeOverride)}-${reminder.taskNumber}`;
-
   const timing = reminder.kind === "due_today" ? "is due today" : "is due tomorrow";
-
   const lines = [`Flow reminder: ${taskCode} ${timing}.`, reminder.taskTitle, `Due Date: ${formatDisplayDate(reminder.dueDate)}`];
 
   if (reminder.threadGuildId && reminder.threadId) {
@@ -573,33 +476,21 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
   try {
     const dm = await createDiscordDmChannel(botToken, reminder.discordUserId);
-
     await createDiscordMessage(botToken, dm.id, lines.join("\n"));
-
     const sentAt = new Date();
 
     await db
       .update(taskDiscordReminders)
       .set({
         deliveryStatus: "sent",
-
         lastError: null,
-
         sentAt,
-
         updatedAt: sentAt,
       })
-      .where(
-        and(
-          eq(taskDiscordReminders.id, reminderId),
-
-          eq(taskDiscordReminders.deliveryStatus, "pending"),
-        ),
-      );
+      .where(and(eq(taskDiscordReminders.id, reminderId), eq(taskDiscordReminders.deliveryStatus, "pending")));
 
     return {
       status: "sent",
-
       reminderId,
     };
   } catch (cause) {
@@ -617,9 +508,7 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
 
       return {
         status: "cancelled",
-
         reminderId,
-
         reason: "discord_dm_forbidden",
       };
     }
@@ -628,16 +517,13 @@ export async function deliverDiscordTaskReminder(db: Db, botToken: string, remin
       .update(taskDiscordReminders)
       .set({
         lastError: message,
-
         updatedAt: new Date(),
       })
       .where(eq(taskDiscordReminders.id, reminderId));
 
     return {
       status: "error",
-
       reminderId,
-
       message,
     };
   }

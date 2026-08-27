@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { createTaskResource, deleteTaskResource, getTaskResources, updateTaskResource } from "../api/task-resources";
-
 import type { CreateTaskResourceInput, UpdateTaskResourceInput } from "../types";
+import { taskActivityQueryKey } from "./use-task-activity";
 
 export function taskResourcesQueryKey(taskId: string) {
   return ["tasks", taskId, "resources"] as const;
@@ -31,9 +30,15 @@ export function useCreateTaskResource() {
     mutationFn: ({ taskId, input }: CreateVariables) => createTaskResource(taskId, input),
 
     onSuccess: async (_resource, variables) => {
-      await queryClient.invalidateQueries({
-        queryKey: taskResourcesQueryKey(variables.taskId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: taskResourcesQueryKey(variables.taskId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: taskActivityQueryKey(variables.taskId),
+        }),
+      ]);
     },
   });
 }

@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { Hono } from "hono";
 
 import { createTaskSchema, reorderTasksSchema, updateTaskSchema, type TaskAssigneeDto, type TaskDto, type TaskLeadDto } from "../../shared/contracts/tasks";
+import { TASK_ACTIVITY_PAGE_SIZE } from "../../shared/contracts/task-activity";
 import { resolveProjectCode } from "../../shared/project-code";
 import { defaultTaskWorkflowStatuses, updateTaskWorkflowSchema, type TaskWorkflowStatusDto } from "../../shared/contracts/task-workflow";
 import { createTaskResourceSchema, updateTaskResourceSchema, type TaskResourceDto } from "../../shared/contracts/task-resources";
@@ -11,6 +12,9 @@ import { discordOutboxEvents, projectDiscordForums, projectMembers, projectTaskS
 import { createId } from "../lib/id";
 import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { findAccessibleProject } from "../lib/project-access";
+import { buildTaskActivityInsert, listTaskActivity, type TaskActivityEntry } from "../lib/task-activity";
+import { resolvePersonName } from "../lib/person-name";
+import type { TaskActivityEvent } from "../../shared/contracts/task-activity";
 import { hasPermission, requireAuth, requirePermission } from "../middleware/auth";
 import { provisionTaskDiscordThread, syncTaskDiscordThread } from "../lib/task-discord-thread";
 
@@ -926,6 +930,29 @@ tasksRoutes.post("/projects/:projectId/tasks", requireAuth, requirePermission("t
     );
   }
 
+  /*
+   * TASK_CREATED dicatat dalam batch yang sama
+   * dengan insert task — atomik.
+   */
+  statements.push(
+    c.env.flow_db
+      .prepare(
+        `
+          INSERT INTO task_activity (
+            id,
+            task_id,
+            project_id,
+            actor_user_id,
+            event_type,
+            metadata,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, 'TASK_CREATED', NULL, ?)
+        `,
+      )
+      .bind(createId("act"), id, projectId, auth.user.id, nowSeconds),
+  );
+
   await c.env.flow_db.batch(statements);
 
   /*
@@ -1454,7 +1481,7 @@ tasksRoutes.patch("/projects/:projectId/tasks/reorder", requireAuth, requirePerm
 
   const statements = [...updateStatements, ...discordSyncStatements];
 
-  if (statements.length > 0) {
+if (statements.length > 0) {
     await c.env.flow_db.batch(statements);
   }
 
@@ -1516,6 +1543,54 @@ tasksRoutes.get("/tasks/:taskId", requireAuth, requirePermission("tasks.view"), 
   return c.json({
     data,
   });
+});
+
+tasksRoutes.get("/tasks/:taskId/activity", requireAuth, requirePermission("tasks.view"), async (c) => {
+  const auth = c.var.auth;
+
+  const taskId = c.req.param("taskId");
+
+  const db = createDb(c.env.flow_db);
+
+  const data = await loadTaskDto(db, taskId);
+
+  if (!data) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const access = await findAccessibleProject(db, auth, data.projectId);
+
+  if (!access) {
+    return c.json(
+      {
+        error: {
+          code: "TASK_NOT_FOUND",
+
+          message: "Task not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const cursor = c.req.query("cursor") || null;
+
+  const rawLimit = Number(c.req.query("limit"));
+
+  const limit = Number.isInteger(rawLimit) && rawLimit > 0 && rawLimit <= 100 ? rawLimit : TASK_ACTIVITY_PAGE_SIZE;
+
+  const result = await listTaskActivity(db, taskId, cursor, limit);
+
+  return c.json(result);
 });
 
 tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
@@ -1847,6 +1922,225 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
     }
   }
 
+  /*
+   * ── Activity: diff sebelum menulis ──
+   * `task` adalah snapshot before; resolved
+   * variables di atas adalah after.
+   */
+  const activityEntries: TaskActivityEntry[] = [];
+
+  const fieldChanges: Array<{
+    eventType: TaskActivityEvent;
+
+    before: string | null;
+
+    after: string | null;
+  }> = [];
+
+  if (task.status !== status) {
+    fieldChanges.push({
+      eventType: "STATUS_CHANGED",
+
+      before: task.status,
+
+      after: status,
+    });
+  }
+
+  if (task.priority !== priority) {
+    fieldChanges.push({
+      eventType: "PRIORITY_CHANGED",
+
+      before: task.priority,
+
+      after: priority,
+    });
+  }
+
+  if (task.leadUserId !== leadUserId) {
+    fieldChanges.push({
+      eventType: "LEAD_CHANGED",
+
+      before: task.leadUserId,
+
+      after: leadUserId,
+    });
+  }
+
+  if (task.startDate !== startDate) {
+    fieldChanges.push({
+      eventType: "START_DATE_CHANGED",
+
+      before: task.startDate,
+
+      after: startDate,
+    });
+  }
+
+  if (task.dueDate !== dueDate) {
+    fieldChanges.push({
+      eventType: "DUE_DATE_CHANGED",
+
+      before: task.dueDate,
+
+      after: dueDate,
+    });
+  }
+
+  const descriptionChanged = (task.description ?? "") !== (description ?? "");
+
+  const addedAssigneeIds: string[] = [];
+
+  const removedAssigneeIds: string[] = [];
+
+  if (assigneeIds !== undefined) {
+    const resolvedPreviousAssigneeIds = (
+      await db
+        .select({
+          userId: taskAssignees.userId,
+        })
+        .from(taskAssignees)
+        .where(eq(taskAssignees.taskId, taskId))
+    ).map((row) => row.userId);
+
+    for (const userId of assigneeIds) {
+      if (!resolvedPreviousAssigneeIds.includes(userId)) {
+        addedAssigneeIds.push(userId);
+      }
+    }
+
+    for (const userId of resolvedPreviousAssigneeIds) {
+      if (!assigneeIds.includes(userId)) {
+        removedAssigneeIds.push(userId);
+      }
+    }
+  }
+
+  const involvedUserIds = [
+    ...fieldChanges.filter((change) => change.eventType === "LEAD_CHANGED").flatMap((change) => [change.before, change.after]),
+
+    ...addedAssigneeIds,
+
+    ...removedAssigneeIds,
+  ].filter((value): value is string => value !== null);
+
+  const userNameById = new Map<string, string>();
+
+  if (involvedUserIds.length > 0) {
+    const involvedUsers = await db
+      .select({
+        id: users.id,
+
+        displayName: users.displayName,
+
+        firstName: users.firstName,
+
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(inArray(users.id, involvedUserIds));
+
+    for (const involvedUser of involvedUsers) {
+      userNameById.set(involvedUser.id, resolvePersonName(involvedUser));
+    }
+  }
+
+  for (const change of fieldChanges) {
+    if (change.eventType === "LEAD_CHANGED") {
+      activityEntries.push({
+        taskId,
+
+        projectId: task.projectId,
+
+        actorUserId: auth.user.id,
+
+        eventType: change.eventType,
+
+        metadata: {
+          before: change.before ? userNameById.get(change.before) ?? change.before : null,
+
+          after: change.after ? userNameById.get(change.after) ?? change.after : null,
+        },
+      });
+
+      continue;
+    }
+
+    activityEntries.push({
+      taskId,
+
+      projectId: task.projectId,
+
+      actorUserId: auth.user.id,
+
+      eventType: change.eventType,
+
+      metadata: {
+        before: change.before,
+
+        after: change.after,
+      },
+    });
+  }
+
+  if (descriptionChanged) {
+    activityEntries.push({
+      taskId,
+
+      projectId: task.projectId,
+
+      actorUserId: auth.user.id,
+
+      eventType: "DESCRIPTION_CHANGED",
+
+      metadata: {
+        oldLength: task.description?.length ?? 0,
+
+        newLength: description?.length ?? 0,
+      },
+    });
+  }
+
+  for (const addedUserId of addedAssigneeIds) {
+    activityEntries.push({
+      taskId,
+
+      projectId: task.projectId,
+
+      actorUserId: auth.user.id,
+
+      eventType: "ASSIGNEE_ADDED",
+
+      metadata: {
+        userId: addedUserId,
+
+        userName: userNameById.get(addedUserId) ?? addedUserId,
+      },
+    });
+  }
+
+  for (const removedUserId of removedAssigneeIds) {
+    activityEntries.push({
+      taskId,
+
+      projectId: task.projectId,
+
+      actorUserId: auth.user.id,
+
+      eventType: "ASSIGNEE_REMOVED",
+
+      metadata: {
+        userId: removedUserId,
+
+        userName: userNameById.get(removedUserId) ?? removedUserId,
+      },
+    });
+  }
+
+  const activityInsert = activityEntries.length > 0 ? buildTaskActivityInsert(db, activityEntries, now) : null;
+
+  const activityStatements = activityInsert ? [activityInsert] : [];
+
   const taskUpdate = db
     .update(tasks)
     .set({
@@ -1925,19 +2219,21 @@ tasksRoutes.patch("/tasks/:taskId", requireAuth, async (c) => {
       );
 
       if (discordSyncDelete && discordSyncInsert) {
-        await db.batch([taskUpdate, assignmentDelete, assignmentInsert, discordSyncDelete, discordSyncInsert]);
+        await db.batch([taskUpdate, assignmentDelete, assignmentInsert, ...activityStatements, discordSyncDelete, discordSyncInsert]);
       } else {
-        await db.batch([taskUpdate, assignmentDelete, assignmentInsert]);
+        await db.batch([taskUpdate, assignmentDelete, assignmentInsert, ...activityStatements]);
       }
     } else {
       if (discordSyncDelete && discordSyncInsert) {
-        await db.batch([taskUpdate, assignmentDelete, discordSyncDelete, discordSyncInsert]);
+        await db.batch([taskUpdate, assignmentDelete, ...activityStatements, discordSyncDelete, discordSyncInsert]);
       } else {
-        await db.batch([taskUpdate, assignmentDelete]);
+        await db.batch([taskUpdate, assignmentDelete, ...activityStatements]);
       }
     }
   } else if (discordSyncDelete && discordSyncInsert) {
-    await db.batch([taskUpdate, discordSyncDelete, discordSyncInsert]);
+    await db.batch([taskUpdate, ...activityStatements, discordSyncDelete, discordSyncInsert]);
+  } else if (activityStatements.length > 0) {
+    await db.batch([taskUpdate, ...activityStatements]);
   } else {
     await taskUpdate;
   }
@@ -2168,12 +2464,34 @@ tasksRoutes.post("/tasks/:taskId/resources", requireAuth, requirePermission("tas
 
   const discordSync = await createTaskDiscordSyncIntent(db, auth.workspace.id, task.id, now);
 
+  const activityInsert = buildTaskActivityInsert(
+    db,
+    [
+      {
+        taskId: task.id,
+
+        projectId: task.projectId,
+
+        actorUserId: auth.user.id,
+
+        eventType: "RESOURCE_ADDED",
+
+        metadata: {
+          title: resource.title ?? null,
+
+          resourceType: resource.type,
+        },
+      },
+    ],
+    now,
+  );
+
   if (discordSync) {
-    await db.batch([resourceInsert, taskTouch, discordSync.deletePrevious, discordSync.insertLatest]);
+    await db.batch([resourceInsert, taskTouch, activityInsert, discordSync.deletePrevious, discordSync.insertLatest]);
 
     c.executionCtx.waitUntil(dispatchTaskDiscordSyncImmediately(db, c.env.FLOW_DISCORD_QUEUE, auth.workspace.id, task.id, discordSync.eventId));
   } else {
-    await db.batch([resourceInsert, taskTouch]);
+    await db.batch([resourceInsert, taskTouch, activityInsert]);
   }
 
   const data: TaskResourceDto = {

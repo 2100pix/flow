@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-
 import {
   CalendarBlankIcon,
   CellSignalHighIcon,
@@ -18,19 +17,13 @@ import {
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
-
 import { Button } from "@/components/ui/button";
-
 import { Calendar } from "@/components/ui/calendar";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 
 import { useProjectMembers } from "@/features/members/hooks/use-project-members";
-
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 
 import type { TaskPriority, TaskStatus, TaskWorkflowStatusDto } from "@/features/tasks/types";
@@ -40,21 +33,15 @@ import { resolvePersonName } from "@/lib/person-name";
 type CreateTaskDialogProps = {
   open: boolean;
   projectId: string;
-
   statuses: TaskWorkflowStatusDto[];
-
   initialStatus: TaskStatus;
-
   onClose: () => void;
 };
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
-
   const month = String(date.getMonth() + 1).padStart(2, "0");
-
   const day = String(date.getDate()).padStart(2, "0");
-
   return `${year}-${month}-${day}`;
 }
 
@@ -104,18 +91,14 @@ function getInitials(name: string) {
 
 type PersonLike = {
   firstName?: string | null;
-
   lastName?: string | null;
-
   displayName: string;
 };
 
 function getName(person: PersonLike) {
   return resolvePersonName({
     firstName: person.firstName,
-
     lastName: person.lastName,
-
     displayName: person.displayName,
   });
 }
@@ -144,20 +127,7 @@ function TaskStatusIcon({ status }: { status: TaskStatus }) {
   }
 }
 
-function TaskStatusPicker({
-  value,
-  statuses,
-  disabled,
-  onValueChange,
-}: {
-  value: TaskStatus;
-
-  statuses: TaskWorkflowStatusDto[];
-
-  disabled: boolean;
-
-  onValueChange: (status: TaskStatus) => void;
-}) {
+function TaskStatusPicker({ value, statuses, disabled, onValueChange }: { value: TaskStatus; statuses: TaskWorkflowStatusDto[]; disabled: boolean; onValueChange: (status: TaskStatus) => void }) {
   const current = statuses.find((status) => status.statusKey === value);
 
   return (
@@ -229,17 +199,7 @@ const priorityLabels = {
 
 const NO_PRIORITY = "__flow_no_priority__";
 
-function TaskPriorityPicker({
-  value,
-  disabled,
-  onValueChange,
-}: {
-  value: TaskPriority | null;
-
-  disabled: boolean;
-
-  onValueChange: (priority: TaskPriority | null) => void;
-}) {
+function TaskPriorityPicker({ value, disabled, onValueChange }: { value: TaskPriority | null; disabled: boolean; onValueChange: (priority: TaskPriority | null) => void }) {
   return (
     <Select
       value={value ?? NO_PRIORITY}
@@ -286,26 +246,10 @@ function TaskPriorityPicker({
   );
 }
 
-function TaskAssigneePicker({
-  projectId,
-  value,
-  disabled,
-  onValueChange,
-}: {
-  projectId: string;
-
-  value: string[];
-
-  disabled: boolean;
-
-  onValueChange: (userIds: string[]) => void;
-}) {
+function TaskAssigneePicker({ projectId, value, disabled, onValueChange }: { projectId: string; value: string[]; disabled: boolean; onValueChange: (userIds: string[]) => void }) {
   const [open, setOpen] = useState(false);
-
   const { data: projectMembers = [], isPending, isError } = useProjectMembers(projectId, open && !disabled);
-
   const selectedSet = new Set(value);
-
   const orderedMembers = useMemo(
     () =>
       [...projectMembers].sort((first, second) => {
@@ -321,11 +265,8 @@ function TaskAssigneePicker({
   );
 
   const selectedMembers = orderedMembers.filter((member) => selectedSet.has(member.user.id));
-
   const visibleAvatars = selectedMembers.slice(0, 3);
-
   const hiddenCount = Math.max(selectedMembers.length - visibleAvatars.length, 0);
-
   const assigneeLabel = selectedMembers.length > 0 ? `Assignees: ${selectedMembers.map((member) => getName(member.user)).join(", ")}` : "Assignees";
 
   return (
@@ -424,21 +365,15 @@ function TaskDatePicker({
   onValueChange,
 }: {
   label: string;
-
   value: string | null;
-
   minDate?: string | null;
-
   disabled: boolean;
 
   onValueChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-
   const selected = parseDate(value);
-
   const minimum = parseDate(minDate ?? null);
-
   const formatted = formatDate(value);
 
   return (
@@ -466,9 +401,7 @@ function TaskDatePicker({
             if (!date) {
               return;
             }
-
             onValueChange(serializeDate(date));
-
             setOpen(false);
           }}
         />
@@ -479,27 +412,18 @@ function TaskDatePicker({
 
 export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onClose }: CreateTaskDialogProps) {
   const enabledStatuses = useMemo(() => [...statuses].filter((status) => status.enabled).sort((first, second) => first.position - second.position), [statuses]);
-
   const resolvedInitialStatus = enabledStatuses.some((status) => status.statusKey === initialStatus) ? initialStatus : (enabledStatuses[0]?.statusKey ?? "backlog");
 
   const [title, setTitle] = useState("");
-
   const [description, setDescription] = useState("");
 
   const [status, setStatus] = useState<TaskStatus>(resolvedInitialStatus);
-
   const [priority, setPriority] = useState<TaskPriority | null>(null);
-
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-
   const [startDate, setStartDate] = useState<string | null>(null);
-
   const [dueDate, setDueDate] = useState<string | null>(null);
-
   const createTask = useCreateTask();
-
   const effectiveStartDate = startDate ?? getLocalDateString();
-
   const dateRangeValid = !dueDate || dueDate >= effectiveStartDate;
 
   function close() {
@@ -565,22 +489,16 @@ export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onC
 
                 input: {
                   title: taskTitle,
-
                   description: description.trim() || undefined,
-
                   status,
-
                   priority,
-
                   assigneeIds,
-
                   /*
                    * Explicit browser-local
                    * date prevents the UTC
                    * rollover problem.
                    */
                   startDate: effectiveStartDate,
-
                   dueDate,
                 },
               },
@@ -685,9 +603,7 @@ export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onC
 
           <div className="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-2.5">
             <TaskStatusPicker value={status} statuses={enabledStatuses} disabled={createTask.isPending} onValueChange={setStatus} />
-
             <TaskPriorityPicker value={priority} disabled={createTask.isPending} onValueChange={setPriority} />
-
             <TaskAssigneePicker projectId={projectId} value={assigneeIds} disabled={createTask.isPending} onValueChange={setAssigneeIds} />
 
             <TaskDatePicker
@@ -710,7 +626,6 @@ export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onC
             <Button type="button" variant="secondary" size="lg" className="border border-border px-4 shadow-xs" disabled={createTask.isPending} onClick={close}>
               Cancel
             </Button>
-
             <Button type="submit" size="lg" className="px-4 shadow-xs" disabled={!title.trim() || !dateRangeValid || createTask.isPending}>
               {createTask.isPending ? "Creating…" : "Create task"}
             </Button>
@@ -720,4 +635,3 @@ export function CreateTaskDialog({ open, projectId, statuses, initialStatus, onC
     </Dialog>
   );
 }
-

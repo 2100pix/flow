@@ -23,11 +23,8 @@ export const dashboardRoutes = new Hono<DashboardEnv>();
 
 dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async (c) => {
   const auth = c.var.auth;
-
   const db = createDb(c.env.flow_db);
-
   const activeClients = await db.$count(clients, and(eq(clients.workspaceId, auth.workspace.id), eq(clients.status, "active"), isNull(clients.archivedAt)));
-
   const projectAccessRows = await db
     .select({
       id: projects.id,
@@ -38,9 +35,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
     .where(and(eq(projects.workspaceId, auth.workspace.id), isNull(projects.archivedAt)));
 
   const accessibleProjects = await filterAccessibleProjects(db, auth, projectAccessRows);
-
   const accessibleProjectIds = accessibleProjects.map((project) => project.id);
-
   const activeProjects = accessibleProjects.filter((project) => project.status === "active").length;
 
   const [taskSummary] =
@@ -153,19 +148,7 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
           .from(taskAssignees)
           .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
           .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(
-            and(
-              eq(taskAssignees.userId, auth.user.id),
-
-              inArray(projects.id, accessibleProjectIds),
-
-              ne(projects.status, "completed"),
-
-              isNull(tasks.archivedAt),
-
-              notInArray(tasks.status, ["done", "cancelled"]),
-            ),
-          )
+          .where(and(eq(taskAssignees.userId, auth.user.id), inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), notInArray(tasks.status, ["done", "cancelled"])))
       : [];
 
   const taskStatus = {
@@ -182,37 +165,18 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
       ? await db
           .select({
             id: tasks.id,
-
             projectId: projects.id,
-
             projectName: projects.name,
-
             title: tasks.title,
-
             status: tasks.status,
-
             priority: tasks.priority,
-
             dueDate: tasks.dueDate,
-
             updatedAt: tasks.updatedAt,
           })
           .from(taskAssignees)
           .innerJoin(tasks, eq(taskAssignees.taskId, tasks.id))
           .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(
-            and(
-              eq(taskAssignees.userId, auth.user.id),
-
-              inArray(projects.id, accessibleProjectIds),
-
-              ne(projects.status, "completed"),
-
-              isNull(tasks.archivedAt),
-
-              notInArray(tasks.status, ["done", "cancelled"]),
-            ),
-          )
+          .where(and(eq(taskAssignees.userId, auth.user.id), inArray(projects.id, accessibleProjectIds), ne(projects.status, "completed"), isNull(tasks.archivedAt), notInArray(tasks.status, ["done", "cancelled"])))
           .orderBy(desc(tasks.updatedAt))
           .limit(6)
       : [];
@@ -220,15 +184,10 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
     id: task.id,
 
     projectId: task.projectId,
-
     projectName: task.projectName,
-
     title: task.title,
-
     status: task.status,
-
     priority: task.priority,
-
     dueDate: task.dueDate,
   }));
 
@@ -237,17 +196,12 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
       ? await db
           .select({
             id: projects.id,
-
             clientId: clients.id,
 
             clientName: clients.name,
-
             name: projects.name,
-
             status: projects.status,
-
             dueDate: projects.dueDate,
-
             updatedAt: projects.updatedAt,
           })
           .from(projects)
@@ -329,18 +283,12 @@ dashboardRoutes.get("/", requireAuth, requirePermission("dashboard.view"), async
   const data: DashboardResponse["data"] = {
     counts: {
       activeClients,
-
       activeProjects,
-
       openTasks: Number(taskSummary?.openTasks ?? 0),
-
       myTasks: Number(myTaskCountRow?.count ?? 0),
     },
-
     taskStatus,
-
     myTasks,
-
     recentProjects,
   };
 

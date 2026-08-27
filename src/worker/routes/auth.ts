@@ -38,15 +38,10 @@ authRoutes.get("/discord", (c) => {
   });
 
   const authorizationUrl = new URL("https://discord.com/oauth2/authorize");
-
   authorizationUrl.searchParams.set("client_id", c.env.DISCORD_CLIENT_ID);
-
   authorizationUrl.searchParams.set("response_type", "code");
-
   authorizationUrl.searchParams.set("redirect_uri", c.env.DISCORD_REDIRECT_URI);
-
   authorizationUrl.searchParams.set("scope", "identify");
-
   authorizationUrl.searchParams.set("state", state);
 
   return c.redirect(authorizationUrl.toString());
@@ -56,7 +51,6 @@ authRoutes.get("/discord/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
   const error = c.req.query("error");
-
   const storedState = getCookie(c, OAUTH_STATE_COOKIE);
 
   const secure = new URL(c.req.url).protocol === "https:";

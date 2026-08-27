@@ -4,15 +4,10 @@ import { ApiError } from "@/lib/api";
 
 export function AccessPendingPage() {
   const continueAccess = useContinuePendingAccess();
-
   const errorCode = continueAccess.error instanceof ApiError ? continueAccess.error.code : null;
-
   const stillPending = errorCode === "ACCESS_REQUEST_PENDING";
-
   const rejected = errorCode === "ACCESS_REQUEST_REJECTED";
-
   const sessionUnavailable = errorCode === "PENDING_SESSION_REQUIRED" || errorCode === "PENDING_SESSION_INVALID" || errorCode === "PENDING_SESSION_EXPIRED";
-
   const unexpectedError = continueAccess.isError && !stillPending && !rejected && !sessionUnavailable;
 
   return (

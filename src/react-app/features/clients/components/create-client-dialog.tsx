@@ -8,7 +8,6 @@ import { useCreateClient } from "@/features/clients/hooks/use-create-client";
 
 export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
-
   const createClient = useCreateClient();
 
   if (!open) {
@@ -23,7 +22,6 @@ export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: 
             <h2 id="create-client-title" className="text-base font-semibold">
               Create client
             </h2>
-
             <p className="mt-1 text-sm text-muted-foreground">Add a client to this workspace.</p>
           </div>
 
@@ -36,7 +34,6 @@ export function CreateClientDialog({ open, onClose }: { open: boolean; onClose: 
           className="mt-5 space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-
             const value = name.trim();
 
             if (!value) {

@@ -28,14 +28,10 @@ import {
 type Db = ReturnType<typeof createDb>;
 
 const PROVISION_LEASE_MS = 60_000;
-
 const MAX_LAST_ERROR_LENGTH = 1_000;
-
 const MAX_DISCORD_MESSAGE_LENGTH = 2_000;
 
-// ════════════════════════════════════════════════════════════════════
-//  KONFIGURASI FORMAT PESAN DISCORD — silakan ubah sesuai selera Anda
-// ════════════════════════════════════════════════════════════════════
+//  KONFIGURASI FORMAT PESAN DISCORD
 
 // Domain aplikasi Flow, dipakai untuk link "buka task di Flow" pada pesan Discord.
 const FLOW_APP_BASE_URL = "https://flow.normalbase.workers.dev";
@@ -50,7 +46,7 @@ const STATUS_EMOJI = {
   cancelled: "🔴",
 } satisfies Record<TaskStatus, string>;
 
-// Tulisan cantik untuk tiap status task.
+// Tulisan untuk tiap status task.
 const STATUS_LABEL = {
   backlog: "Backlog",
   todo: "Todo",
@@ -68,7 +64,7 @@ const PRIORITY_EMOJI = {
   urgent: "🚨",
 } satisfies Record<TaskPriority, string>;
 
-// Tulisan cantik untuk tiap priority task.
+// Tulisan untuk tiap priority task.
 const PRIORITY_LABEL = {
   low: "Low",
   medium: "Medium",
@@ -79,65 +75,47 @@ const PRIORITY_LABEL = {
 export type ProvisionTaskDiscordThreadResult =
   | {
       status: "skipped";
-
       reason: "mapping_missing" | "integration_disabled" | "integration_not_connected" | "project_forum_not_ready";
     }
   | {
       status: "busy";
-
       taskId: string;
     }
   | {
       status: "ready";
-
       taskId: string;
-
       guildId: string;
-
       forumChannelId: string;
-
       threadId: string;
-
       initialMessageId: string;
 
       attemptCount: number;
-
       recovered: boolean;
     }
   | {
       status: "error";
-
       taskId: string;
 
       attemptCount: number;
-
       message: string;
     };
 
 export type SyncTaskDiscordThreadResult =
   | {
       status: "skipped";
-
       reason: "mapping_missing" | "mapping_not_ready" | "integration_disabled" | "integration_not_connected" | "project_forum_not_ready";
     }
   | {
       status: "synced";
-
       taskId: string;
-
       guildId: string;
-
       forumChannelId: string;
-
       threadId: string;
-
       initialMessageId: string;
     }
   | {
       status: "error";
-
       taskId: string;
-
       message: string;
     };
 function resolveErrorMessage(cause: unknown) {
@@ -174,13 +152,11 @@ function resolveTaskMarker(projectId: string, taskId: string) {
 // Emoji + label untuk status; fallback aman kalau nilai tak dikenal.
 function resolveStatusEmoji(status: string) {
   const parsed = taskStatusSchema.safeParse(status);
-
   return parsed.success ? STATUS_EMOJI[parsed.data] : "⬜";
 }
 
 function resolveStatusLabel(status: string) {
   const parsed = taskStatusSchema.safeParse(status);
-
   return parsed.success ? STATUS_LABEL[parsed.data] : status;
 }
 
@@ -198,7 +174,6 @@ function resolvePriorityParts(priority: string | null) {
 
   return {
     emoji: PRIORITY_EMOJI[parsed.data],
-
     label: PRIORITY_LABEL[parsed.data],
   };
 }
@@ -219,21 +194,13 @@ async function buildCanonicalTaskMessage(
   db: Db,
   task: {
     id: string;
-
     projectId: string;
-
     taskCode: string;
-
     description: string | null;
-
     status: string;
-
     priority: string | null;
-
     leadUserId: string | null;
-
     startDate: string | null;
-
     dueDate: string | null;
   },
 ) {
@@ -274,13 +241,9 @@ async function buildCanonicalTaskMessage(
   const resources = await db
     .select({
       type: taskResources.type,
-
       title: taskResources.title,
-
       url: taskResources.url,
-
       content: taskResources.content,
-
       position: taskResources.position,
     })
     .from(taskResources)
@@ -290,14 +253,14 @@ async function buildCanonicalTaskMessage(
   const lines: string[] = [];
 
   /*
-   * ── KODE TASK ──
+   * KODE TASK
    * Baris paling atas: kode task dalam tebal,
    * contoh: **FLOW-12**
    */
   lines.push(`**${task.taskCode}**`);
 
   /*
-   * ── DESCRIPTION ──
+   * DESCRIPTION
    * Judul sebagai heading Discord, lalu isi
    * description pada baris baru di bawahnya.
    */
@@ -305,14 +268,12 @@ async function buildCanonicalTaskMessage(
 
   if (description) {
     lines.push("");
-
     lines.push("### 📝 Description");
-
     lines.push(description);
   }
 
   /*
-   * ── ATRIBUT TASK ──
+   * ATRIBUT TASK
    * Status (ber-emoji warna), priority
    * (ber-emoji), tanggal, lead, assignees.
    */
@@ -343,7 +304,7 @@ async function buildCanonicalTaskMessage(
   }
 
   /*
-   * ── RESOURCES ──
+   * RESOURCES
    * Brief (dokumen): tiap brief jadi heading +
    * isinya di baris baru, seperti Description.
    *
@@ -363,9 +324,7 @@ async function buildCanonicalTaskMessage(
     const title = brief.title?.trim() || "Brief";
 
     lines.push("");
-
     lines.push(`### 📚 ${title}`);
-
     lines.push(content);
   }
 
@@ -380,7 +339,7 @@ async function buildCanonicalTaskMessage(
   }
 
   /*
-   * ── LINK KE FLOW ──
+   * LINK KE FLOW
    * Baris penutup berisi URL task di Flow.
    * Sekaligus menjadi marker unik untuk
    * crash-recovery (menggantikan Flow Task ID).
@@ -412,10 +371,10 @@ async function buildCanonicalTaskMessage(
  * Memasang reaksi emoji sesuai status task,
  * lalu membersihkan emoji status lama milik
  * bot supaya post selalu punya tepat satu
- * lingkaran warna.
+ * lingkaran warna
  *
  * Bersifat kosmetik: kegagalan di sini tidak
- * boleh menggagalkan provisioning/sinkronisasi.
+ * boleh menggagalkan provisioning/sinkronisasi
  */
 async function applyStatusReaction(botToken: string, channelId: string, messageId: string, status: string) {
   try {
@@ -434,7 +393,7 @@ async function applyStatusReaction(botToken: string, channelId: string, messageI
 
     await addDiscordMessageReaction(botToken, channelId, messageId, targetEmoji);
   } catch {
-    // Kosmetik saja — biarkan gagal senyap.
+    //
   }
 }
 
@@ -453,7 +412,6 @@ async function findExistingTaskThread(botToken: string, guildId: string, forumCh
 
   const matches: Array<{
     thread: DiscordGuildChannel;
-
     message: DiscordMessage;
   }> = [];
 
@@ -496,45 +454,29 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   const [mapping] = await db
     .select({
       taskId: taskDiscordThreads.taskId,
-
       guildId: taskDiscordThreads.guildId,
-
       forumChannelId: taskDiscordThreads.forumChannelId,
-
       threadId: taskDiscordThreads.threadId,
-
       initialMessageId: taskDiscordThreads.initialMessageId,
 
       provisioningStatus: taskDiscordThreads.provisioningStatus,
-
       attemptCount: taskDiscordThreads.attemptCount,
-
       lastAttemptAt: taskDiscordThreads.lastAttemptAt,
 
       projectId: tasks.projectId,
-
       taskNumber: tasks.taskNumber,
-
       title: tasks.title,
-
       description: tasks.description,
-
       status: tasks.status,
-
       priority: tasks.priority,
-
       leadUserId: tasks.leadUserId,
 
       startDate: tasks.startDate,
-
       dueDate: tasks.dueDate,
-
       taskUpdatedAt: tasks.updatedAt,
 
       workspaceId: projects.workspaceId,
-
       projectName: projects.name,
-
       projectCodeOverride: projects.projectCodeOverride,
     })
     .from(taskDiscordThreads)
@@ -554,19 +496,12 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   if (mapping.provisioningStatus === "ready" && mapping.forumChannelId && mapping.threadId && mapping.initialMessageId) {
     return {
       status: "ready",
-
       taskId,
-
       guildId: mapping.guildId,
-
       forumChannelId: mapping.forumChannelId,
-
       threadId: mapping.threadId,
-
       initialMessageId: mapping.initialMessageId,
-
       attemptCount: mapping.attemptCount,
-
       recovered: false,
     };
   }
@@ -574,7 +509,6 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   const [integration] = await db
     .select({
       enabled: workspaceDiscordIntegrations.enabled,
-
       guildId: workspaceDiscordIntegrations.guildId,
     })
     .from(workspaceDiscordIntegrations)
@@ -600,9 +534,7 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   const [projectForum] = await db
     .select({
       guildId: projectDiscordForums.guildId,
-
       forumChannelId: projectDiscordForums.forumChannelId,
-
       provisioningStatus: projectDiscordForums.provisioningStatus,
     })
     .from(projectDiscordForums)
@@ -618,7 +550,6 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   }
 
   const currentGuildId = integration.guildId;
-
   const currentForumChannelId = projectForum.forumChannelId;
 
   if (projectForum.guildId !== currentGuildId) {
@@ -628,20 +559,15 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       .update(taskDiscordThreads)
       .set({
         provisioningStatus: "error",
-
         lastError: message,
-
         updatedAt: new Date(),
       })
       .where(eq(taskDiscordThreads.taskId, taskId));
 
     return {
       status: "error",
-
       taskId,
-
       attemptCount: mapping.attemptCount,
-
       message,
     };
   }
@@ -653,20 +579,15 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       .update(taskDiscordThreads)
       .set({
         provisioningStatus: "error",
-
         lastError: message,
-
         updatedAt: new Date(),
       })
       .where(eq(taskDiscordThreads.taskId, taskId));
 
     return {
       status: "error",
-
       taskId,
-
       attemptCount: mapping.attemptCount,
-
       message,
     };
   }
@@ -676,7 +597,6 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
   if (mapping.provisioningStatus === "pending" && mapping.lastAttemptAt && now.getTime() - mapping.lastAttemptAt.getTime() < PROVISION_LEASE_MS) {
     return {
       status: "busy",
-
       taskId,
     };
   }
@@ -687,28 +607,14 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
     .update(taskDiscordThreads)
     .set({
       guildId: currentGuildId,
-
       forumChannelId: currentForumChannelId,
-
       provisioningStatus: "pending",
-
       attemptCount: nextAttemptCount,
-
       lastError: null,
-
       lastAttemptAt: now,
-
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(taskDiscordThreads.taskId, taskId),
-
-        eq(taskDiscordThreads.attemptCount, mapping.attemptCount),
-
-        ne(taskDiscordThreads.provisioningStatus, "ready"),
-      ),
-    )
+    .where(and(eq(taskDiscordThreads.taskId, taskId), eq(taskDiscordThreads.attemptCount, mapping.attemptCount), ne(taskDiscordThreads.provisioningStatus, "ready")))
     .returning({
       attemptCount: taskDiscordThreads.attemptCount,
     });
@@ -717,15 +623,10 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
     const [latest] = await db
       .select({
         guildId: taskDiscordThreads.guildId,
-
         forumChannelId: taskDiscordThreads.forumChannelId,
-
         threadId: taskDiscordThreads.threadId,
-
         initialMessageId: taskDiscordThreads.initialMessageId,
-
         provisioningStatus: taskDiscordThreads.provisioningStatus,
-
         attemptCount: taskDiscordThreads.attemptCount,
       })
       .from(taskDiscordThreads)
@@ -735,17 +636,11 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
     if (latest?.provisioningStatus === "ready" && latest.forumChannelId && latest.threadId && latest.initialMessageId) {
       return {
         status: "ready",
-
         taskId,
-
         guildId: latest.guildId,
-
         forumChannelId: latest.forumChannelId,
-
         threadId: latest.threadId,
-
         initialMessageId: latest.initialMessageId,
-
         attemptCount: latest.attemptCount,
 
         recovered: false,
@@ -761,35 +656,23 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
 
   try {
     const threadName = resolveTaskThreadName(mapping.projectName, mapping.projectCodeOverride, mapping.taskNumber, mapping.title);
-
     const taskCode = `${resolveProjectCode(mapping.projectName, mapping.projectCodeOverride)}-${mapping.taskNumber}`;
-
     const marker = resolveTaskMarker(mapping.projectId, taskId);
-
     const canonicalMessage = await buildCanonicalTaskMessage(db, {
       id: taskId,
-
       projectId: mapping.projectId,
-
       taskCode,
-
       description: mapping.description,
-
       status: mapping.status,
-
       priority: mapping.priority,
-
       leadUserId: mapping.leadUserId,
-
       startDate: mapping.startDate,
 
       dueDate: mapping.dueDate,
     });
 
     let thread: DiscordGuildChannel;
-
     let initialMessage: DiscordMessage;
-
     let recovered = false;
 
     /*
@@ -812,35 +695,25 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       } else {
         const created = await createDiscordForumThread(botToken, {
           forumChannelId: currentForumChannelId,
-
           name: threadName,
-
           content: canonicalMessage.content,
-
           allowedUserIds: canonicalMessage.allowedUserIds,
-
           auditReason: `Flow task thread provisioning: ${taskId}`,
         });
 
         thread = created;
-
         initialMessage = created.message;
       }
     } else {
       const created = await createDiscordForumThread(botToken, {
         forumChannelId: currentForumChannelId,
-
         name: threadName,
-
         content: canonicalMessage.content,
-
         allowedUserIds: canonicalMessage.allowedUserIds,
-
         auditReason: `Flow task thread provisioning: ${taskId}`,
       });
 
       thread = created;
-
       initialMessage = created.message;
     }
 
@@ -862,33 +735,18 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       .update(taskDiscordThreads)
       .set({
         guildId: currentGuildId,
-
         forumChannelId: currentForumChannelId,
-
         threadId: thread.id,
-
         initialMessageId: initialMessage.id,
-
         provisioningStatus: "ready",
-
         lastError: null,
 
         updatedAt: readyAt,
       })
-      .where(
-        and(
-          eq(taskDiscordThreads.taskId, taskId),
-
-          eq(taskDiscordThreads.attemptCount, claimed.attemptCount),
-
-          ne(taskDiscordThreads.provisioningStatus, "ready"),
-        ),
-      )
+      .where(and(eq(taskDiscordThreads.taskId, taskId), eq(taskDiscordThreads.attemptCount, claimed.attemptCount), ne(taskDiscordThreads.provisioningStatus, "ready")))
       .returning({
         threadId: taskDiscordThreads.threadId,
-
         initialMessageId: taskDiscordThreads.initialMessageId,
-
         attemptCount: taskDiscordThreads.attemptCount,
       });
 
@@ -896,15 +754,10 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       const [latest] = await db
         .select({
           guildId: taskDiscordThreads.guildId,
-
           forumChannelId: taskDiscordThreads.forumChannelId,
-
           threadId: taskDiscordThreads.threadId,
-
           initialMessageId: taskDiscordThreads.initialMessageId,
-
           provisioningStatus: taskDiscordThreads.provisioningStatus,
-
           attemptCount: taskDiscordThreads.attemptCount,
         })
         .from(taskDiscordThreads)
@@ -914,17 +767,11 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       if (latest?.provisioningStatus === "ready" && latest.forumChannelId && latest.threadId && latest.initialMessageId) {
         return {
           status: "ready",
-
           taskId,
-
           guildId: latest.guildId,
-
           forumChannelId: latest.forumChannelId,
-
           threadId: latest.threadId,
-
           initialMessageId: latest.initialMessageId,
-
           attemptCount: latest.attemptCount,
 
           recovered,
@@ -942,17 +789,11 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
 
     return {
       status: "ready",
-
       taskId,
-
       guildId: currentGuildId,
-
       forumChannelId: currentForumChannelId,
-
       threadId: persisted.threadId,
-
       initialMessageId: persisted.initialMessageId,
-
       attemptCount: persisted.attemptCount,
 
       recovered,
@@ -964,26 +805,14 @@ export async function provisionTaskDiscordThread(db: Db, botToken: string, taskI
       .update(taskDiscordThreads)
       .set({
         provisioningStatus: "error",
-
         lastError: message,
-
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(taskDiscordThreads.taskId, taskId),
-
-          eq(taskDiscordThreads.attemptCount, claimed.attemptCount),
-
-          ne(taskDiscordThreads.provisioningStatus, "ready"),
-        ),
-      );
+      .where(and(eq(taskDiscordThreads.taskId, taskId), eq(taskDiscordThreads.attemptCount, claimed.attemptCount), ne(taskDiscordThreads.provisioningStatus, "ready")));
 
     return {
       status: "error",
-
       taskId,
-
       attemptCount: claimed.attemptCount,
 
       message,
@@ -995,41 +824,26 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
   const [mapping] = await db
     .select({
       taskId: taskDiscordThreads.taskId,
-
       guildId: taskDiscordThreads.guildId,
-
       forumChannelId: taskDiscordThreads.forumChannelId,
-
       threadId: taskDiscordThreads.threadId,
-
       initialMessageId: taskDiscordThreads.initialMessageId,
 
       provisioningStatus: taskDiscordThreads.provisioningStatus,
 
       projectId: tasks.projectId,
-
       taskNumber: tasks.taskNumber,
-
       title: tasks.title,
-
       description: tasks.description,
-
       status: tasks.status,
-
       priority: tasks.priority,
-
       leadUserId: tasks.leadUserId,
 
       startDate: tasks.startDate,
-
       dueDate: tasks.dueDate,
-
       taskUpdatedAt: tasks.updatedAt,
-
       workspaceId: projects.workspaceId,
-
       projectName: projects.name,
-
       projectCodeOverride: projects.projectCodeOverride,
     })
     .from(taskDiscordThreads)
@@ -1083,9 +897,7 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
   const [projectForum] = await db
     .select({
       guildId: projectDiscordForums.guildId,
-
       forumChannelId: projectDiscordForums.forumChannelId,
-
       provisioningStatus: projectDiscordForums.provisioningStatus,
     })
     .from(projectDiscordForums)
@@ -1103,7 +915,6 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
   if (mapping.guildId !== integration.guildId || projectForum.guildId !== integration.guildId || mapping.forumChannelId !== projectForum.forumChannelId) {
     return {
       status: "error",
-
       taskId,
 
       message: "Task Discord thread mapping does not match the current Discord integration",
@@ -1141,19 +952,12 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
 
     const canonicalMessage = await buildCanonicalTaskMessage(db, {
       id: taskId,
-
       projectId: mapping.projectId,
-
       taskCode,
-
       description: mapping.description,
-
       status: mapping.status,
-
       priority: mapping.priority,
-
       leadUserId: mapping.leadUserId,
-
       startDate: mapping.startDate,
 
       dueDate: mapping.dueDate,
@@ -1161,11 +965,8 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
 
     const message = await editDiscordMessage(botToken, {
       channelId: mapping.threadId,
-
       messageId: mapping.initialMessageId,
-
       content: canonicalMessage.content,
-
       allowedUserIds: canonicalMessage.allowedUserIds,
     });
 
@@ -1181,23 +982,16 @@ export async function syncTaskDiscordThread(db: Db, botToken: string, taskId: st
 
     return {
       status: "synced",
-
       taskId,
-
       guildId: mapping.guildId,
-
       forumChannelId: mapping.forumChannelId,
-
       threadId: mapping.threadId,
-
       initialMessageId: message.id,
     };
   } catch (cause) {
     return {
       status: "error",
-
       taskId,
-
       message: resolveSyncErrorMessage(cause),
     };
   }

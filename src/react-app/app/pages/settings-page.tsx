@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
-import { hasPermission } from "@/features/auth/permissions";
-import { useMe } from "@/features/auth/hooks/use-me";
 import { RolesSettings } from "@/features/roles/components/roles-settings";
 import { TeamsSettings } from "@/features/teams/components/teams-settings";
 import { MembersSettings } from "@/features/members/components/members-settings";
 import { DiscordIntegrationSettings } from "@/features/integrations/discord/components/discord-integration-settings";
+
 import { getErrorMessage } from "@/lib/errors";
 
+import { hasPermission } from "@/features/auth/permissions";
 import { useUpdateWorkspace } from "@/features/workspace/hooks/use-update-workspace";
 import { PersonalSettings } from "@/features/profile/components/personal-settings";
+import { useMe } from "@/features/auth/hooks/use-me";
 
 const settingsSections = [
   {
@@ -48,9 +50,7 @@ function isSettingsSection(value: string | null): value is SettingsSection {
 
 function GeneralSettings() {
   const { data: auth } = useMe();
-
   const updateWorkspace = useUpdateWorkspace();
-
   const [workspaceName, setWorkspaceName] = useState(() => auth?.workspace.name ?? "");
 
   if (!auth) {
@@ -58,17 +58,13 @@ function GeneralSettings() {
   }
 
   const canManageWorkspace = hasPermission(auth, "workspace.manage");
-
   const normalizedName = workspaceName.trim();
-
   const hasNameChange = normalizedName !== auth.workspace.name;
-
   const workspaceInitial = auth.workspace.name.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div className="p-6 md:p-8">
       <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">General</h1>
-
       <div className="mt-8">
         <div className="mx-auto mt-10 max-w-xl space-y-12">
           <section>
@@ -134,7 +130,6 @@ function GeneralSettings() {
                 <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-3">
                   <div>
                     <p className="text-xs font-medium">Workspace Logo</p>
-
                     <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
                   </div>
 
@@ -172,7 +167,6 @@ function GeneralSettings() {
             <div className="mt-3 flex min-h-14 items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium">Delete Workspace</p>
-
                 <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
               </div>
 
@@ -189,11 +183,8 @@ function GeneralSettings() {
 
 export function SettingsPage() {
   const [searchParams] = useSearchParams();
-
   const { data: auth } = useMe();
-
   const activeSectionValue = searchParams.get("section");
-
   const requestedSection: SettingsSection = isSettingsSection(activeSectionValue) ? activeSectionValue : "general";
 
   if (!auth) {

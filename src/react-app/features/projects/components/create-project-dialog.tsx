@@ -20,17 +20,11 @@ type CreateProjectDialogProps = {
 
 export function CreateProjectDialog({ open, onClose, onCreated, canCreatePrivate, canViewClients }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
-
   const [description, setDescription] = useState("");
-
   const [visibility, setVisibility] = useState<"workspace" | "private">("workspace");
-
   const [clientId, setClientId] = useState<string | null>(null);
-
   const createProject = useCreateProject();
-
   const { data: clients = [], isPending: clientsPending, isError: clientsError } = useClients(open && canViewClients);
-
   const activeClients = clients.filter((client) => client.status === "active");
 
   function reset() {

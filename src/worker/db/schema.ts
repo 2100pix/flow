@@ -8,13 +8,11 @@ export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
 
   name: text("name").notNull(),
-
   slug: text("slug").notNull().unique(),
 
   createdAt: integer("created_at", {
     mode: "timestamp",
   }).notNull(),
-
   updatedAt: integer("updated_at", {
     mode: "timestamp",
   }).notNull(),
@@ -22,27 +20,21 @@ export const workspaces = sqliteTable("workspaces", {
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
-
   discordUserId: text("discord_user_id").notNull().unique(),
 
   displayName: text("display_name").notNull(),
-
   firstName: text("first_name"),
-
   lastName: text("last_name"),
 
   timeZone: text("time_zone"),
-
   avatarUrl: text("avatar_url"),
 
   createdAt: integer("created_at", {
     mode: "timestamp",
   }).notNull(),
-
   updatedAt: integer("updated_at", {
     mode: "timestamp",
   }).notNull(),
-
   lastLoginAt: integer("last_login_at", {
     mode: "timestamp",
   }),
@@ -68,7 +60,6 @@ export const workspaceDiscordIntegrations = sqliteTable(
     guildName: text("guild_name"),
 
     projectCategoryId: text("project_category_id"),
-
     workspaceRoleId: text("workspace_role_id"),
 
     remindersEnabled: integer("reminders_enabled", {
@@ -78,21 +69,17 @@ export const workspaceDiscordIntegrations = sqliteTable(
       .notNull(),
 
     reminderTimeZone: text("reminder_time_zone").default("UTC").notNull(),
-
     reminderHourLocal: integer("reminder_hour_local").default(9).notNull(),
 
     connectedByUserId: text("connected_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-
     connectedAt: integer("connected_at", {
       mode: "timestamp",
     }),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
-
     updatedAt: integer("updated_at", {
       mode: "timestamp",
     }).notNull(),
@@ -100,9 +87,7 @@ export const workspaceDiscordIntegrations = sqliteTable(
 
   (table) => [
     uniqueIndex("workspace_discord_integrations_guild_id_unique").on(table.guildId),
-
     index("workspace_discord_integrations_connected_by_user_id_idx").on(table.connectedByUserId),
-
     check(
       "workspace_discord_integrations_enabled_requires_guild_check",
       sql`
@@ -163,7 +148,6 @@ export const workspaceMembers = sqliteTable(
     }),
 
     index("workspace_members_user_id_idx").on(table.userId),
-
     check("workspace_members_role_check", sql`${table.role} in ('owner', 'admin', 'member')`),
 
     index("workspace_members_custom_role_id_idx").on(table.customRoleId),
@@ -326,7 +310,6 @@ export const memberExpertise = sqliteTable(
     }),
 
     index("member_expertise_user_id_idx").on(table.userId),
-
     index("member_expertise_expertise_id_idx").on(table.expertiseId),
   ],
 );
@@ -383,7 +366,6 @@ export const sessions = sqliteTable(
   "sessions",
   {
     id: text("id").primaryKey(),
-
     userId: text("user_id")
       .notNull()
       .references(() => users.id, {
@@ -393,7 +375,6 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at", {
       mode: "timestamp",
     }).notNull(),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
@@ -405,7 +386,6 @@ export const clients = sqliteTable(
   "clients",
   {
     id: text("id").primaryKey(),
-
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, {
@@ -415,19 +395,15 @@ export const clients = sqliteTable(
     name: text("name").notNull(),
 
     logoUrl: text("logo_url"),
-
     status: text("status", {
       enum: ["active", "inactive"],
     }).notNull(),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
-
     updatedAt: integer("updated_at", {
       mode: "timestamp",
     }).notNull(),
-
     archivedAt: integer("archived_at", {
       mode: "timestamp",
     }),
@@ -516,7 +492,6 @@ export const projectDiscordForums = sqliteTable(
       }),
 
     guildId: text("guild_id").notNull(),
-
     forumChannelId: text("forum_channel_id"),
 
     provisioningStatus: text("provisioning_status", {
@@ -524,19 +499,14 @@ export const projectDiscordForums = sqliteTable(
     })
       .default("pending")
       .notNull(),
-
     attemptCount: integer("attempt_count").default(0).notNull(),
-
     lastError: text("last_error"),
-
     lastAttemptAt: integer("last_attempt_at", {
       mode: "timestamp",
     }),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
-
     updatedAt: integer("updated_at", {
       mode: "timestamp",
     }).notNull(),
@@ -544,9 +514,7 @@ export const projectDiscordForums = sqliteTable(
 
   (table) => [
     uniqueIndex("project_discord_forums_forum_channel_id_unique").on(table.forumChannelId),
-
     index("project_discord_forums_guild_id_idx").on(table.guildId),
-
     index("project_discord_forums_provisioning_status_idx").on(table.provisioningStatus),
 
     check(
@@ -634,9 +602,7 @@ export const projectLeads = sqliteTable(
     }),
 
     uniqueIndex("project_leads_project_position_unique").on(table.projectId, table.position),
-
     index("project_leads_user_id_idx").on(table.userId),
-
     check("project_leads_position_check", sql`${table.position} >= 0 and ${table.position} <= 2`),
   ],
 );
@@ -655,36 +621,26 @@ export const projectResources = sqliteTable(
     type: text("type", {
       enum: ["document_brief", "link"],
     }).notNull(),
-
     title: text("title"),
-
     url: text("url"),
-
     content: text("content"),
-
     position: integer("position").notNull(),
-
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id, {
         onDelete: "restrict",
       }),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
-
     updatedAt: integer("updated_at", {
       mode: "timestamp",
     }).notNull(),
   },
   (table) => [
     index("project_resources_project_id_idx").on(table.projectId),
-
     uniqueIndex("project_resources_project_position_unique").on(table.projectId, table.position),
-
     check("project_resources_type_check", sql`${table.type} in ('document_brief', 'link')`),
-
     check("project_resources_position_check", sql`${table.position} >= 0`),
 
     check(
@@ -710,11 +666,8 @@ export const projectTaskStatuses = sqliteTable(
     statusKey: text("status_key", {
       enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
     }).notNull(),
-
     label: text("label").notNull(),
-
     position: integer("position").notNull(),
-
     enabled: integer("enabled", {
       mode: "boolean",
     }).notNull(),
@@ -725,7 +678,6 @@ export const projectTaskStatuses = sqliteTable(
     }),
 
     uniqueIndex("project_task_statuses_project_position_unique").on(table.projectId, table.position),
-
     check("project_task_statuses_status_key_check", sql`${table.statusKey} in ('backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled')`),
     check("project_task_statuses_position_check", sql`${table.position} >= 0`),
     check("project_task_statuses_enabled_check", sql`${table.enabled} in (0, 1)`),
@@ -854,34 +806,25 @@ export const taskResources = sqliteTable(
     }).notNull(),
 
     title: text("title"),
-
     url: text("url"),
-
     content: text("content"),
-
     position: integer("position").notNull(),
-
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id, {
         onDelete: "restrict",
       }),
-
     createdAt: integer("created_at", {
       mode: "timestamp",
     }).notNull(),
-
     updatedAt: integer("updated_at", {
       mode: "timestamp",
     }).notNull(),
   },
   (table) => [
     index("task_resources_task_id_idx").on(table.taskId),
-
     uniqueIndex("task_resources_task_position_unique").on(table.taskId, table.position),
-
     check("task_resources_type_check", sql`${table.type} in ('document_brief', 'link')`),
-
     check("task_resources_position_check", sql`${table.position} >= 0`),
 
     check(
@@ -902,11 +845,55 @@ export const taskResources = sqliteTable(
   ],
 );
 
+export const taskActivityEventTypes = ["TASK_CREATED", "STATUS_CHANGED", "PRIORITY_CHANGED", "ASSIGNEE_ADDED", "ASSIGNEE_REMOVED", "LEAD_CHANGED", "START_DATE_CHANGED", "DUE_DATE_CHANGED", "DESCRIPTION_CHANGED", "RESOURCE_ADDED"] as const;
+
+export type TaskActivityEventType = (typeof taskActivityEventTypes)[number];
+
+export const taskActivity = sqliteTable(
+  "task_activity",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, {
+        onDelete: "cascade",
+      }),
+
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: "cascade",
+      }),
+
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+      }),
+
+    eventType: text("event_type", {
+      enum: taskActivityEventTypes,
+    }).notNull(),
+
+    metadata: text("metadata"),
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    }).notNull(),
+  },
+  (table) => [
+    index("task_activity_task_created_idx").on(table.taskId, table.createdAt, table.id),
+    index("task_activity_project_created_idx").on(table.projectId, table.createdAt),
+    check(
+      "task_activity_event_type_check",
+      sql`${table.eventType} in ('TASK_CREATED', 'STATUS_CHANGED', 'PRIORITY_CHANGED', 'ASSIGNEE_ADDED', 'ASSIGNEE_REMOVED', 'LEAD_CHANGED', 'START_DATE_CHANGED', 'DUE_DATE_CHANGED', 'DESCRIPTION_CHANGED', 'RESOURCE_ADDED')`,
+    ),
+  ],
+);
+
 export const taskDiscordReminders = sqliteTable(
   "task_discord_reminders",
   {
     id: text("id").primaryKey(),
-
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, {
@@ -953,15 +940,10 @@ export const taskDiscordReminders = sqliteTable(
   },
   (table) => [
     uniqueIndex("task_discord_reminders_task_user_due_kind_unique").on(table.taskId, table.userId, table.dueDate, table.kind),
-
     index("task_discord_reminders_workspace_id_idx").on(table.workspaceId),
-
     index("task_discord_reminders_task_id_idx").on(table.taskId),
-
     index("task_discord_reminders_delivery_status_idx").on(table.deliveryStatus),
-
     check("task_discord_reminders_kind_check", sql`${table.kind} in ('day_before', 'due_today')`),
-
     check("task_discord_reminders_delivery_status_check", sql`${table.deliveryStatus} in ('pending', 'sent', 'cancelled')`),
   ],
 );
@@ -1001,11 +983,8 @@ export const discordInteractionReceipts = sqliteTable(
   },
   (table) => [
     index("discord_interaction_receipts_workspace_id_idx").on(table.workspaceId),
-
     index("discord_interaction_receipts_task_id_idx").on(table.taskId),
-
     index("discord_interaction_receipts_actor_user_id_idx").on(table.actorUserId),
-
     check(
       "discord_interaction_receipts_command_name_check",
       sql`${table.commandName} in (
@@ -1069,9 +1048,7 @@ export const discordOutboxEvents = sqliteTable(
       .on(table.eventType, table.aggregateId)
       .where(sql`${table.status} = 'pending'`),
     index("discord_outbox_events_status_idx").on(table.status),
-
     index("discord_outbox_events_workspace_id_idx").on(table.workspaceId),
-
     check(
       "discord_outbox_events_status_check",
       sql`
@@ -1082,7 +1059,6 @@ export const discordOutboxEvents = sqliteTable(
           )
         `,
     ),
-
     check(
       "discord_outbox_events_dispatch_attempt_count_check",
       sql`
@@ -1102,12 +1078,9 @@ export const taskDiscordThreads = sqliteTable(
       }),
 
     guildId: text("guild_id").notNull(),
-
     forumChannelId: text("forum_channel_id"),
     threadId: text("thread_id").unique(),
-
     initialMessageId: text("initial_message_id").unique(),
-
     provisioningStatus: text("provisioning_status", {
       enum: ["pending", "ready", "error"],
     })
@@ -1115,9 +1088,7 @@ export const taskDiscordThreads = sqliteTable(
       .notNull(),
 
     attemptCount: integer("attempt_count").default(0).notNull(),
-
     lastError: text("last_error"),
-
     lastAttemptAt: integer("last_attempt_at", {
       mode: "timestamp",
     }),
@@ -1133,11 +1104,8 @@ export const taskDiscordThreads = sqliteTable(
 
   (table) => [
     index("task_discord_threads_guild_id_idx").on(table.guildId),
-
     index("task_discord_threads_forum_channel_id_idx").on(table.forumChannelId),
-
     index("task_discord_threads_provisioning_status_idx").on(table.provisioningStatus),
-
     check(
       "task_discord_threads_provisioning_status_check",
       sql`

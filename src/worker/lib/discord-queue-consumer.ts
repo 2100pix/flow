@@ -19,31 +19,23 @@ type Db = ReturnType<typeof createDb>;
 type ProcessDiscordQueueResult =
   | {
       status: "processed";
-
       eventId: string;
-
       aggregateType: "project_forum" | "task_thread" | "task_reminder";
       aggregateId: string;
     }
   | {
       status: "deferred";
-
       eventId: string;
-
       reason: string;
     }
   | {
       status: "retry";
-
       eventId: string;
-
       reason: string;
     }
   | {
       status: "ignored";
-
       eventId: string | null;
-
       reason: string;
     };
 
@@ -51,9 +43,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   if (!body || !body.outboxEventId || !Number.isInteger(body.dispatchAttemptCount) || body.dispatchAttemptCount < 1) {
     return {
       status: "ignored",
-
       eventId: null,
-
       reason: "invalid_message",
     };
   }
@@ -78,18 +68,14 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   if (!event) {
     return {
       status: "ignored",
-
       eventId,
-
       reason: "event_missing",
     };
   }
   if (event.dispatchAttemptCount !== body.dispatchAttemptCount) {
     return {
       status: "ignored",
-
       eventId,
-
       reason: "stale_dispatch_attempt",
     };
   }
@@ -103,11 +89,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "processed",
-
         eventId,
-
         aggregateType: "task_reminder",
-
         aggregateId: result.reminderId,
       };
     }
@@ -117,11 +100,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "processed",
-
         eventId,
-
         aggregateType: "task_reminder",
-
         aggregateId: result.reminderId,
       };
     }
@@ -130,9 +110,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
     return {
       status: "deferred",
-
       eventId,
-
       reason: result.message,
     };
   }
@@ -163,11 +141,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "processed",
-
         eventId,
-
         aggregateType: "task_thread",
-
         aggregateId: result.taskId,
       };
     }
@@ -177,9 +152,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: result.message,
       };
     }
@@ -189,9 +162,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "integration_disabled",
       };
     }
@@ -201,9 +172,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "integration_not_connected",
       };
     }
@@ -213,9 +182,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "project_forum_not_ready",
       };
     }
@@ -225,9 +192,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "task_thread_not_ready",
       };
     }
@@ -243,9 +208,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
      */
     return {
       status: "ignored",
-
       eventId,
-
       reason: "mapping_missing",
     };
   }
@@ -260,11 +223,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "processed",
-
         eventId,
-
         aggregateType: "task_thread",
-
         aggregateId: result.taskId,
       };
     }
@@ -272,9 +232,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     if (result.status === "busy") {
       return {
         status: "retry",
-
         eventId,
-
         reason: "task_thread_provisioning_busy",
       };
     }
@@ -284,9 +242,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: result.message,
       };
     }
@@ -296,9 +252,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "integration_disabled",
       };
     }
@@ -308,9 +262,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "integration_not_connected",
       };
     }
@@ -320,9 +272,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "project_forum_not_ready",
       };
     }
@@ -334,16 +284,13 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
      */
     return {
       status: "ignored",
-
       eventId,
-
       reason: "mapping_missing",
     };
   }
 
   if (event.aggregateType === "project_forum" && event.eventType === "project_forum.access") {
     await markDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
-
     const accessResult = await applyProjectForumAccess(db, botToken, event.aggregateId);
 
     if (accessResult.status === "applied") {
@@ -351,11 +298,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "processed",
-
         eventId,
-
         aggregateType: "project_forum",
-
         aggregateId: accessResult.projectId,
       };
     }
@@ -365,9 +309,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
       return {
         status: "deferred",
-
         eventId,
-
         reason: "forum_not_ready",
       };
     }
@@ -376,11 +318,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
     return {
       status: "processed",
-
       eventId,
-
       aggregateType: "project_forum",
-
       aggregateId: event.aggregateId,
     };
   }
@@ -390,9 +329,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
 
     return {
       status: "deferred",
-
       eventId,
-
       reason: "unsupported_event",
     };
   }
@@ -412,11 +349,8 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     await reconcileDiscordOutboxEventDispatched(db, eventId, body.dispatchAttemptCount);
     return {
       status: "processed",
-
       eventId,
-
       aggregateType: "project_forum",
-
       aggregateId: result.projectId,
     };
   }
@@ -424,9 +358,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
   if (result.status === "busy") {
     return {
       status: "retry",
-
       eventId,
-
       reason: "provisioning_busy",
     };
   }
@@ -435,9 +367,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, `Forum provisioning failed: ${result.message}`);
     return {
       status: "deferred",
-
       eventId,
-
       reason: result.message,
     };
   }
@@ -446,9 +376,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is disabled");
     return {
       status: "deferred",
-
       eventId,
-
       reason: "integration_disabled",
     };
   }
@@ -457,9 +385,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
     await returnDiscordOutboxEventToPending(db, eventId, body.dispatchAttemptCount, "Deferred because Discord integration is not connected");
     return {
       status: "deferred",
-
       eventId,
-
       reason: "integration_not_connected",
     };
   }
@@ -474,9 +400,7 @@ async function processDiscordOutboxQueueMessage(db: Db, botToken: string, body: 
    */
   return {
     status: "ignored",
-
     eventId,
-
     reason: "mapping_missing",
   };
 }
@@ -520,7 +444,6 @@ export async function consumeDiscordOutboxBatch(batch: MessageBatch<DiscordOutbo
        */
       console.error("Discord queue consumer failed", {
         messageId: message.id,
-
         outboxEventId: message.body?.outboxEventId,
 
         error,

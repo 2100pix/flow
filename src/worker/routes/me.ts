@@ -2,11 +2,7 @@ import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
-import {
-  createWorkspaceExpertiseSchema,
-  updateMemberExpertiseSchema,
-  type WorkspaceExpertiseDto,
-} from "../../shared/contracts/members";
+import { createWorkspaceExpertiseSchema, updateMemberExpertiseSchema, type WorkspaceExpertiseDto } from "../../shared/contracts/members";
 import { updateProfileSchema, type UserProfileDto } from "../../shared/contracts/me";
 import { createDb } from "../db";
 import { getDiscordGuildMember, DiscordApiError } from "../lib/discord-api";
@@ -91,35 +87,25 @@ meRoutes.put(
     }
 
     const db = createDb(c.env.flow_db);
-
     const now = new Date();
 
     await db
       .update(users)
       .set({
         firstName: input.firstName,
-
         lastName: input.lastName,
-
         timeZone: input.timeZone,
-
         updatedAt: now,
       })
       .where(eq(users.id, auth.user.id));
 
     const data: UserProfileDto = {
       id: auth.user.id,
-
       displayName: auth.user.displayName,
-
       avatarUrl: auth.user.avatarUrl,
-
       firstName: input.firstName,
-
       lastName: input.lastName,
-
       timeZone: input.timeZone,
-
       expertise: auth.user.expertise,
     };
 
@@ -181,35 +167,25 @@ meRoutes.post("/discord-refresh", requireAuth, async (c) => {
   }
 
   const now = new Date();
-
   const displayName = resolveDiscordDisplayName(discordUser);
-
   const avatarUrl = getDiscordAvatarUrl(discordUser);
 
   await db
     .update(users)
     .set({
       displayName,
-
       avatarUrl,
-
       updatedAt: now,
     })
     .where(eq(users.id, auth.user.id));
 
   const data: UserProfileDto = {
     id: auth.user.id,
-
     displayName,
-
     avatarUrl,
-
     firstName: auth.user.firstName,
-
     lastName: auth.user.lastName,
-
     timeZone: auth.user.timeZone,
-
     expertise: auth.user.expertise,
   };
 
@@ -220,7 +196,6 @@ meRoutes.post("/discord-refresh", requireAuth, async (c) => {
 
 meRoutes.get("/expertise", requireAuth, async (c) => {
   const auth = c.var.auth;
-
   const db = createDb(c.env.flow_db);
 
   const rows = await db
@@ -276,9 +251,7 @@ meRoutes.post(
 
   async (c) => {
     const auth = c.var.auth;
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
 
     const existing = await db
@@ -306,26 +279,19 @@ meRoutes.post(
     }
 
     const id = createId("exp");
-
     const now = new Date();
 
     await db.insert(workspaceExpertise).values({
       id,
-
       workspaceId: auth.workspace.id,
-
       name: input.name,
-
       createdAt: now,
-
       updatedAt: now,
     });
 
     const data: WorkspaceExpertiseDto = {
       id,
-
       name: input.name,
-
       createdAt: now.toISOString(),
     };
 
@@ -340,9 +306,7 @@ meRoutes.post(
 
 meRoutes.put(
   "/expertise",
-
   requireAuth,
-
   zValidator(
     "json",
 
@@ -366,13 +330,9 @@ meRoutes.put(
 
   async (c) => {
     const auth = c.var.auth;
-
     const userId = auth.user.id;
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const available = await db
       .select({
         id: workspaceExpertise.id,

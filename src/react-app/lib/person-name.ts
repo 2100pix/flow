@@ -1,8 +1,6 @@
 type PersonNameInput = {
   firstName?: string | null;
-
   lastName?: string | null;
-
   displayName: string;
 };
 

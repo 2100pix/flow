@@ -22,20 +22,14 @@ export const reorderRolesSchema = z.object({
 });
 
 export type ReorderRolesInput = z.infer<typeof reorderRolesSchema>;
-
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
-
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 
 export type RoleDto = {
   id: string;
-
   name: string;
-
   kind: "built_in" | "custom";
-
   systemKey: BuiltInRoleKey | null;
-
   permissions: PermissionKey[];
   position: number | null;
   createdAt: string | null;

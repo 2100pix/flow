@@ -10,11 +10,8 @@ import { hasPermission } from "@/features/auth/permissions";
 export function ClientsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: auth } = useMe();
-
   const canView = hasPermission(auth, "clients.view");
-
   const canCreate = hasPermission(auth, "clients.create");
-
   const { data: clients = [], isPending, isError } = useClients(canView);
 
   const createOpen = searchParams.get("create") === "client";

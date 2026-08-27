@@ -32,11 +32,8 @@ const themeOptions: Array<{
 
 export function AccountMenu({ auth }: { auth: AuthContext }) {
   const logout = useLogout();
-
   const { theme, setTheme } = useTheme();
-
   const [open, setOpen] = useState(false);
-
   const containerRef = useRef<HTMLDivElement>(null);
 
   const personName = resolvePersonName({
@@ -66,12 +63,10 @@ export function AccountMenu({ auth }: { auth: AuthContext }) {
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
-
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
-
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);

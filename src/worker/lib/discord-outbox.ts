@@ -7,45 +7,35 @@ import type { DiscordOutboxQueueMessage } from "../types/discord-queue";
 type Db = ReturnType<typeof createDb>;
 
 const DISPATCH_LEASE_MS = 60_000;
-
 const MAX_DISPATCH_ERROR_LENGTH = 1_000;
 
 export type DispatchDiscordOutboxResult =
   | {
       status: "missing";
-
       eventId: string;
     }
   | {
       status: "already_dispatched";
-
       eventId: string;
     }
   | {
       status: "busy";
-
       eventId: string;
     }
   | {
       status: "dispatched";
-
       eventId: string;
-
       attemptCount: number;
     }
   | {
       status: "error";
-
       eventId: string;
-
       attemptCount: number;
-
       message: string;
     };
 
 function resolveDispatchError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "Unknown Discord outbox dispatch error";
-
   return message.slice(0, MAX_DISPATCH_ERROR_LENGTH);
 }
 
@@ -53,13 +43,9 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   const [event] = await db
     .select({
       id: discordOutboxEvents.id,
-
       status: discordOutboxEvents.status,
-
       dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
-
       lastDispatchError: discordOutboxEvents.lastDispatchError,
-
       updatedAt: discordOutboxEvents.updatedAt,
     })
     .from(discordOutboxEvents)
@@ -69,7 +55,6 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   if (!event) {
     return {
       status: "missing",
-
       eventId,
     };
   }
@@ -77,7 +62,6 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   if (event.status === "dispatched") {
     return {
       status: "already_dispatched",
-
       eventId,
     };
   }
@@ -97,7 +81,6 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   if (event.dispatchAttemptCount > 0 && !event.lastDispatchError && now.getTime() - event.updatedAt.getTime() < DISPATCH_LEASE_MS) {
     return {
       status: "busy",
-
       eventId,
     };
   }
@@ -108,9 +91,7 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     .update(discordOutboxEvents)
     .set({
       dispatchAttemptCount: nextAttemptCount,
-
       lastDispatchError: null,
-
       updatedAt: now,
     })
     .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending"), eq(discordOutboxEvents.dispatchAttemptCount, event.dispatchAttemptCount)))
@@ -130,14 +111,12 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     if (latest?.status === "dispatched") {
       return {
         status: "already_dispatched",
-
         eventId,
       };
     }
 
     return {
       status: "busy",
-
       eventId,
     };
   }
@@ -145,7 +124,6 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
   try {
     await queue.send({
       outboxEventId: eventId,
-
       dispatchAttemptCount: claimed.attemptCount,
     });
   } catch (cause) {
@@ -155,15 +133,12 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
       .update(discordOutboxEvents)
       .set({
         lastDispatchError: message,
-
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(discordOutboxEvents.id, eventId),
-
           eq(discordOutboxEvents.status, "pending"),
-
           eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount),
 
           /*
@@ -180,11 +155,8 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
       );
     return {
       status: "error",
-
       eventId,
-
       attemptCount: claimed.attemptCount,
-
       message,
     };
   }
@@ -195,19 +167,14 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     .update(discordOutboxEvents)
     .set({
       status: "dispatched",
-
       lastDispatchError: null,
-
       dispatchedAt,
-
       updatedAt: dispatchedAt,
     })
     .where(
       and(
         eq(discordOutboxEvents.id, eventId),
-
         eq(discordOutboxEvents.status, "pending"),
-
         eq(discordOutboxEvents.dispatchAttemptCount, claimed.attemptCount),
 
         /*
@@ -224,9 +191,7 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     )
     .returning({
       status: discordOutboxEvents.status,
-
       dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
-
       lastDispatchError: discordOutboxEvents.lastDispatchError,
     });
 
@@ -234,9 +199,7 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     const [latest] = await db
       .select({
         status: discordOutboxEvents.status,
-
         dispatchAttemptCount: discordOutboxEvents.dispatchAttemptCount,
-
         lastDispatchError: discordOutboxEvents.lastDispatchError,
       })
       .from(discordOutboxEvents)
@@ -246,7 +209,6 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     if (latest?.dispatchAttemptCount !== claimed.attemptCount) {
       return {
         status: "busy",
-
         eventId,
       };
     }
@@ -254,11 +216,8 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
     if (latest.status === "pending" && latest.lastDispatchError) {
       return {
         status: "error",
-
         eventId,
-
         attemptCount: claimed.attemptCount,
-
         message: latest.lastDispatchError,
       };
     }
@@ -266,9 +225,7 @@ export async function dispatchDiscordOutboxEvent(db: Db, queue: Queue<DiscordOut
 
   return {
     status: "dispatched",
-
     eventId,
-
     attemptCount: claimed.attemptCount,
   };
 }
@@ -353,22 +310,11 @@ export async function markDiscordOutboxEventDispatched(db: Db, eventId: string, 
     .update(discordOutboxEvents)
     .set({
       status: "dispatched",
-
       lastDispatchError: null,
-
       dispatchedAt: now,
-
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(discordOutboxEvents.id, eventId),
-
-        eq(discordOutboxEvents.status, "pending"),
-
-        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
-      ),
-    );
+    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.status, "pending"), eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount)));
 }
 
 export async function returnDiscordOutboxEventToPending(db: Db, eventId: string, dispatchAttemptCount: number, reason: string) {
@@ -378,20 +324,11 @@ export async function returnDiscordOutboxEventToPending(db: Db, eventId: string,
     .update(discordOutboxEvents)
     .set({
       status: "pending",
-
       lastDispatchError: reason.slice(0, MAX_DISPATCH_ERROR_LENGTH),
-
       dispatchedAt: null,
-
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(discordOutboxEvents.id, eventId),
-
-        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
-      ),
-    );
+    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount)));
 }
 
 export async function reconcileDiscordOutboxEventDispatched(db: Db, eventId: string, dispatchAttemptCount: number) {
@@ -401,18 +338,9 @@ export async function reconcileDiscordOutboxEventDispatched(db: Db, eventId: str
     .update(discordOutboxEvents)
     .set({
       status: "dispatched",
-
       lastDispatchError: null,
-
       dispatchedAt: now,
-
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(discordOutboxEvents.id, eventId),
-
-        eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount),
-      ),
-    );
+    .where(and(eq(discordOutboxEvents.id, eventId), eq(discordOutboxEvents.dispatchAttemptCount, dispatchAttemptCount)));
 }

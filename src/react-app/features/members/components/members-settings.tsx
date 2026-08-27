@@ -238,17 +238,11 @@ function EditMemberDialog({ member, teams, open, onOpenChange }: { member: Membe
     );
   }
   const roleChanged = roleValue !== initialRoleValue;
-
   const teamChanged = !haveSameIds(teamIds, initialTeamIds);
-
   const expertiseChanged = !haveSameIds(expertiseIds, initialExpertiseIds);
-
   const teamIdsToAdd = teamIds.filter((teamId) => !initialTeamIds.includes(teamId));
-
   const teamIdsToRemove = initialTeamIds.filter((teamId) => !teamIds.includes(teamId));
-
   const hasChanges = roleChanged || teamChanged || expertiseChanged;
-
   const isSaving = updateRole.isPending || updateExpertise.isPending || addTeamMember.isPending || removeTeamMember.isPending;
 
   async function saveMember() {
@@ -600,30 +594,20 @@ function MemberRow({
 }: {
   member: MemberDto;
   teams: TeamDto[];
-
   teamNames: string[];
-
   canManage: boolean;
-
   currentUserId: string;
-
   currentWorkspaceRole: "owner" | "admin" | "member";
 }) {
   const updateRole = useUpdateMemberRole();
-
   const removeMember = useRemoveWorkspaceMember();
-
   const [editOpen, setEditOpen] = useState(false);
-
   const [removeOpen, setRemoveOpen] = useState(false);
-
   const canChangeBuiltInRole = canManage && member.role !== "owner";
-
   const nextBuiltInRole = member.role === "admin" ? "member" : "admin";
-
   const nextBuiltInRoleLabel = member.role === "admin" ? "Set member" : "Set admin";
-
   const canRemove = canManage && member.id !== currentUserId && (member.role !== "owner" || currentWorkspaceRole === "owner");
+
   return (
     <>
       <div
@@ -714,9 +698,7 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
                 >
                   {nextBuiltInRoleLabel}
                 </DropdownMenuItem>
-
                 <DropdownMenuSeparator />
-
                 <DropdownMenuItem
                   variant="destructive"
                   disabled={!canRemove}
@@ -771,7 +753,6 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
           )}
         </div>
         <p className="truncate text-muted-foreground">{getRoleLabel(member)}</p>
-
         <div className="min-w-0">
           {teamNames.length === 0 ? null : (
             <div className="flex min-w-0 items-center gap-1.5">
@@ -793,7 +774,6 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove member?</AlertDialogTitle>
-
             <AlertDialogDescription>{getMemberLabel(member)} will be removed from this workspace, its projects, teams and task assignments. The Flow user account itself will not be deleted.</AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -828,18 +808,12 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]
 
 export function MembersSettings() {
   const { data: auth } = useMe();
-
   const { data: members = [], isPending, isError } = useMembers();
   const { data: roles = [] } = useRoles();
-
   const { data: teams = [] } = useTeams();
-
   const canManage = hasPermission(auth, "members.manage");
-
   const { data: pending = [] } = useMemberAccessRequests(canManage);
-
   const [query, setQuery] = useState("");
-
   const [pendingOpen, setPendingOpen] = useState(false);
 
   const teamsByUserId = useMemo(() => {
@@ -899,7 +873,6 @@ export function MembersSettings() {
   return (
     <div className="p-6 md:p-8">
       <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Members</h1>
-
       <div className="mt-8">
         <div className="flex min-w-0 items-center justify-between gap-4">
           <div className="relative w-full max-w-xs">
@@ -973,15 +946,10 @@ grid-cols-[minmax(260px,1fr)_32px_170px_120px_200px_72px]                items-c
               "
             >
               <span>Name</span>
-
               <span />
-
               <span>Expertise</span>
-
               <span>Role</span>
-
               <span>Team</span>
-
               <span>Joined</span>
             </div>
 

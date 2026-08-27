@@ -19,7 +19,6 @@ export const updateWorkspaceMemberRoleSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type UpdateWorkspaceMemberRoleInput = z.infer<typeof updateWorkspaceMemberRoleSchema>;
-
 export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;
 
 export const createWorkspaceExpertiseSchema = z.object({
@@ -31,7 +30,6 @@ export const updateMemberExpertiseSchema = z.object({
 });
 
 export type CreateWorkspaceExpertiseInput = z.infer<typeof createWorkspaceExpertiseSchema>;
-
 export type UpdateMemberExpertiseInput = z.infer<typeof updateMemberExpertiseSchema>;
 
 export type WorkspaceExpertiseDto = {

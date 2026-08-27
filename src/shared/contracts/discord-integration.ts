@@ -2,15 +2,12 @@ import * as z from "zod";
 
 export type DiscordReminderSettingsDto = {
   enabled: boolean;
-
   timeZone: string;
-
   hourLocal: number;
 };
 
 export type DiscordIntegrationDto = {
   enabled: boolean;
-
   connectionStatus: "disconnected" | "connected";
 
   guild: {
@@ -19,11 +16,8 @@ export type DiscordIntegrationDto = {
   } | null;
 
   projectCategoryId: string | null;
-
   workspaceDiscordRoleId: string | null;
-
   reminders: DiscordReminderSettingsDto;
-
   connectedAt: string | null;
 };
 
@@ -63,7 +57,6 @@ export type UpdateDiscordProjectCategoryInput = z.infer<typeof updateDiscordProj
 
 export type DiscordRoleDto = {
   id: string;
-
   name: string;
 };
 

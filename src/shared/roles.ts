@@ -16,14 +16,8 @@ export function getPermissionWeight(permissions: readonly PermissionKey[]) {
 }
 export const adminPermissions = [
   "dashboard.view",
-
-  // Admin boleh masuk Settings untuk
-  // mengelola Members dan Teams,
-  // tetapi tidak Manage Settings.
   "settings.view",
 
-  // Dibutuhkan untuk membaca pilihan
-  // role saat Edit Member.
   "roles.view",
 
   "members.view",
@@ -58,25 +52,19 @@ export const adminPermissions = [
 export const builtInRoleDefinitions: readonly BuiltInRoleDefinition[] = [
   {
     key: "owner",
-
     name: "Owner",
-
     permissions: permissionKeys,
   },
 
   {
     key: "admin",
-
     name: "Admin",
-
     permissions: adminPermissions,
   },
 
   {
     key: "member",
-
     name: "Member",
-
     permissions: viewOnlyWorkspacePermissions,
   },
 ];

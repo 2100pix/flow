@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-
 import { getDiscordRoles } from "../api/discord-integration";
 
 export const discordRolesQueryKey = ["integrations", "discord", "roles"] as const;

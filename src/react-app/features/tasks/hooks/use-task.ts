@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-
 import { getTask } from "../api/tasks";
 
 export function taskQueryKey(taskId: string | undefined) {

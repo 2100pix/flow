@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateTask } from "../api/tasks";
 import type { TaskDto, UpdateTaskInput } from "../types";
 import { projectTasksQueryKey } from "./use-project-tasks";
+import { taskActivityQueryKey } from "./use-task-activity";
 import { taskQueryKey } from "./use-task";
 import { dashboardQueryKey } from "@/features/dashboard/hooks/use-dashboard";
 import { projectQueryKey } from "@/features/projects/hooks/use-project";
@@ -40,6 +41,10 @@ export function useUpdateTask() {
 
         queryClient.invalidateQueries({
           queryKey: dashboardQueryKey,
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: taskActivityQueryKey(task.id),
         }),
       ]);
     },

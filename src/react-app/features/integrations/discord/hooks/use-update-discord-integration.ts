@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { updateDiscordIntegration } from "../api/discord-integration";
-
 import { discordIntegrationQueryKey } from "./use-discord-integration";
 
 export function useUpdateDiscordIntegration() {

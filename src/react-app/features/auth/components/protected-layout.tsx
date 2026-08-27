@@ -9,9 +9,7 @@ import { useMe } from "../hooks/use-me";
 
 export function ProtectedLayout() {
   const queryClient = useQueryClient();
-
   const navigate = useNavigate();
-
   const { data: auth, isPending, isError } = useMe();
 
   useEffect(() => {

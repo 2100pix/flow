@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
@@ -7,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProject } from "@/features/projects/hooks/use-project";
 
 import { TaskActionsMenu } from "@/features/tasks/components/task-actions-menu";
+import { TaskActivityContent } from "@/features/tasks/components/task-activity-content";
 
 import { TaskDetailContent } from "@/features/tasks/components/task-detail-content";
 import { TaskWorkspaceFilterButton, TaskWorkspaceFilterGroup } from "@/features/tasks/components/task-workspace-filter";
@@ -70,6 +72,8 @@ export function TaskDetailPage() {
 
   const { data: workflow, isPending: workflowPending, isError: workflowError } = useProjectTaskWorkflow(projectId);
 
+  const [section, setSection] = useState<"overview" | "activity">("overview");
+
   if (!projectId || !taskId) {
     return null;
   }
@@ -128,7 +132,7 @@ export function TaskDetailPage() {
             <BreadcrumbSeparator />
 
             <BreadcrumbItem>
-              <BreadcrumbPage>Overview</BreadcrumbPage>
+              <BreadcrumbPage>{section === "activity" ? "Activity" : "Overview"}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -142,11 +146,25 @@ export function TaskDetailPage() {
         <div className="mt-8">
           <nav aria-label="Task detail sections">
             <TaskWorkspaceFilterGroup>
-              <TaskWorkspaceFilterButton active ariaCurrent="page">
+              <TaskWorkspaceFilterButton
+                active={section === "overview"}
+                ariaCurrent={section === "overview" ? "page" : undefined}
+                onClick={() => {
+                  setSection("overview");
+                }}
+              >
                 Overview
               </TaskWorkspaceFilterButton>
 
-              <TaskWorkspaceFilterButton active={false}>Activity</TaskWorkspaceFilterButton>
+              <TaskWorkspaceFilterButton
+                active={section === "activity"}
+                ariaCurrent={section === "activity" ? "page" : undefined}
+                onClick={() => {
+                  setSection("activity");
+                }}
+              >
+                Activity
+              </TaskWorkspaceFilterButton>
 
               <TaskWorkspaceFilterButton active={false}>Updates</TaskWorkspaceFilterButton>
             </TaskWorkspaceFilterGroup>
@@ -155,7 +173,7 @@ export function TaskDetailPage() {
       </div>
 
       <div className="mx-auto max-w-6xl">
-        <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} presentation="page" />
+        {section === "activity" ? <TaskActivityContent task={task} /> : <TaskDetailContent key={task.id} task={task} workflowStatuses={workflow.statuses} presentation="page" />}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
 
 import { Hono } from "hono";
 import { z } from "zod";
@@ -27,6 +27,7 @@ import {
 import { dispatchDiscordOutboxEvent } from "../lib/discord-outbox";
 import { formatDisplayDate } from "../lib/format-date";
 import { createId } from "../lib/id";
+import { buildTaskActivityInsert, type TaskActivityEntry } from "../lib/task-activity";
 import { resolvePersonName } from "../lib/person-name";
 import type { AppBindings } from "../types/app-env";
 
@@ -561,6 +562,24 @@ async function persistDiscordAssigneeMutation(
       ),
     );
 
+  /*
+   * Nama target user untuk metadata activity
+   * (ASSIGNEE_ADDED/REMOVED) — snapshot saat itu.
+   */
+  const [targetUser] = await db
+    .select({
+      displayName: users.displayName,
+
+      firstName: users.firstName,
+
+      lastName: users.lastName,
+    })
+    .from(users)
+    .where(eq(users.id, targetUserId))
+    .limit(1);
+
+  const targetUserName = targetUser ? resolvePersonName(targetUser) : targetUserId;
+
   if (action === "add") {
     const assignmentInsert = db
       .insert(taskAssignees)
@@ -575,8 +594,35 @@ async function persistDiscordAssigneeMutation(
         target: [taskAssignees.taskId, taskAssignees.userId],
       });
 
+    /*
+     * ASSIGNEE_ADDED dicatat atomik bersama
+     * assignment + receipt (actor = Flow user
+     * pemilik perintah Discord).
+     */
+    const activityInsert = buildTaskActivityInsert(
+      db,
+      [
+        {
+          taskId,
+
+          projectId,
+
+          actorUserId: successReceipt.actorUserId,
+
+          eventType: "ASSIGNEE_ADDED",
+
+          metadata: {
+            userId: targetUserId,
+
+            userName: targetUserName,
+          },
+        },
+      ],
+      now,
+    );
+
     try {
-      await db.batch([receiptInsert, assignmentInsert, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
+      await db.batch([receiptInsert, assignmentInsert, taskUpdate, activityInsert, syncIntent.deletePrevious, syncIntent.insertLatest]);
     } catch (error) {
       return resolveDiscordInteractionBatchFailure(db, successReceipt.interactionId, error);
     }
@@ -589,8 +635,35 @@ async function persistDiscordAssigneeMutation(
       ),
     );
 
+    /*
+     * ASSIGNEE_REMOVED dicatat atomik bersama
+     * delete + receipt (actor = Flow user pemilik
+     * perintah Discord).
+     */
+    const activityInsert = buildTaskActivityInsert(
+      db,
+      [
+        {
+          taskId,
+
+          projectId,
+
+          actorUserId: successReceipt.actorUserId,
+
+          eventType: "ASSIGNEE_REMOVED",
+
+          metadata: {
+            userId: targetUserId,
+
+            userName: targetUserName,
+          },
+        },
+      ],
+      now,
+    );
+
     try {
-      await db.batch([receiptInsert, assignmentDelete, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
+      await db.batch([receiptInsert, assignmentDelete, taskUpdate, activityInsert, syncIntent.deletePrevious, syncIntent.insertLatest]);
     } catch (error) {
       return resolveDiscordInteractionBatchFailure(db, successReceipt.interactionId, error);
     }
@@ -685,6 +758,113 @@ async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, works
   const receiptInsert = createDiscordInteractionReceiptInsert(db, receipt, now);
   const syncIntent = createDiscordTaskSyncIntent(db, workspaceId, taskId, now);
 
+  /*
+   * Snapshot nilai before untuk activity —
+   * diambil sekali untuk seluruh jenis mutasi.
+   */
+  const [taskSnapshot] = await db
+    .select({
+      status: tasks.status,
+
+      priority: tasks.priority,
+
+      leadUserId: tasks.leadUserId,
+
+      startDate: tasks.startDate,
+
+      dueDate: tasks.dueDate,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.projectId, projectId), isNull(tasks.archivedAt)))
+    .limit(1);
+
+  if (!taskSnapshot) {
+    throw new Error("Discord Task mutation target no longer exists");
+  }
+
+  const beforeValue =
+    mutation.kind === "status"
+      ? taskSnapshot.status
+      : mutation.kind === "priority"
+        ? taskSnapshot.priority
+        : mutation.kind === "lead"
+          ? taskSnapshot.leadUserId
+          : mutation.kind === "start_date"
+            ? taskSnapshot.startDate
+            : taskSnapshot.dueDate;
+
+  let activityEntry: TaskActivityEntry | null = null;
+
+  if (beforeValue !== mutation.value) {
+    if (mutation.kind === "lead") {
+      const involvedLeadIds = [beforeValue, mutation.value].filter((value): value is string => value !== null);
+
+      const nameById = new Map<string, string>();
+
+      if (involvedLeadIds.length > 0) {
+        const involvedUsers = await db
+          .select({
+            id: users.id,
+
+            displayName: users.displayName,
+
+            firstName: users.firstName,
+
+            lastName: users.lastName,
+          })
+          .from(users)
+          .where(inArray(users.id, involvedLeadIds));
+
+        for (const involvedUser of involvedUsers) {
+          nameById.set(involvedUser.id, resolvePersonName(involvedUser));
+        }
+      }
+
+      activityEntry = {
+        taskId,
+
+        projectId,
+
+        actorUserId: receipt.actorUserId,
+
+        eventType: "LEAD_CHANGED",
+
+        metadata: {
+          before: beforeValue ? (nameById.get(beforeValue) ?? beforeValue) : null,
+
+          after: mutation.value ? (nameById.get(mutation.value) ?? mutation.value) : null,
+        },
+      };
+    } else {
+      const eventType =
+        mutation.kind === "status"
+          ? ("STATUS_CHANGED" as const)
+          : mutation.kind === "priority"
+            ? ("PRIORITY_CHANGED" as const)
+            : mutation.kind === "start_date"
+              ? ("START_DATE_CHANGED" as const)
+              : ("DUE_DATE_CHANGED" as const);
+
+      activityEntry = {
+        taskId,
+
+        projectId,
+
+        actorUserId: receipt.actorUserId,
+
+        eventType,
+
+        metadata: {
+          before: beforeValue ?? null,
+
+          after: mutation.value,
+        },
+      };
+    }
+  }
+
+  const activityInsert = activityEntry ? buildTaskActivityInsert(db, [activityEntry], now) : null;
+
   let nextSortOrder: number | undefined;
 
   if (mutation.kind === "status") {
@@ -766,7 +946,7 @@ async function persistDiscordTaskMutation(db: ReturnType<typeof createDb>, works
    * latest intent.
    */
   try {
-    await db.batch([receiptInsert, taskUpdate, syncIntent.deletePrevious, syncIntent.insertLatest]);
+    await db.batch([receiptInsert, taskUpdate, ...(activityInsert ? [activityInsert] : []), syncIntent.deletePrevious, syncIntent.insertLatest]);
   } catch (cause) {
     return resolveDiscordInteractionBatchFailure(db, receipt.interactionId, cause);
   }

@@ -83,13 +83,10 @@ export type TaskActionResponse = {
 };
 
 export type ArchiveTaskResponse = TaskActionResponse;
-
 export type DeleteTaskResponse = TaskActionResponse;
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
-
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
-
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
 export type TaskAssigneeDto = {

@@ -103,7 +103,6 @@ export function ProjectBoardPage() {
 
   function resetDragState() {
     boardRef.current = null;
-
     previousBoardRef.current = null;
 
     setDragBoard(null);
@@ -112,7 +111,6 @@ export function ProjectBoardPage() {
   function openTask(taskId: string) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
-
       next.set("task", taskId);
 
       return next;
@@ -218,11 +216,8 @@ export function ProjectBoardPage() {
     <DragDropProvider
       onDragStart={() => {
         reorderTasks.reset();
-
         const snapshot = cloneBoard(board);
-
         previousBoardRef.current = snapshot;
-
         boardRef.current = snapshot;
       }}
       sensors={(defaults) => [
@@ -259,7 +254,6 @@ export function ProjectBoardPage() {
 
           // SAFETY: base is a TaskBoardState and dnd-kit move() only reorders its existing entries, preserving the board shape.
           const next = move(base, event) as TaskBoardState;
-
           boardRef.current = next;
 
           return next;
@@ -267,7 +261,6 @@ export function ProjectBoardPage() {
       }}
       onDragEnd={(event) => {
         const snapshot = previousBoardRef.current;
-
         const currentBoard = boardRef.current;
 
         if (!snapshot || !currentBoard) {
@@ -286,11 +279,8 @@ export function ProjectBoardPage() {
           resetDragState();
           return;
         }
-
         const taskId = String(source.id);
-
         const sourceStatus = findTaskStatus(snapshot, taskId);
-
         const targetStatus = findTaskStatus(currentBoard, taskId);
 
         if (!sourceStatus || !targetStatus) {
@@ -299,12 +289,9 @@ export function ProjectBoardPage() {
         }
 
         const affectedStatuses: TaskStatus[] = sourceStatus === targetStatus ? [sourceStatus] : [sourceStatus, targetStatus];
-
         const changed = affectedStatuses.some((status) => {
           const before = snapshot[status];
-
           const after = currentBoard[status];
-
           return before.length !== after.length || before.some((task, index) => task.id !== after[index]?.id);
         });
 
@@ -321,7 +308,6 @@ export function ProjectBoardPage() {
         };
 
         const toastId = toast.loading("Saving task order…");
-
         reorderTasks.mutate(
           {
             projectId: project.id,

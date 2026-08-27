@@ -6,15 +6,10 @@ const NO_CLIENT_VALUE = "__flow_no_client__";
 
 type ProjectClientPickerProps = {
   value: string | null;
-
   clients: ClientDto[];
-
   onValueChange: (value: string | null) => void;
-
   disabled?: boolean;
-
   loading?: boolean;
-
   error?: boolean;
 };
 

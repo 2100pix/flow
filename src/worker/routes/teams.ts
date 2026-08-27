@@ -22,7 +22,6 @@ export const teamsRoutes = new Hono<TeamsEnv>();
 
 teamsRoutes.get("/", requireAuth, requirePermission("teams.view"), async (c) => {
   const auth = c.var.auth;
-
   const db = createDb(c.env.flow_db);
 
   const teamRows = await db

@@ -80,17 +80,11 @@ export function DiscordIntegrationSettings() {
   const { data: roles = [], isPending: rolesPending, isError: rolesError } = useDiscordRoles(connected && canManageIntegration);
   const updateWorkspaceRole = useUpdateDiscordWorkspaceRole();
   const updateReminders = useUpdateDiscordReminderSettings();
-
   const [reminderTimeZoneDraft, setReminderTimeZoneDraft] = useState<string | null>(null);
-
   const [reminderHourLocalDraft, setReminderHourLocalDraft] = useState<number | null>(null);
-
   const statusLabel = !connected ? "Not connected" : integration.enabled ? "Enabled" : "Connected";
-
   const reminderTimeZone = reminderTimeZoneDraft ?? integration?.reminders.timeZone ?? "UTC";
-
   const reminderHourLocal = reminderHourLocalDraft ?? integration?.reminders.hourLocal ?? 9;
-
   const reminderSettingsDirty = integration ? reminderTimeZone !== integration.reminders.timeZone || reminderHourLocal !== integration.reminders.hourLocal : false;
 
   return (
@@ -110,13 +104,11 @@ export function DiscordIntegrationSettings() {
               <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">Discord</p>
-
                   <p className="mt-0.5 text-xs text-muted-foreground">Discussion and task interaction layer for Flow.</p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
                   {!isPending && !isError ? <Badge variant={connected ? "secondary" : "outline"}>{statusLabel}</Badge> : null}
-
                   {!isPending && !isError && canManageIntegration ? (
                     connected ? (
                       <>
@@ -194,20 +186,17 @@ export function DiscordIntegrationSettings() {
                   <div className="divide-y divide-border/60">
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <span className="text-xs text-muted-foreground">Connection</span>
-
                       <span className="text-xs font-medium">{connected ? "Connected" : "Not connected"}</span>
                     </div>
 
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <span className="text-xs text-muted-foreground">Server</span>
-
                       <span className="max-w-64 truncate text-right text-xs font-medium">{integration.guild?.name ?? "—"}</span>
                     </div>
 
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Project category</p>
-
                         <p className="mt-0.5 text-[11px] text-muted-foreground">New project forums will be created inside this category.</p>
                       </div>
 
@@ -273,7 +262,6 @@ export function DiscordIntegrationSettings() {
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Roles workspace</p>
-
                         <p className="mt-0.5 text-[11px] text-muted-foreground">Discord role that can view project forums. Private projects are always restricted to their Flow members.</p>
                       </div>
 
@@ -321,7 +309,6 @@ export function DiscordIntegrationSettings() {
                           "
                           >
                             <option value="">Everyone (open)</option>
-
                             {roles.map((role) => (
                               <option key={role.id} value={role.id}>
                                 {role.name}
@@ -339,7 +326,6 @@ export function DiscordIntegrationSettings() {
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Sync</p>
-
                         <p className="mt-0.5 text-[11px] text-muted-foreground">Controls automatic Discord synchronization.</p>
                       </div>
 
@@ -377,7 +363,6 @@ export function DiscordIntegrationSettings() {
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Deadline reminders</p>
-
                         <p className="mt-0.5 text-[11px] text-muted-foreground">DM Task leads and assignees one day before and on the due date.</p>
                       </div>
 
@@ -422,7 +407,6 @@ export function DiscordIntegrationSettings() {
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Reminder schedule</p>
-
                         <p className="mt-0.5 text-[11px] text-muted-foreground">Workspace timezone and local delivery hour.</p>
                       </div>
 

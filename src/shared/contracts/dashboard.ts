@@ -39,9 +39,7 @@ export type DashboardResponse = {
     };
 
     taskStatus: Record<TaskStatus, number>;
-
     myTasks: DashboardTaskDto[];
-
     recentProjects: DashboardProjectDto[];
   };
 };

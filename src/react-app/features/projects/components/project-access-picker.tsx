@@ -36,11 +36,8 @@ const accessConfig = {
 
 export function ProjectAccessPicker({ value, onValueChange, canChoosePrivate, disabled = false, appearance = "default" }: ProjectAccessPickerProps) {
   const current = accessConfig[value];
-
   const CurrentIcon = current.Icon;
-
   const values: ProjectDto["visibility"][] = canChoosePrivate || value === "private" ? ["workspace", "private"] : ["workspace"];
-
   const createAppearance = appearance === "create";
 
   return (

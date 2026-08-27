@@ -1,21 +1,14 @@
 import { useState, type FormEvent } from "react";
-
 import { FileTextIcon, LinkIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
-
 import { toast } from "sonner";
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Button } from "@/components/ui/button";
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 import { useCreateTaskResource, useDeleteTaskResource, useTaskResources, useUpdateTaskResource } from "../hooks/use-task-resources";
-
 import { getErrorMessage } from "@/lib/errors";
-
 import type { TaskResourceDto, TaskResourceType } from "../types";
 
 type ResourceEditor =

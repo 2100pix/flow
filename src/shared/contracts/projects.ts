@@ -65,7 +65,6 @@ export type ProjectActionResponse = {
 };
 
 export type ArchiveProjectResponse = ProjectActionResponse;
-
 export type DeleteProjectResponse = ProjectActionResponse;
 
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;

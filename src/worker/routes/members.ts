@@ -62,44 +62,26 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
   const result = await db
     .select({
       id: users.id,
-
       displayName: users.displayName,
-
       firstName: users.firstName,
-
       lastName: users.lastName,
-
       avatarUrl: users.avatarUrl,
-
       role: workspaceMembers.role,
-
       joinedAt: workspaceMembers.createdAt,
-
       customRoleId: workspaceRoles.id,
-
       customRoleName: workspaceRoles.name,
     })
     .from(workspaceMembers)
     .innerJoin(users, eq(workspaceMembers.userId, users.id))
-    .leftJoin(
-      workspaceRoles,
-      and(
-        eq(workspaceMembers.customRoleId, workspaceRoles.id),
-
-        eq(workspaceRoles.workspaceId, auth.workspace.id),
-      ),
-    )
+    .leftJoin(workspaceRoles, and(eq(workspaceMembers.customRoleId, workspaceRoles.id), eq(workspaceRoles.workspaceId, auth.workspace.id)))
     .where(eq(workspaceMembers.workspaceId, auth.workspace.id))
     .orderBy(asc(sql`COALESCE(NULLIF(${users.firstName}, ''), ${users.displayName})`));
 
   const expertiseRows = await db
     .select({
       userId: memberExpertise.userId,
-
       id: workspaceExpertise.id,
-
       name: workspaceExpertise.name,
-
       createdAt: workspaceExpertise.createdAt,
     })
     .from(memberExpertise)
@@ -114,9 +96,7 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
 
     current.push({
       id: expertise.id,
-
       name: expertise.name,
-
       createdAt: expertise.createdAt.toISOString(),
     });
 
@@ -124,24 +104,17 @@ membersRoutes.get("/", requireAuth, requirePermission("members.view"), async (c)
   }
   const data: MemberDto[] = result.map((member) => ({
     id: member.id,
-
     displayName: member.displayName,
-
     firstName: member.firstName,
-
     lastName: member.lastName,
-
     avatarUrl: member.avatarUrl,
-
     role: member.role,
-
     joinedAt: member.joinedAt.toISOString(),
     expertise: expertiseByUserId.get(member.id) ?? [],
     customRole:
       member.customRoleId && member.customRoleName
         ? {
             id: member.customRoleId,
-
             name: member.customRoleName,
           }
         : null,
@@ -299,16 +272,12 @@ membersRoutes.delete("/access-requests/:userId", requireAuth, requirePermission(
 
 membersRoutes.get(
   "/expertise",
-
   requireAuth,
-
   requirePermission("members.view"),
 
   async (c) => {
     const auth = c.var.auth;
-
     const db = createDb(c.env.flow_db);
-
     const rows = await db
       .select({
         id: workspaceExpertise.id,
@@ -339,9 +308,7 @@ membersRoutes.post(
   "/expertise",
 
   requireAuth,
-
   requirePermission("members.manage"),
-
   zValidator(
     "json",
 
@@ -365,9 +332,7 @@ membersRoutes.post(
 
   async (c) => {
     const auth = c.var.auth;
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
 
     const existing = await db
@@ -386,7 +351,6 @@ membersRoutes.post(
         {
           error: {
             code: "EXPERTISE_NAME_TAKEN",
-
             message: "Expertise already exists",
           },
         },
@@ -395,26 +359,18 @@ membersRoutes.post(
     }
 
     const id = createId("exp");
-
     const now = new Date();
-
     await db.insert(workspaceExpertise).values({
       id,
-
       workspaceId: auth.workspace.id,
-
       name: input.name,
-
       createdAt: now,
-
       updatedAt: now,
     });
 
     const data: WorkspaceExpertiseDto = {
       id,
-
       name: input.name,
-
       createdAt: now.toISOString(),
     };
 
@@ -428,11 +384,8 @@ membersRoutes.post(
 );
 membersRoutes.put(
   "/:userId/expertise",
-
   requireAuth,
-
   requirePermission("members.manage"),
-
   zValidator(
     "json",
 
@@ -456,13 +409,9 @@ membersRoutes.put(
 
   async (c) => {
     const auth = c.var.auth;
-
     const userId = c.req.param("userId");
-
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const [membership] = await db
       .select({
         userId: workspaceMembers.userId,
@@ -557,9 +506,7 @@ membersRoutes.put(
 
 membersRoutes.delete(
   "/:userId",
-
   requireAuth,
-
   requirePermission("members.manage"),
 
   async (c) => {
@@ -978,7 +925,6 @@ membersRoutes.patch(
 
       if (!isSystemAdministrator) {
         const allowed = new Set(auth.workspace.permissions);
-
         const exceedsCaller = definition.permissions.some((permission) => !allowed.has(permission));
 
         if (exceedsCaller) {
@@ -995,7 +941,6 @@ membersRoutes.patch(
         }
       }
       nextRole = input.role;
-
       nextCustomRoleId = null;
     } else {
       const customRoleRows = await db
@@ -1036,7 +981,6 @@ membersRoutes.patch(
 
       if (!isSystemAdministrator) {
         const allowed = new Set(auth.workspace.permissions);
-
         const exceedsCaller = customRolePermissions.some((permission) => !allowed.has(permission));
 
         if (exceedsCaller) {
@@ -1054,7 +998,6 @@ membersRoutes.patch(
       }
 
       nextRole = targetMember.role === "owner" ? "owner" : "member";
-
       nextCustomRoleId = customRole.id;
 
       nextCustomRole = {
@@ -1109,13 +1052,9 @@ membersRoutes.patch(
     const [user] = await db
       .select({
         id: users.id,
-
         displayName: users.displayName,
-
         firstName: users.firstName,
-
         lastName: users.lastName,
-
         avatarUrl: users.avatarUrl,
       })
       .from(users)
@@ -1137,17 +1076,11 @@ membersRoutes.patch(
 
     const data: MemberDto = {
       id: user.id,
-
       displayName: user.displayName,
-
       firstName: user.firstName,
-
       lastName: user.lastName,
-
       avatarUrl: user.avatarUrl,
-
       role: nextRole,
-
       customRole: nextCustomRole,
     };
 
@@ -1159,9 +1092,7 @@ membersRoutes.patch(
     const accessSyncEvents = await insertForumAccessSyncForWorkspace(db, auth.workspace.id);
 
     for (const syncEvent of accessSyncEvents) {
-      c.executionCtx.waitUntil(
-        dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, syncEvent.eventId).catch(() => undefined),
-      );
+      c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, syncEvent.eventId).catch(() => undefined));
     }
 
     return c.json({

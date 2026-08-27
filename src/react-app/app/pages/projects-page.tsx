@@ -29,7 +29,6 @@ export function ProjectsPage() {
   }
   function openCreate() {
     const next = new URLSearchParams(searchParams);
-
     next.set("create", "project");
 
     setSearchParams(next);
@@ -37,7 +36,6 @@ export function ProjectsPage() {
 
   function closeCreate() {
     const next = new URLSearchParams(searchParams);
-
     next.delete("create");
 
     setSearchParams(next, {
@@ -69,9 +67,7 @@ export function ProjectsPage() {
         </div>
 
         {isPending && <p className="text-sm text-muted-foreground">Loading projects…</p>}
-
         {isError && <p className="text-sm text-destructive">Unable to load projects.</p>}
-
         {!isPending && !isError && projects.length === 0 && (
           <div className="rounded-lg border border-dashed p-8">
             <p className="text-sm font-medium">No projects yet</p>

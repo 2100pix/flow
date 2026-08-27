@@ -3,11 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { createProjectSchema, updateProjectSchema, type ProjectDetailDto, type ProjectDto, type ProjectDueDateMode } from "../../shared/contracts/projects";
-
 import { addProjectMemberSchema, type ProjectMemberDto } from "../../shared/contracts/members";
-
 import { replaceProjectLeadsSchema } from "../../shared/contracts/project-leads";
-
 import { createProjectResourceSchema, updateProjectResourceSchema, type ProjectResourceDto } from "../../shared/contracts/project-resources";
 
 import { canCreateProjectWithVisibility, canManageProjectMembers, canManageProjectVisibility } from "../../shared/project-privacy";
@@ -126,25 +123,15 @@ async function insertProjectForumAccessEvent(db: ReturnType<typeof createDb>, wo
 
   await db.insert(discordOutboxEvents).values({
     id: eventId,
-
     workspaceId,
-
     aggregateType: "project_forum",
-
     aggregateId: projectId,
-
     eventType: "project_forum.access",
-
     status: "pending",
-
     dispatchAttemptCount: 0,
-
     lastDispatchError: null,
-
     dispatchedAt: null,
-
     createdAt: now,
-
     updatedAt: now,
   });
 
@@ -261,9 +248,7 @@ projectsRoutes.post(
   async (c) => {
     const auth = c.var.auth;
     const input = c.req.valid("json");
-
     const db = createDb(c.env.flow_db);
-
     const visibility = input.visibility ?? "workspace";
 
     if (!canCreateProjectWithVisibility(auth.workspace.permissions, visibility)) {
@@ -408,21 +393,13 @@ projectsRoutes.post(
     if (discordIntegration?.enabled && discordIntegration.guildId) {
       const discordForumInsert = db.insert(projectDiscordForums).values({
         projectId: id,
-
         guildId: discordIntegration.guildId,
-
         forumChannelId: null,
-
         provisioningStatus: "pending",
-
         attemptCount: 0,
-
         lastError: null,
-
         lastAttemptAt: null,
-
         createdAt: now,
-
         updatedAt: now,
       });
 
@@ -430,25 +407,15 @@ projectsRoutes.post(
 
       const discordOutboxInsert = db.insert(discordOutboxEvents).values({
         id: discordOutboxEventId,
-
         workspaceId: auth.workspace.id,
-
         aggregateType: "project_forum",
-
         aggregateId: id,
-
         eventType: "project_forum.provision",
-
         status: "pending",
-
         dispatchAttemptCount: 0,
-
         lastDispatchError: null,
-
         dispatchedAt: null,
-
         createdAt: now,
-
         updatedAt: now,
       });
 
@@ -531,9 +498,7 @@ projectsRoutes.post(
 
 projectsRoutes.post("/:id/discord-forum/provision", requireAuth, requirePermission("settings.manage"), async (c) => {
   const auth = c.var.auth;
-
   const projectId = c.req.param("id");
-
   const db = createDb(c.env.flow_db);
 
   const [project] = await db
@@ -595,18 +560,15 @@ projectsRoutes.post("/:id/discord-forum/provision", requireAuth, requirePermissi
     result.reason === "mapping_missing"
       ? {
           code: "DISCORD_FORUM_MAPPING_MISSING",
-
           message: "This project does not have a Discord Forum provisioning mapping",
         }
       : result.reason === "integration_disabled"
         ? {
             code: "DISCORD_INTEGRATION_DISABLED",
-
             message: "Discord integration is disabled",
           }
         : {
             code: "DISCORD_NOT_CONNECTED",
-
             message: "Discord integration is not connected",
           };
 
@@ -681,9 +643,7 @@ projectsRoutes.get("/:id/task-workflow", requireAuth, requirePermission("tasks.v
 projectsRoutes.patch("/:id/task-workflow", requireAuth, requirePermission("tasks.edit"), async (c) => {
   const auth = c.var.auth;
   const projectId = c.req.param("id");
-
   const db = createDb(c.env.flow_db);
-
   const access = await findAccessibleProject(db, auth, projectId);
 
   if (!access) {
@@ -1135,9 +1095,7 @@ projectsRoutes.patch("/:id", requireAuth, requirePermission("projects.edit"), as
   if (visibilityChanged) {
     const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
 
-    c.executionCtx.waitUntil(
-      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
-    );
+    c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined));
   }
 
   return c.json({
@@ -1505,9 +1463,7 @@ projectsRoutes.post("/:id/members", requireAuth, requirePermission("projects.ass
 
   const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
 
-  c.executionCtx.waitUntil(
-    dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
-  );
+  c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined));
 
   return c.json({
     data,
@@ -1657,9 +1613,7 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
 
     const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
 
-    c.executionCtx.waitUntil(
-      dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
-    );
+    c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined));
 
     return c.json({
       data: {
@@ -1708,9 +1662,7 @@ projectsRoutes.delete("/:id/members/:userId", requireAuth, requirePermission("pr
 
   const accessEventId = await insertProjectForumAccessEvent(db, auth.workspace.id, projectId);
 
-  c.executionCtx.waitUntil(
-    dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined),
-  );
+  c.executionCtx.waitUntil(dispatchDiscordOutboxEvent(db, c.env.FLOW_DISCORD_QUEUE, accessEventId).catch(() => undefined));
 
   return c.json({
     data: {

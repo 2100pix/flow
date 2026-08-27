@@ -16,15 +16,10 @@ export type ProfileExpertiseItem = {
 
 export type UserProfileDto = {
   id: string;
-
   displayName: string;
-
   avatarUrl: string | null;
-
   firstName: string | null;
-
   lastName: string | null;
-
   timeZone: string | null;
 
   expertise: ProfileExpertiseItem[];

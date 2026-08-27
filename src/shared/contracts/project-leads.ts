@@ -17,7 +17,6 @@ export const replaceProjectLeadsSchema = z.object({
 });
 
 export type ProjectLeadUserIds = z.infer<typeof projectLeadUserIdsSchema>;
-
 export type ReplaceProjectLeadsInput = z.infer<typeof replaceProjectLeadsSchema>;
 
 export type ProjectLeadDto = {

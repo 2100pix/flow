@@ -76,13 +76,9 @@ type InviteMembersControlProps = {
 
 function InviteMembersControl({ projectId, assignedUserIds, canManageMembers, canViewWorkspaceMembers, mode }: InviteMembersControlProps) {
   const [open, setOpen] = useState(false);
-
   const { data: workspaceMembers = [], isPending, isError } = useMembers(open && canManageMembers && canViewWorkspaceMembers);
-
   const addMember = useAddProjectMember();
-
   const assignedIds = new Set(assignedUserIds);
-
   const candidates = workspaceMembers.filter((member) => !assignedIds.has(member.id));
 
   if (!canManageMembers || !canViewWorkspaceMembers) {
@@ -171,11 +167,8 @@ type ProjectSettingsTeamProps = {
 
 export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canViewWorkspaceMembers }: ProjectSettingsTeamProps) {
   const [expanded, setExpanded] = useState(false);
-
   const { data: projectMembers = [], isPending, isError } = useProjectMembers(project.id);
-
   const removeMember = useRemoveProjectMember();
-
   const updateLeads = useUpdateProjectLeads();
 
   const orderedMembers = [...projectMembers].sort((first, second) => {
@@ -198,13 +191,9 @@ export function ProjectSettingsTeam({ project, canEdit, canManageMembers, canVie
    * Team members = non-leads
    */
   const teamMembers = orderedMembers.filter((member) => !member.isLead);
-
   const leadIds = leads.map((lead) => lead.user.id);
-
   const visibleMembers = expanded ? teamMembers : teamMembers.slice(0, 4);
-
   const hiddenCount = Math.max(teamMembers.length - 4, 0);
-
   const mutationPending = removeMember.isPending || updateLeads.isPending;
 
   function setAsLead(userId: string) {

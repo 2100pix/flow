@@ -1,19 +1,14 @@
 import type { CSSProperties } from "react";
-
 import { ArrowsOutSimpleIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
-
 import { useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
-
 import { cn } from "@/lib/utils";
 
 import { TaskActionsMenu } from "./task-actions-menu";
-
 import { TaskDetailContent } from "./task-detail-content";
 
 import { useTask } from "../hooks/use-task";
-
 import type { TaskWorkflowStatusDto } from "../types";
 
 function LoadedTaskDetailSheet({

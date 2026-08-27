@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import { toast } from "sonner";
-
 import { getErrorMessage } from "@/lib/errors";
-
 import type { TaskDto, TaskPriority, TaskStatus, UpdateTaskInput } from "../types";
-
 import { useUpdateTask } from "./use-update-task";
 
 const TEXT_SAVE_DELAY_MS = 600;

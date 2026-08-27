@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-
 export type ThemePreference = "light" | "dark" | "system";
-
 const THEME_STORAGE_KEY = "flow:theme";
-
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
 function isThemePreference(value: string | null): value is ThemePreference {
@@ -18,9 +15,7 @@ export function getThemePreference(): ThemePreference {
 
 export function applyTheme(theme: ThemePreference) {
   const resolvedDark = theme === "dark" || (theme === "system" && window.matchMedia(DARK_MEDIA_QUERY).matches);
-
   document.documentElement.classList.toggle("dark", resolvedDark);
-
   document.documentElement.style.colorScheme = resolvedDark ? "dark" : "light";
 }
 

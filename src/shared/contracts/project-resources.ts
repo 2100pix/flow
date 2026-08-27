@@ -40,9 +40,7 @@ export const updateProjectResourceSchema = z
   });
 
 export type ProjectResourceType = z.infer<typeof projectResourceTypeSchema>;
-
 export type CreateProjectResourceInput = z.infer<typeof createProjectResourceSchema>;
-
 export type UpdateProjectResourceInput = z.infer<typeof updateProjectResourceSchema>;
 
 export type ProjectResourceDto = {

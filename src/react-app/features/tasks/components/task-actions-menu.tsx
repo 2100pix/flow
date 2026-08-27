@@ -1,23 +1,13 @@
 import { useState } from "react";
-
 import { DotsThreeIcon } from "@phosphor-icons/react";
-
 import { toast } from "sonner";
-
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
 import { Button } from "@/components/ui/button";
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-
 import { hasPermission } from "@/features/auth/permissions";
-
 import { useMe } from "@/features/auth/hooks/use-me";
-
 import { useArchiveTask } from "../hooks/use-archive-task";
-
 import { useDeleteTask } from "../hooks/use-delete-task";
-
 import { getErrorMessage } from "@/lib/errors";
 
 import type { TaskDto } from "../types";
@@ -34,19 +24,12 @@ type TaskActionsMenuProps = {
 
 export function TaskActionsMenu({ task, align = "start", onArchived, onDeleted }: TaskActionsMenuProps) {
   const { data: auth } = useMe();
-
   const canArchive = hasPermission(auth, "tasks.archive");
-
   const canDelete = hasPermission(auth, "tasks.delete");
-
   const archiveTask = useArchiveTask();
-
   const deleteTask = useDeleteTask();
-
   const [archiveOpen, setArchiveOpen] = useState(false);
-
   const [deleteOpen, setDeleteOpen] = useState(false);
-
   const taskPath = `/projects/${task.projectId}/tasks/${task.id}`;
 
   return (

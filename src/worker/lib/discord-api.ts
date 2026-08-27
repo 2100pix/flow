@@ -13,7 +13,7 @@ type DiscordErrorResponse = {
    * Detail validasi per-field dari Discord,
    * contohnya saat Invalid Form Body (400).
    * Bentuknya bervariasi, jadi hanya
-   * di-stringify untuk pesan error.
+   * di-stringify untuk pesan error
    */
   errors?: unknown;
 };
@@ -28,29 +28,22 @@ export type DiscordGuildChannel = {
 
 export type DiscordMessage = {
   id: string;
-
   channel_id: string;
-
   content: string;
-
   reactions?: DiscordMessageReaction[];
 };
 
 export type DiscordMessageReaction = {
   count: number;
-
   me: boolean;
-
   emoji: {
     id: string | null;
-
     name: string | null;
   };
 };
 
 export type DiscordDmChannel = {
   id: string;
-
   type: number;
 };
 
@@ -76,9 +69,7 @@ export class DiscordApiError extends Error {
     super(message);
 
     this.name = "DiscordApiError";
-
     this.status = status;
-
     this.discordCode = discordCode;
   }
 }
@@ -87,7 +78,6 @@ async function discordFetch<T>(botToken: string, path: string, init: RequestInit
   const headers = new Headers(init.headers);
 
   headers.set("Authorization", `Bot ${botToken}`);
-
   headers.set("Accept", "application/json");
 
   const response = await fetch(`${DISCORD_API_BASE}${path}`, {
@@ -109,32 +99,26 @@ async function discordFetch<T>(botToken: string, path: string, init: RequestInit
   }
 
   if (!response.ok) {
-      // SAFETY: same untrusted payload parsed above; DiscordErrorResponse fields are optional so a mismatch degrades to a generic message.
-      const error = body as DiscordErrorResponse | null;
+    // SAFETY: same untrusted payload parsed above; DiscordErrorResponse fields are optional so a mismatch degrades to a generic message.
+    const error = body as DiscordErrorResponse | null;
 
-      /*
-       * Sertakan detail errors per-field dari
-       * Discord bila ada (mis. Invalid Form Body)
-       * supaya penyebab kegagalan langsung terlihat
-       * di lastError tanpa perlu debugging manual.
-       */
-      let detail = "";
+    /*
+     * Sertakan detail errors per-field dari
+     * Discord bila ada (mis. Invalid Form Body)
+     * supaya penyebab kegagalan langsung terlihat
+     * di lastError tanpa perlu debugging manual
+     */
+    let detail = "";
 
-      if (error?.errors) {
-        try {
-          detail = ` :: ${JSON.stringify(error.errors).slice(0, 500)}`;
-        } catch {
-          detail = "";
-        }
+    if (error?.errors) {
+      try {
+        detail = ` :: ${JSON.stringify(error.errors).slice(0, 500)}`;
+      } catch {
+        detail = "";
       }
+    }
 
-      throw new DiscordApiError(
-        response.status,
-        error?.code ?? null,
-        error?.message
-          ? `Discord API ${response.status}: ${error.message}${detail}`
-          : `Discord API request failed with status ${response.status}${detail}`,
-      );
+    throw new DiscordApiError(response.status, error?.code ?? null, error?.message ? `Discord API ${response.status}: ${error.message}${detail}` : `Discord API request failed with status ${response.status}${detail}`);
   }
 
   // SAFETY: on 2xx the payload is trusted to match the contract declared by the calling wrapper function.
@@ -148,11 +132,8 @@ export function listDiscordGuildChannels(botToken: string, guildId: string) {
 export type DiscordGuildMember = {
   user: {
     id: string;
-
     username: string;
-
     global_name: string | null;
-
     avatar: string | null;
   };
 };
@@ -171,10 +152,10 @@ type CreateDiscordForumChannelInput = {
 };
 
 /*
- * Overwrite izin kanal Discord.
- * type: 0 = role, 1 = member.
+ * Overwrite izin kanal Discord
+ * type: 0 = role, 1 = member
  * allow/deny berupa bitmask angka yang
- * diserialisasi Discord sebagai string.
+ * diserialisasi Discord sebagai string
  */
 export type DiscordOverwrite = {
   id: string;
@@ -188,30 +169,21 @@ export type DiscordOverwrite = {
 
 /*
  * Bitmask izin yang dipakai Flow untuk
- * mengunci akses Forum project.
+ * mengunci akses Forum project
  */
 export const DISCORD_VIEW_CHANNEL = 1 << 10;
-
 export const DISCORD_SEND_MESSAGES = 1 << 11;
-
 export const DISCORD_READ_MESSAGE_HISTORY = 1 << 16;
 
 type CreateDiscordForumChannelBody = {
   name: string;
-
   type: number;
-
   topic: string;
-
   parent_id?: string;
-
   permission_overwrites?: Array<{
     id: string;
-
     type: 0 | 1;
-
     allow: string;
-
     deny: string;
   }>;
 };
@@ -219,9 +191,7 @@ type CreateDiscordForumChannelBody = {
 export function createDiscordForumChannel(botToken: string, input: CreateDiscordForumChannelInput) {
   const body: CreateDiscordForumChannelBody = {
     name: input.name,
-
     type: DISCORD_GUILD_FORUM_TYPE,
-
     topic: input.topic,
   };
 
@@ -232,18 +202,14 @@ export function createDiscordForumChannel(botToken: string, input: CreateDiscord
   if (input.permissionOverwrites && input.permissionOverwrites.length > 0) {
     body.permission_overwrites = input.permissionOverwrites.map((overwrite) => ({
       id: overwrite.id,
-
       type: overwrite.type,
-
       allow: String(overwrite.allow),
-
       deny: String(overwrite.deny),
     }));
   }
 
   return discordFetch<DiscordGuildChannel>(botToken, `/guilds/${encodeURIComponent(input.guildId)}/channels`, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json",
 
@@ -258,12 +224,11 @@ export function createDiscordForumChannel(botToken: string, input: CreateDiscord
  * Mengganti seluruh permission overwrites
  * sebuah kanal (semantik Discord: full
  * replace). Dipakai untuk mengunci/membuka
- * Forum project sesuai visibilitas Flow.
+ * Forum project sesuai visibilitas Flow
  */
 export function modifyDiscordChannelOverwrites(botToken: string, input: { channelId: string; overwrites: DiscordOverwrite[]; auditReason: string }) {
   return discordFetch<DiscordGuildChannel>(botToken, `/channels/${encodeURIComponent(input.channelId)}`, {
     method: "PATCH",
-
     headers: {
       "Content-Type": "application/json",
 
@@ -273,11 +238,8 @@ export function modifyDiscordChannelOverwrites(botToken: string, input: { channe
     body: JSON.stringify({
       permission_overwrites: input.overwrites.map((overwrite) => ({
         id: overwrite.id,
-
         type: overwrite.type,
-
         allow: String(overwrite.allow),
-
         deny: String(overwrite.deny),
       })),
     }),
@@ -324,17 +286,16 @@ export function modifyDiscordThread(botToken: string, input: ModifyDiscordThread
 
     headers: {
       "Content-Type": "application/json",
-
       "X-Audit-Log-Reason": encodeURIComponent(input.auditReason),
     },
 
     /*
      * Intentionally do not send
-     * archived=false.
+     * archived=false
      *
      * Renaming a Flow Task must never
      * silently reopen an archived
-     * Discord thread.
+     * Discord thread
      */
     body: JSON.stringify({
       name: input.name,
@@ -344,13 +305,9 @@ export function modifyDiscordThread(botToken: string, input: ModifyDiscordThread
 
 type CreateDiscordForumThreadInput = {
   forumChannelId: string;
-
   name: string;
-
   content: string;
-
   allowedUserIds: readonly string[];
-
   auditReason: string;
 };
 
@@ -380,7 +337,6 @@ export function createDiscordForumThread(botToken: string, input: CreateDiscordF
          */
         allowed_mentions: {
           parse: [],
-
           users: input.allowedUserIds,
         },
       },
@@ -390,11 +346,9 @@ export function createDiscordForumThread(botToken: string, input: CreateDiscordF
 
 type EditDiscordMessageInput = {
   channelId: string;
-
   messageId: string;
 
   content: string;
-
   allowedUserIds: readonly string[];
 };
 
@@ -416,7 +370,7 @@ export function editDiscordMessage(botToken: string, input: EditDiscordMessageIn
        *
        * Keep arbitrary user content from
        * producing @everyone/@here or
-       * unintended user mentions.
+       * unintended user mentions
        */
       allowed_mentions: {
         parse: [],
@@ -431,7 +385,7 @@ export function editDiscordMessage(botToken: string, input: EditDiscordMessageIn
  * Menambahkan reaksi emoji milik bot
  * pada sebuah pesan. Respons sukses
  * adalah 204 tanpa body, sehingga
- * discordFetch mengembalikan null.
+ * discordFetch mengembalikan null
  */
 export function addDiscordMessageReaction(botToken: string, channelId: string, messageId: string, emoji: string) {
   return discordFetch<null>(botToken, `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}/@me`, {

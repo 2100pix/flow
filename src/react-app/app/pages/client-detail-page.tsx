@@ -20,13 +20,9 @@ type ClientEditorProps = {
 
 function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
   const navigate = useNavigate();
-
   const [name, setName] = useState(client.name);
-
   const [status, setStatus] = useState<ClientStatus>(client.status);
-
   const updateClient = useUpdateClient();
-
   const archiveClient = useArchiveClient();
 
   return (
@@ -146,9 +142,7 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
 
 export function ClientDetailPage() {
   const { clientId } = useParams();
-
   const { data: auth } = useMe();
-
   const { data: client, isPending, isError } = useClient(clientId);
 
   if (!clientId) {

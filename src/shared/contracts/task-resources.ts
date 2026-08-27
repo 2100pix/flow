@@ -18,17 +18,13 @@ const taskResourceTitleSchema = z.string().trim().min(1);
 export const createTaskResourceSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("document_brief"),
-
     title: taskResourceTitleSchema.optional(),
-
     content: z.string().optional(),
   }),
 
   z.object({
     type: z.literal("link"),
-
     title: taskResourceTitleSchema.optional(),
-
     url: taskResourceUrlSchema,
   }),
 ]);
@@ -36,9 +32,7 @@ export const createTaskResourceSchema = z.discriminatedUnion("type", [
 export const updateTaskResourceSchema = z
   .object({
     title: taskResourceTitleSchema.nullable().optional(),
-
     url: taskResourceUrlSchema.nullable().optional(),
-
     content: z.string().nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
@@ -46,9 +40,7 @@ export const updateTaskResourceSchema = z
   });
 
 export type TaskResourceType = z.infer<typeof taskResourceTypeSchema>;
-
 export type CreateTaskResourceInput = z.infer<typeof createTaskResourceSchema>;
-
 export type UpdateTaskResourceInput = z.infer<typeof updateTaskResourceSchema>;
 
 export type TaskResourceDto = {
@@ -56,15 +48,12 @@ export type TaskResourceDto = {
   taskId: string;
 
   type: TaskResourceType;
-
   title: string | null;
   url: string | null;
   content: string | null;
-
   position: number;
 
   createdBy: string;
-
   createdAt: string;
   updatedAt: string;
 };
