@@ -2,48 +2,49 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { getErrorMessage } from "@/lib/errors";
-import { useArchiveProject } from "../hooks/use-archive-project";
-import { useDeleteProject } from "../hooks/use-delete-project";
-import type { ProjectDto } from "../types";
+import { useArchiveClient } from "../hooks/use-archive-client";
+import { useDeleteClient } from "../hooks/use-delete-client";
 
-type ArchiveProjectDialogProps = {
-  project: ProjectDto;
+import type { ClientDto } from "../types";
+
+type ArchiveClientDialogProps = {
+  client: ClientDto;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onArchived?: () => void;
 };
 
-export function ArchiveProjectDialog({ project, open, onOpenChange, onArchived }: ArchiveProjectDialogProps) {
-  const archiveProject = useArchiveProject();
+export function ArchiveClientDialog({ client, open, onOpenChange, onArchived }: ArchiveClientDialogProps) {
+  const archiveClient = useArchiveClient();
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Archive {project.name}?</AlertDialogTitle>
-          <AlertDialogDescription>The project will be removed from active navigation. Its members, leads, resources, tasks, workflow, and metadata remain stored.</AlertDialogDescription>
+          <AlertDialogTitle>Archive {client.name}?</AlertDialogTitle>
+          <AlertDialogDescription>The client will be removed from the active client list. Its data remains stored.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={archiveProject.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={archiveClient.isPending}>Cancel</AlertDialogCancel>
 
           <AlertDialogAction
             variant="destructive"
-            disabled={archiveProject.isPending}
+            disabled={archiveClient.isPending}
             onClick={() => {
-              archiveProject.mutate(project.id, {
+              archiveClient.mutate(client.id, {
                 onSuccess: () => {
                   onOpenChange(false);
-                  toast.success("Project archived.");
+                  toast.success("Client archived.");
                   onArchived?.();
                 },
 
                 onError: (error) => {
-                  toast.error(getErrorMessage(error, "Failed to archive project."));
+                  toast.error(getErrorMessage(error, "Failed to archive client."));
                 },
               });
             }}
           >
-            {archiveProject.isPending ? "Archiving…" : "Archive"}
+            {archiveClient.isPending ? "Archiving…" : "Archive"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -51,16 +52,17 @@ export function ArchiveProjectDialog({ project, open, onOpenChange, onArchived }
   );
 }
 
-type DeleteProjectDialogProps = {
-  project: ProjectDto;
+type DeleteClientDialogProps = {
+  client: ClientDto;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
 };
 
-export function DeleteProjectDialog({ project, open, onOpenChange, onDeleted }: DeleteProjectDialogProps) {
-  const deleteProject = useDeleteProject();
+export function DeleteClientDialog({ client, open, onOpenChange, onDeleted }: DeleteClientDialogProps) {
+  const deleteClient = useDeleteClient();
   const [confirmation, setConfirmation] = useState("");
+
   function handleOpenChange(nextOpen: boolean) {
     onOpenChange(nextOpen);
 
@@ -73,19 +75,19 @@ export function DeleteProjectDialog({ project, open, onOpenChange, onDeleted }: 
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Permanently delete {project.name}?</AlertDialogTitle>
-          <AlertDialogDescription>This permanently removes the project, members, project leads, resources, tasks, workflow, and project metadata. There is no restore.</AlertDialogDescription>
+          <AlertDialogTitle>Permanently delete {client.name}?</AlertDialogTitle>
+          <AlertDialogDescription>This permanently removes the client. Projects linked to this client must be deleted first. There is no restore.</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-2">
-          <label htmlFor={`delete-project-confirmation-${project.id}`} className="text-sm font-medium">
-            Type <span className="font-semibold">{project.name}</span> to confirm
+          <label htmlFor={`delete-client-confirmation-${client.id}`} className="text-sm font-medium">
+            Type <span className="font-semibold">{client.name}</span> to confirm
           </label>
 
           <input
-            id={`delete-project-confirmation-${project.id}`}
+            id={`delete-client-confirmation-${client.id}`}
             value={confirmation}
             autoComplete="off"
-            disabled={deleteProject.isPending}
+            disabled={deleteClient.isPending}
             onChange={(event) => {
               setConfirmation(event.target.value);
             }}
@@ -94,26 +96,26 @@ export function DeleteProjectDialog({ project, open, onOpenChange, onDeleted }: 
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleteProject.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={deleteClient.isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            disabled={confirmation !== project.name || deleteProject.isPending}
+            disabled={confirmation !== client.name || deleteClient.isPending}
             onClick={() => {
-              deleteProject.mutate(project.id, {
+              deleteClient.mutate(client.id, {
                 onSuccess: () => {
                   handleOpenChange(false);
-                  toast.success("Project deleted.");
+                  toast.success("Client deleted.");
 
                   onDeleted?.();
                 },
 
                 onError: (error) => {
-                  toast.error(getErrorMessage(error, "Failed to delete project."));
+                  toast.error(getErrorMessage(error, "Failed to delete client."));
                 },
               });
             }}
           >
-            {deleteProject.isPending ? "Deleting…" : "Delete permanently"}
+            {deleteClient.isPending ? "Deleting…" : "Delete permanently"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-
 import { createClient } from "../api/clients";
 import { clientsQueryKey } from "./use-clients";
 

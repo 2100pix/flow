@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-
 import { updateClient } from "../api/clients";
 import type { UpdateClientInput } from "../types";
 import { clientQueryKey } from "./use-client";

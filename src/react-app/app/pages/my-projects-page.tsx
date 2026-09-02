@@ -23,7 +23,7 @@ export function MyProjectsPage() {
         </div>
 
         <div className="rounded-lg border border-dashed p-8">
-          <p className="text-sm font-medium">My Projects</p>
+          <p className="text-sm font-medium">Under development</p>
         </div>
       </div>
     </div>

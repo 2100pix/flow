@@ -16,7 +16,8 @@ export const permissionKeys = [
   "clients.view",
   "clients.create",
   "clients.edit",
-  "clients.archive",
+"clients.archive",
+  "clients.delete",
 
   "projects.view",
   "projects.create",
@@ -126,6 +127,11 @@ export const permissionCatalog: Array<{
     key: "clients.archive",
     group: "Clients",
     label: "Archive clients",
+  },
+  {
+    key: "clients.delete",
+    group: "Clients",
+    label: "Delete clients",
   },
 
   {

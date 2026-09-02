@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-
 import { getClient } from "../api/clients";
 
 export function clientQueryKey(clientId: string | undefined) {

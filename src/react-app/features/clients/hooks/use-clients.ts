@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-
 import { getClients } from "../api/clients";
 
 export const clientsQueryKey = ["clients"] as const;

@@ -30,6 +30,7 @@ export const adminPermissions = [
   "clients.create",
   "clients.edit",
   "clients.archive",
+  "clients.delete",
 
   "projects.view",
   "projects.create",

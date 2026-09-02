@@ -378,7 +378,7 @@ export function DiscordIntegrationSettings() {
                             onClick={() => {
                               updateReminders.mutate(
                                 {
-                                  enabled: integration.reminders.enabled,
+                                  enabled: !integration.reminders.enabled,
 
                                   timeZone: reminderTimeZone.trim(),
 

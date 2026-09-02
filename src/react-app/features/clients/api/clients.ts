@@ -21,6 +21,12 @@ export async function updateClient(clientId: string, input: UpdateClientInput) {
 }
 
 export async function archiveClient(clientId: string) {
+  return apiFetch<ArchiveClientResponse>(`/api/clients/${clientId}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function deleteClient(clientId: string) {
   return apiFetch<ArchiveClientResponse>(`/api/clients/${clientId}`, {
     method: "DELETE",
   });

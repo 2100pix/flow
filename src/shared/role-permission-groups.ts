@@ -63,7 +63,7 @@ export const administratorPermissionGroups: readonly PermissionGroup[] = [
   {
     id: "manage-clients",
     label: "Manage clients",
-    permissions: ["clients.view", "clients.create", "clients.edit", "clients.archive"],
+    permissions: ["clients.view", "clients.create", "clients.edit", "clients.archive", "clients.delete"],
   },
 
   {
@@ -96,6 +96,11 @@ export const clientPermissionGroups: readonly PermissionGroup[] = [
     id: "archive-clients",
     label: "Archive clients",
     permissions: ["clients.archive"],
+  },
+  {
+    id: "delete-clients",
+    label: "Delete clients",
+    permissions: ["clients.delete"],
   },
 ];
 

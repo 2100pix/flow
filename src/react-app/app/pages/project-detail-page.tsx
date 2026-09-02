@@ -18,11 +18,9 @@ import { useProject } from "@/features/projects/hooks/use-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 import { ProjectSettingsTeam } from "@/features/projects/components/project-settings-team";
 import type { ProjectDto, ProjectStatus, UpdateProjectInput } from "@/features/projects/types";
-
 import { deriveProjectCode } from "../../../shared/project-code";
 
 const NO_CLIENT_VALUE = "__flow_no_client__";
-
 const PROJECT_SETTINGS_FORM_ID = "project-settings-form";
 
 const statusItems: Array<{
@@ -80,9 +78,7 @@ type DangerZoneProps = {
 
 function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
   const navigate = useNavigate();
-
   const [archiveOpen, setArchiveOpen] = useState(false);
-
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (!canArchive && !canDelete) {
@@ -102,7 +98,15 @@ function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Archiving this project removes it from normal navigation while retaining its project data.</p>
             </div>
 
-            <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => { setArchiveOpen(true); }}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                setArchiveOpen(true);
+              }}
+            >
               Archive
             </Button>
           </div>
@@ -116,7 +120,15 @@ function DangerZone({ project, canArchive, canDelete }: DangerZoneProps) {
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Permanently remove this project and all project-owned data. This action cannot be recovered.</p>
             </div>
 
-            <Button type="button" variant="destructive" size="sm" className="shrink-0" onClick={() => { setDeleteOpen(true); }}>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                setDeleteOpen(true);
+              }}
+            >
               Delete
             </Button>
           </div>

@@ -234,7 +234,7 @@ clientsRoutes.patch(
   },
 );
 
-clientsRoutes.delete("/:id", requireAuth, requirePermission("clients.archive"), async (c) => {
+clientsRoutes.post("/:id/archive", requireAuth, requirePermission("clients.archive"), async (c) => {
   const auth = c.var.auth;
   const clientId = c.req.param("id");
 
@@ -288,6 +288,69 @@ clientsRoutes.delete("/:id", requireAuth, requirePermission("clients.archive"), 
       archivedAt: now,
       updatedAt: now,
     })
+    .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)));
+
+  return c.json({
+    data: {
+      success: true as const,
+    },
+  });
+});
+
+clientsRoutes.delete("/:id", requireAuth, requirePermission("clients.delete"), async (c) => {
+  const auth = c.var.auth;
+  const clientId = c.req.param("id");
+
+  const db = createDb(c.env.flow_db);
+
+  const [client] = await db
+    .select({
+      id: clients.id,
+    })
+    .from(clients)
+    .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)))
+    .limit(1);
+
+  if (!client) {
+    return c.json(
+      {
+        error: {
+          code: "CLIENT_NOT_FOUND",
+          message: "Client not found",
+        },
+      },
+      404,
+    );
+  }
+
+  /*
+   * FK projects.client_id → clients.id pakai
+   * onDelete restrict, jadi pastikan tidak ada
+   * project (aktif maupun arsip) yang masih
+   * mereferensikan client ini.
+   */
+  const [referencingProject] = await db
+    .select({
+      id: projects.id,
+    })
+    .from(projects)
+    .where(and(eq(projects.clientId, clientId), eq(projects.workspaceId, auth.workspace.id)))
+    .limit(1);
+
+  if (referencingProject) {
+    return c.json(
+      {
+        error: {
+          code: "CLIENT_HAS_PROJECTS",
+          message: "Delete the client's projects before deleting this client",
+        },
+      },
+      409,
+    );
+  }
+
+  await db
+    .delete(clients)
     .where(and(eq(clients.id, clientId), eq(clients.workspaceId, auth.workspace.id), isNull(clients.archivedAt)));
 
   return c.json({

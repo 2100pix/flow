@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 import { useMe } from "@/features/auth/hooks/use-me";
-import { useArchiveClient } from "@/features/clients/hooks/use-archive-client";
 import { useClient } from "@/features/clients/hooks/use-client";
 import { useUpdateClient } from "@/features/clients/hooks/use-update-client";
+import { DeleteClientDialog, ArchiveClientDialog } from "@/features/clients/components/client-danger-dialogs";
 import { hasPermission } from "@/features/auth/permissions";
 
 import type { ClientDto, ClientStatus } from "@/features/clients/types";
@@ -16,14 +16,16 @@ type ClientEditorProps = {
   client: ClientDto;
   canEdit: boolean;
   canArchive: boolean;
+  canDelete: boolean;
 };
 
-function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
+function ClientEditor({ client, canEdit, canArchive, canDelete }: ClientEditorProps) {
   const navigate = useNavigate();
   const [name, setName] = useState(client.name);
   const [status, setStatus] = useState<ClientStatus>(client.status);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const updateClient = useUpdateClient();
-  const archiveClient = useArchiveClient();
 
   return (
     <div className="space-y-8">
@@ -99,43 +101,76 @@ function ClientEditor({ client, canEdit, canArchive }: ClientEditorProps) {
           ) : null}
         </div>
       </div>
+      <div className="pt-12">
+        <h2 className="text-sm font-medium">Dangerzone</h2>
 
-      {canArchive ? (
-        <div className="rounded-lg border border-destructive/20 p-5">
-          <p className="text-sm font-medium">Archive client</p>
+        <div className="mt-4 divide-y divide-border/60 rounded-xl border border-border/60">
+          {canArchive ? (
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Archive client</p>
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Archived clients are removed from the active client list.</p>
+              </div>
 
-          <p className="mt-1 text-sm text-muted-foreground">Archived clients are removed from the active client list.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setArchiveOpen(true);
+                }}
+              >
+                Archive
+              </Button>
+            </div>
+          ) : null}
 
-          <Button
-            className="mt-4"
-            variant="destructive"
-            disabled={archiveClient.isPending}
-            onClick={() => {
-              const confirmed = window.confirm(`Archive ${client.name}?`);
+          {canDelete ? (
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Delete client</p>
 
-              if (!confirmed) {
-                return;
-              }
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Permanently remove this client. Projects linked to this client must be deleted first. This action cannot be recovered.</p>
+              </div>
 
-              archiveClient.mutate(client.id, {
-                onSuccess: () => {
-                  toast.success("Client archived.");
-
-                  void navigate("/clients", {
-                    replace: true,
-                  });
-                },
-
-                onError: (error) => {
-                  toast.error(getErrorMessage(error, "Failed to archive client."));
-                },
-              });
-            }}
-          >
-            {archiveClient.isPending ? "Archiving…" : "Archive client"}
-          </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+
+        <ArchiveClientDialog
+          client={client}
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          onArchived={() => {
+            void navigate("/clients", {
+              replace: true,
+            });
+          }}
+        />
+
+        <DeleteClientDialog
+          client={client}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => {
+            void navigate("/clients", {
+              replace: true,
+            });
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -152,6 +187,8 @@ export function ClientDetailPage() {
 
   const canArchive = hasPermission(auth, "clients.archive");
 
+  const canDelete = hasPermission(auth, "clients.delete");
+
   return (
     <div className="p-8">
       <div className="mx-auto max-w-5xl space-y-8">
@@ -167,7 +204,7 @@ export function ClientDetailPage() {
 
         {isError ? <p className="text-sm text-destructive">Unable to load client.</p> : null}
 
-        {client ? <ClientEditor key={client.updatedAt} client={client} canEdit={canEdit} canArchive={canArchive} /> : null}
+        {client ? <ClientEditor key={client.updatedAt} client={client} canEdit={canEdit} canArchive={canArchive} canDelete={canDelete} /> : null}
       </div>
     </div>
   );
