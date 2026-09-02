@@ -130,12 +130,12 @@ function GeneralSettings() {
                 <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-3">
                   <div>
                     <p className="text-xs font-medium">Workspace Logo</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Under development</p>
                   </div>
 
                   <div
                     aria-label="Workspace logo placeholder"
-                    title="Workspace logo — coming soon"
+                    title="Workspace logo - Under development"
                     className="
                       flex size-8 shrink-0
                       items-center justify-center
@@ -167,7 +167,6 @@ function GeneralSettings() {
             <div className="mt-3 flex min-h-14 items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium">Delete Workspace</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Coming soon</p>
               </div>
 
               <Button type="button" variant="destructive" size="sm" disabled title="Coming soon" className="shrink-0">

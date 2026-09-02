@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { getErrorMessage } from "@/lib/errors";
 import { hasPermission } from "@/features/auth/permissions";
 import { useMe } from "@/features/auth/hooks/use-me";
@@ -73,6 +74,7 @@ export function DiscordIntegrationSettings() {
   const disconnectDiscord = useDisconnectDiscordIntegration();
   const updateDiscord = useUpdateDiscordIntegration();
   const canManageIntegration = hasPermission(auth, "settings.manage");
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
   const feedback = getDiscordConnectionFeedback(searchParams.get("discord"));
   const connected = integration?.connectionStatus === "connected";
   const { data: categories = [], isPending: categoriesPending, isError: categoriesError } = useDiscordCategories(connected);
@@ -80,12 +82,12 @@ export function DiscordIntegrationSettings() {
   const { data: roles = [], isPending: rolesPending, isError: rolesError } = useDiscordRoles(connected && canManageIntegration);
   const updateWorkspaceRole = useUpdateDiscordWorkspaceRole();
   const updateReminders = useUpdateDiscordReminderSettings();
-  const [reminderTimeZoneDraft, setReminderTimeZoneDraft] = useState<string | null>(null);
   const [reminderHourLocalDraft, setReminderHourLocalDraft] = useState<number | null>(null);
   const statusLabel = !connected ? "Not connected" : integration.enabled ? "Enabled" : "Connected";
-  const reminderTimeZone = reminderTimeZoneDraft ?? integration?.reminders.timeZone ?? "UTC";
+  const personalTimeZone = auth?.user.timeZone ?? null;
+  const reminderFallbackTimeZone = personalTimeZone ?? integration?.reminders.timeZone ?? "UTC";
   const reminderHourLocal = reminderHourLocalDraft ?? integration?.reminders.hourLocal ?? 9;
-  const reminderSettingsDirty = integration ? reminderTimeZone !== integration.reminders.timeZone || reminderHourLocal !== integration.reminders.hourLocal : false;
+  const reminderSettingsDirty = integration ? reminderHourLocal !== integration.reminders.hourLocal : false;
 
   return (
     <div className="p-6 md:p-8">
@@ -130,29 +132,7 @@ export function DiscordIntegrationSettings() {
                           variant="destructive"
                           disabled={disconnectDiscord.isPending}
                           onClick={() => {
-                            const confirmed = window.confirm("Disconnect Discord from this workspace? Discord sync will remain off and the saved server connection will be removed from Flow.");
-
-                            if (!confirmed) {
-                              return;
-                            }
-
-                            disconnectDiscord.mutate(undefined, {
-                              onSuccess: () => {
-                                toast.success("Discord disconnected.");
-
-                                const nextSearchParams = new URLSearchParams(searchParams);
-
-                                nextSearchParams.delete("discord");
-
-                                setSearchParams(nextSearchParams, {
-                                  replace: true,
-                                });
-                              },
-
-                              onError: (error) => {
-                                toast.error(getErrorMessage(error, "Failed to disconnect Discord."));
-                              },
-                            });
+                            setDisconnectOpen(true);
                           }}
                         >
                           {disconnectDiscord.isPending ? "Disconnecting…" : "Disconnect"}
@@ -173,6 +153,48 @@ export function DiscordIntegrationSettings() {
                 </div>
               </div>
 
+              <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disconnect Discord?</AlertDialogTitle>
+
+                    <AlertDialogDescription>Discord sync will remain off and the saved server connection will be removed from Flow.</AlertDialogDescription>
+                  </AlertDialogHeader>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={disconnectDiscord.isPending}>Cancel</AlertDialogCancel>
+
+                    <AlertDialogAction
+                      variant="destructive"
+                      disabled={disconnectDiscord.isPending}
+                      onClick={() => {
+                        disconnectDiscord.mutate(undefined, {
+                          onSuccess: () => {
+                            setDisconnectOpen(false);
+
+                            toast.success("Discord disconnected.");
+
+                            const nextSearchParams = new URLSearchParams(searchParams);
+
+                            nextSearchParams.delete("discord");
+
+                            setSearchParams(nextSearchParams, {
+                              replace: true,
+                            });
+                          },
+
+                          onError: (error) => {
+                            toast.error(getErrorMessage(error, "Failed to disconnect Discord."));
+                          },
+                        });
+                      }}
+                    >
+                      {disconnectDiscord.isPending ? "Disconnecting…" : "Disconnect"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
               <div className="border-t border-border/60">
                 {isPending ? (
                   <div className="px-4 py-4">
@@ -182,7 +204,7 @@ export function DiscordIntegrationSettings() {
                   <div className="px-4 py-4">
                     <p className="text-xs text-destructive">Unable to load Discord integration.</p>
                   </div>
-                ) : integration ? (
+                ) : integration && connected ? (
                   <div className="divide-y divide-border/60">
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <span className="text-xs text-muted-foreground">Connection</span>
@@ -380,7 +402,7 @@ export function DiscordIntegrationSettings() {
                                 {
                                   enabled: !integration.reminders.enabled,
 
-                                  timeZone: reminderTimeZone.trim(),
+                                  timeZone: reminderFallbackTimeZone,
 
                                   hourLocal: reminderHourLocal,
                                 },
@@ -388,7 +410,6 @@ export function DiscordIntegrationSettings() {
                                   onSuccess: () => {
                                     toast.success("Reminder settings updated.");
 
-                                    setReminderTimeZoneDraft(null);
                                     setReminderHourLocalDraft(null);
                                   },
 
@@ -407,37 +428,13 @@ export function DiscordIntegrationSettings() {
                     <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Reminder schedule</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">Workspace timezone and local delivery hour.</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Uses your personal timezone and local delivery hour.</p>
                       </div>
 
                       {connected ? (
                         canManageIntegration ? (
                           <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={reminderTimeZone}
-                              disabled={updateReminders.isPending || disconnectDiscord.isPending}
-                              onChange={(event) => {
-                                setReminderTimeZoneDraft(event.target.value);
-                              }}
-                              aria-label="Reminder timezone"
-                              placeholder="Asia/Jakarta"
-                              className="
-                              h-8
-                              w-36
-                              rounded-md
-                              border border-input
-                              bg-background
-                              px-2.5
-                              text-xs
-                              outline-none
-                              focus-visible:border-ring
-                              focus-visible:ring-3
-                              focus-visible:ring-ring/50
-                              disabled:cursor-not-allowed
-                              disabled:opacity-60
-                            "
-                            />
+                            <span className="text-xs text-muted-foreground">{reminderFallbackTimeZone}</span>
 
                             <select
                               value={reminderHourLocal}
@@ -473,13 +470,13 @@ export function DiscordIntegrationSettings() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={!reminderSettingsDirty || updateReminders.isPending || disconnectDiscord.isPending || !reminderTimeZone.trim()}
+                              disabled={!reminderSettingsDirty || updateReminders.isPending || disconnectDiscord.isPending}
                               onClick={() => {
                                 updateReminders.mutate(
                                   {
-                                    enabled: !integration.reminders.enabled,
+                                    enabled: integration.reminders.enabled,
 
-                                    timeZone: reminderTimeZone.trim(),
+                                    timeZone: reminderFallbackTimeZone,
 
                                     hourLocal: reminderHourLocal,
                                   },
@@ -487,7 +484,6 @@ export function DiscordIntegrationSettings() {
                                     onSuccess: () => {
                                       toast.success("Reminder schedule updated.");
 
-                                      setReminderTimeZoneDraft(null);
                                       setReminderHourLocalDraft(null);
                                     },
 
@@ -511,6 +507,10 @@ export function DiscordIntegrationSettings() {
                         <span className="text-xs font-medium">Not available</span>
                       )}
                     </div>
+                  </div>
+                ) : integration ? (
+                  <div className="px-4 py-4">
+                    <p className="text-xs text-muted-foreground">Connect Discord to configure integration options.</p>
                   </div>
                 ) : null}
               </div>
